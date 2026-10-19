@@ -127,6 +127,32 @@ async def test_database():
         }
 
 
+@app.get("/storage-test")
+def test_storage():
+    """
+    Tests live connectivity to Google Cloud Storage (Firebase Storage) bucket.
+    """
+    try:
+        import storage as storage_helper
+        bucket = storage_helper.get_storage_bucket()
+        exists = bucket.exists()
+        
+        return {
+            "status": "success" if exists else "error",
+            "message": "Connected to Google Cloud Storage bucket successfully! 🪣🚀" if exists else "Bucket not found or permission denied",
+            "bucket_name": bucket.name,
+            "exists": exists,
+            "location": bucket.location if exists else None,
+            "storage_class": bucket.storage_class if exists else None,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "Failed to connect to Cloud Storage bucket",
+            "details": str(e),
+        }
+
+
 # -----------------------------------------------------------------------------
 # REST API: Curriculum & Content Management
 # -----------------------------------------------------------------------------
