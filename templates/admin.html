@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maths DD — Content Studio</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Marked Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* KaTeX rendering overrides */
+    .katex-display { margin: 0.75em 0; overflow-x: auto; overflow-y: hidden; }
+    .prose p { margin-bottom: 0.75rem; }
+    .prose ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+    .prose ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased text-slate-200 bg-slate-950 selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="sigma" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <span class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            Maths DD <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Studio</span>
+          </span>
+          <p class="text-xs text-slate-400">Content Engine & Cloud SQL Hub</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Cloud SQL Connected
+        </div>
+        
+        <button onclick="seedCurriculum()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="database" class="w-3.5 h-3.5"></i>
+          Seed Curriculum
+        </button>
+
+        <a href="/docs" target="_blank" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="code" class="w-3.5 h-3.5"></i>
+          Swagger API
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="border-b border-slate-800 bg-slate-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6">
+      <button onclick="switchTab('create')" id="tab-btn-create" class="tab-btn py-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2 transition">
+        <i data-lucide="pen-tool" class="w-4 h-4"></i> Create Question
+      </button>
+      <button onclick="switchTab('subjects')" id="tab-btn-subjects" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i data-lucide="layers" class="w-4 h-4"></i> Curriculum & Lessons
+      </button>
+      <button onclick="switchTab('recent')" id="tab-btn-recent" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+        <i data-lucide="history" class="w-4 h-4"></i> Recent Questions
+      </button>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ============================================================== -->
+    <!-- TAB 1: CREATE QUESTION -->
+    <!-- ============================================================== -->
+    <div id="tab-content-create" class="tab-content">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        
+        <!-- Left Column: Question Form -->
+        <div class="bg-slate-900/60 rounded-2xl border border-slate-800/80 p-6 shadow-xl backdrop-blur">
+          <h2 class="text-base font-semibold text-white mb-4 flex items-center gap-2">
+            <i data-lucide="file-plus" class="w-5 h-5 text-indigo-400"></i>
+            Question Metadata & LaTeX Specification
+          </h2>
+
+          <form id="question-form" onsubmit="submitQuestion(event)" class="space-y-4">
+            
+            <!-- Subject and Lesson Selectors -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Subject *</label>
+                <select id="q-subject" onchange="onSubjectChange()" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                  <option value="">Loading subjects...</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Syllabus Lesson *</label>
+                <select id="q-lesson" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                  <option value="">Select subject first</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Title & ID -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-medium text-slate-300 mb-1">Question Title *</label>
+                <input type="text" id="q-title" placeholder="e.g. Quadratic Equations - 2024 Past Paper" required
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Custom ID (Optional)</label>
+                <input type="text" id="q-id" placeholder="auto-generated"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+              </div>
+            </div>
+
+            <!-- Question Classification Metas -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Type</label>
+                <select id="q-type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  <option value="SHORT" selected>SHORT (Part A)</option>
+                  <option value="ESSAY">ESSAY (Part B)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Difficulty</label>
+                <select id="q-difficulty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  <option value="EASY">EASY</option>
+                  <option value="MEDIUM" selected>MEDIUM</option>
+                  <option value="HARD">HARD</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Schedule</label>
+                <select id="q-schedule" onchange="toggleScheduledDate()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  <option value="REGULAR" selected>REGULAR</option>
+                  <option value="DAILY">DAILY</option>
+                  <option value="WEEKLY">WEEKLY</option>
+                  <option value="SPECIAL">SPECIAL</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Allocated Marks</label>
+                <input type="number" id="q-marks" value="25" min="1" max="150"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+
+            <!-- Source & Scheduled Date -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Source</label>
+                <select id="q-source" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                  <option value="PAST_PAPER" selected>PAST_PAPER</option>
+                  <option value="MODEL_PAPER">MODEL_PAPER</option>
+                  <option value="SCHOOL_PAPER">SCHOOL_PAPER</option>
+                  <option value="TERM_TEST">TERM_TEST</option>
+                  <option value="PRACTICE">PRACTICE</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-300 mb-1">Source Details</label>
+                <input type="text" id="q-source-details" placeholder="e.g. 2024 G.C.E. A/L Part A Q1"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+
+              <div id="date-container" class="hidden">
+                <label class="block text-xs font-medium text-indigo-300 mb-1">Daily Challenge Date</label>
+                <input type="date" id="q-date"
+                       class="w-full bg-slate-950 border border-indigo-700/60 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+
+            <!-- Quick Math Snippet Buttons -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-medium text-slate-300">Question Content (Markdown + KaTeX LaTeX) *</label>
+                <span class="text-[11px] text-slate-500">Use $...$ for inline, $$...$$ for display</span>
+              </div>
+              
+              <div class="flex flex-wrap gap-1.5 mb-2 p-1.5 bg-slate-950/80 rounded-lg border border-slate-800 text-xs">
+                <button type="button" onclick="insertSnippet('content', '$\\frac{a}{b}$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">$$\frac{a}{b}$$</button>
+                <button type="button" onclick="insertSnippet('content', '$\\sqrt{x}$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">$$\sqrt{x}$$</button>
+                <button type="button" onclick="insertSnippet('content', '$$\\int_{a}^{b} f(x)\\,dx$$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">$$\int$$</button>
+                <button type="button" onclick="insertSnippet('content', '$$\\lim_{x \\to 0}$$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">$$\lim$$</button>
+                <button type="button" onclick="insertSnippet('content', '$\\alpha, \\beta$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">$$\alpha, \beta$$</button>
+                <button type="button" onclick="insertSnippet('content', '$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 font-mono">Matrix</button>
+              </div>
+
+              <textarea id="q-content" rows="6" required oninput="renderPreview()"
+                        placeholder="Write question here with LaTeX math:&#10;&#10;Find all real roots of the equation:&#10;$$2x^2 - 5x + 2 = 0$$&#10;Hence, deduce the value of $\alpha^2 + \beta^2$ where $\alpha$ and $\beta$ are the roots."
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-mono text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition leading-relaxed"></textarea>
+            </div>
+
+            <!-- Solution / Marking Scheme -->
+            <div class="pt-2 border-t border-slate-800/80">
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-medium text-emerald-400 flex items-center gap-1.5">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                  Worked Solution & Marking Scheme *
+                </label>
+                <input type="text" id="q-solution-title" value="Official Marking Scheme" placeholder="Scheme Title"
+                       class="text-xs bg-slate-950 border border-slate-800 rounded-lg px-2 py-0.5 text-slate-300 w-44">
+              </div>
+
+              <textarea id="q-solution" rows="6" required oninput="renderPreview()"
+                        placeholder="Step-by-step model answer with marking points:&#10;&#10;### Method 1: Factoring&#10;$$2x^2 - 4x - x + 2 = 0$$&#10;$$(2x - 1)(x - 2) = 0 \\implies x = \\frac{1}{2} \\text{ or } x = 2$$ *(10 marks)*&#10;&#10;### Calculation of $\alpha^2 + \beta^2$:&#10;$$\\alpha^2 + \\beta^2 = (\\alpha + \\beta)^2 - 2\\alpha\\beta$$ *(15 marks)*"
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-mono text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition leading-relaxed"></textarea>
+            </div>
+
+            <!-- Flags -->
+            <div class="flex items-center space-x-6 pt-1 text-xs text-slate-300">
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="q-published" checked class="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-800 focus:ring-indigo-500">
+                <span>Published (Visible in App)</span>
+              </label>
+
+              <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="q-premium" class="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-800 focus:ring-amber-500">
+                <span class="text-amber-400 font-medium">PRO / Premium Only</span>
+              </label>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-4">
+              <button type="submit" id="submit-btn" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition active:scale-[0.99]">
+                <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+                Publish Question to Cloud SQL
+              </button>
+            </div>
+
+          </form>
+        </div>
+
+        <!-- Right Column: Live Math & Markdown Preview -->
+        <div class="sticky top-24 bg-slate-900/60 rounded-2xl border border-slate-800/80 p-6 shadow-xl backdrop-blur flex flex-col h-[750px]">
+          
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <button onclick="setPreviewTab('question')" id="prev-tab-q" class="px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition">
+                Question Preview
+              </button>
+              <button onclick="setPreviewTab('solution')" id="prev-tab-s" class="px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition">
+                Solution Preview
+              </button>
+            </div>
+            
+            <div class="text-[11px] text-slate-400 flex items-center gap-1">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+              Live KaTeX Render
+            </div>
+          </div>
+
+          <!-- Preview Render Box -->
+          <div class="flex-1 overflow-y-auto mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800/80">
+            
+            <div id="preview-header" class="mb-4 pb-3 border-b border-slate-800/60">
+              <span id="prev-badge-subject" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mr-2">Pure Mathematics</span>
+              <span id="prev-badge-lesson" class="text-[10px] text-slate-400">Lesson Title</span>
+              <h1 id="prev-title" class="text-base font-bold text-white mt-1">Question Title Preview</h1>
+            </div>
+
+            <!-- Content Target -->
+            <div id="preview-target" class="prose prose-invert prose-sm max-w-none text-slate-200">
+              <p class="text-slate-500 italic">Start typing in the editor on the left to see math rendered here...</p>
+            </div>
+          </div>
+
+          <div class="mt-3 text-right">
+            <span class="text-[11px] text-slate-500">Student mobile devices will render equations formatted exactly as shown above.</span>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- TAB 2: CURRICULUM & LESSONS -->
+    <!-- ============================================================== -->
+    <div id="tab-content-subjects" class="tab-content hidden space-y-6">
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Add New Lesson Form -->
+        <div class="bg-slate-900/60 rounded-2xl border border-slate-800/80 p-6">
+          <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <i data-lucide="folder-plus" class="w-4 h-4 text-indigo-400"></i> Add New Syllabus Lesson
+          </h3>
+          <form onsubmit="submitLesson(event)" class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Subject *</label>
+              <select id="new-les-subject" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200">
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Lesson ID (slug) *</label>
+              <input type="text" id="new-les-id" placeholder="e.g. pure_matrices" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200">
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Lesson Title (English) *</label>
+              <input type="text" id="new-les-title" placeholder="e.g. Matrices & Determinants" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200">
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Sinhala Title</label>
+              <input type="text" id="new-les-sin-title" placeholder="e.g. න්‍යාස හා නිශ්චායක" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200">
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-300 mb-1">Order Index (1, 2, ...)</label>
+              <input type="number" id="new-les-order" value="1" min="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200">
+            </div>
+
+            <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-medium text-white transition">
+              Create Lesson in Cloud SQL
+            </button>
+          </form>
+        </div>
+
+        <!-- Lessons Tree View -->
+        <div class="md:col-span-2 bg-slate-900/60 rounded-2xl border border-slate-800/80 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i data-lucide="list-tree" class="w-4 h-4 text-indigo-400"></i> Active Curriculum Tree
+            </h3>
+            <span id="total-lessons-count" class="text-xs text-slate-400">0 Lessons</span>
+          </div>
+
+          <div id="curriculum-tree-container" class="space-y-4 max-h-[550px] overflow-y-auto pr-2">
+            <p class="text-slate-500 text-xs italic">Loading curriculum from Cloud SQL...</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3: RECENT QUESTIONS -->
+    <!-- ============================================================== -->
+    <div id="tab-content-recent" class="tab-content hidden">
+      <div class="bg-slate-900/60 rounded-2xl border border-slate-800/80 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+            <i data-lucide="table" class="w-4 h-4 text-indigo-400"></i> Latest Published Questions in Cloud SQL
+          </h3>
+          <button onclick="loadRecentQuestions()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400 uppercase border-b border-slate-800 text-[10px]">
+              <tr>
+                <th class="py-2.5 px-3">Title</th>
+                <th class="py-2.5 px-3">Subject / Lesson</th>
+                <th class="py-2.5 px-3">Type</th>
+                <th class="py-2.5 px-3">Difficulty</th>
+                <th class="py-2.5 px-3">Schedule</th>
+                <th class="py-2.5 px-3">Marks</th>
+                <th class="py-2.5 px-3">Status</th>
+              </tr>
+            </thead>
+            <tbody id="recent-questions-body" class="divide-y divide-slate-800/60 text-slate-300">
+              <tr>
+                <td colspan="7" class="py-4 text-center text-slate-500">Loading recent questions...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Client-side Logic -->
+  <script>
+    let subjects = [];
+    let lessons = [];
+    let currentPreviewMode = 'question'; // 'question' or 'solution'
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadCurriculum();
+      loadRecentQuestions();
+    });
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const isSuccess = type === 'success';
+      toast.className = `px-4 py-3 rounded-xl shadow-xl border text-xs font-medium flex items-center gap-2 pointer-events-auto transition transform duration-300 ${
+        isSuccess ? 'bg-emerald-950 border-emerald-800 text-emerald-200' : 'bg-rose-950 border-rose-800 text-rose-200'
+      }`;
+      toast.innerHTML = `<span class="w-2 h-2 rounded-full ${isSuccess ? 'bg-emerald-400' : 'bg-rose-400'}"></span> ${message}`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 4000);
+    }
+
+    async function loadCurriculum() {
+      try {
+        const subRes = await fetch('/api/subjects');
+        subjects = await subRes.json();
+        
+        const lesRes = await fetch('/api/lessons');
+        lessons = await lesRes.json();
+
+        populateSubjectDropdowns();
+        renderCurriculumTree();
+      } catch (err) {
+        showToast('Failed to load curriculum from Cloud SQL: ' + err.message, 'error');
+      }
+    }
+
+    function populateSubjectDropdowns() {
+      const qSub = document.getElementById('q-subject');
+      const newLesSub = document.getElementById('new-les-subject');
+      
+      if (!subjects || subjects.length === 0) {
+        qSub.innerHTML = '<option value="">No subjects found. Seed curriculum first!</option>';
+        newLesSub.innerHTML = '<option value="">No subjects found</option>';
+        return;
+      }
+
+      const optionsHtml = subjects.map(s => `<option value="${s.id}">${s.name} (${s.sinhala_name || s.code})</option>`).join('');
+      qSub.innerHTML = '<option value="">-- Choose Subject --</option>' + optionsHtml;
+      newLesSub.innerHTML = optionsHtml;
+
+      // Auto select first subject if available
+      if (subjects.length > 0) {
+        qSub.value = subjects[0].id;
+        onSubjectChange();
+      }
+    }
+
+    function onSubjectChange() {
+      const subjectId = document.getElementById('q-subject').value;
+      const qLesson = document.getElementById('q-lesson');
+      
+      const filtered = lessons.filter(l => l.subject_id === subjectId);
+      if (filtered.length === 0) {
+        qLesson.innerHTML = '<option value="">No lessons found in this subject</option>';
+      } else {
+        qLesson.innerHTML = filtered.map(l => `<option value="${l.id}">${l.order_index}. ${l.title} (${l.sinhala_title || ''})</option>`).join('');
+      }
+      renderPreview();
+    }
+
+    function renderCurriculumTree() {
+      const tree = document.getElementById('curriculum-tree-container');
+      const countLabel = document.getElementById('total-lessons-count');
+      countLabel.textContent = `${lessons.length} Lessons across ${subjects.length} Subjects`;
+
+      if (subjects.length === 0) {
+        tree.innerHTML = `<div class="p-6 text-center text-slate-500">
+          <p>No subjects found in Cloud SQL.</p>
+          <button onclick="seedCurriculum()" class="mt-2 px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs">Seed Standard Syllabus Now</button>
+        </div>`;
+        return;
+      }
+
+      tree.innerHTML = subjects.map(sub => {
+        const subLessons = lessons.filter(l => l.subject_id === sub.id);
+        return `
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800/70">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono text-[11px] font-bold">${sub.code}</span>
+                <span class="font-semibold text-white text-sm">${sub.name}</span>
+                <span class="text-xs text-slate-400">(${sub.sinhala_name || ''})</span>
+              </div>
+              <span class="text-xs text-slate-400">${subLessons.length} units</span>
+            </div>
+            
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${subLessons.map(l => `
+                <div class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800/80 flex items-center justify-between text-xs">
+                  <span class="text-slate-200"><strong class="text-indigo-400">${l.order_index}.</strong> ${l.title}</span>
+                  <span class="text-[10px] text-slate-500 font-mono">${l.id}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setPreviewTab(tab) {
+      currentPreviewMode = tab;
+      const qBtn = document.getElementById('prev-tab-q');
+      const sBtn = document.getElementById('prev-tab-s');
+
+      if (tab === 'question') {
+        qBtn.className = "px-3 py-1 text-xs font-semibold rounded-lg bg-indigo-600 text-white transition";
+        sBtn.className = "px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition";
+      } else {
+        sBtn.className = "px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 text-white transition";
+        qBtn.className = "px-3 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition";
+      }
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const title = document.getElementById('q-title').value || 'Question Title Preview';
+      const subSelect = document.getElementById('q-subject');
+      const selectedSubName = subSelect.options[subSelect.selectedIndex]?.text || 'Pure Mathematics';
+      
+      const lesSelect = document.getElementById('q-lesson');
+      const selectedLesName = lesSelect.options[lesSelect.selectedIndex]?.text || 'Lesson Title';
+
+      document.getElementById('prev-title').textContent = title;
+      document.getElementById('prev-badge-subject').textContent = selectedSubName;
+      document.getElementById('prev-badge-lesson').textContent = selectedLesName;
+
+      const rawText = (currentPreviewMode === 'question')
+        ? (document.getElementById('q-content').value || '_No question content written yet._')
+        : (document.getElementById('q-solution').value || '_No marking scheme solution written yet._');
+
+      const target = document.getElementById('preview-target');
+      
+      // Parse Markdown with Marked
+      target.innerHTML = marked.parse(rawText);
+
+      // Render KaTeX Math
+      if (window.renderMathInElement) {
+        renderMathInElement(target, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\(', right: '\\)', display: false},
+            {left: '\\[', right: '\\]', display: true}
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    function insertSnippet(field, snippet) {
+      const textarea = document.getElementById(field === 'content' ? 'q-content' : 'q-solution');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      textarea.value = text.substring(0, start) + snippet + text.substring(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+      renderPreview();
+    }
+
+    function toggleScheduledDate() {
+      const schedule = document.getElementById('q-schedule').value;
+      const dateCont = document.getElementById('date-container');
+      if (schedule === 'DAILY') {
+        dateCont.classList.remove('hidden');
+      } else {
+        dateCont.classList.add('hidden');
+      }
+    }
+
+    async function submitQuestion(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span class="animate-spin mr-2">⚙️</span> Saving to Cloud SQL...`;
+
+      try {
+        const payload = {
+          title: document.getElementById('q-title').value,
+          custom_id: document.getElementById('q-id').value || null,
+          subject_id: document.getElementById('q-subject').value,
+          lesson_id: document.getElementById('q-lesson').value || null,
+          content_text: document.getElementById('q-content').value,
+          solution_text: document.getElementById('q-solution').value,
+          solution_title: document.getElementById('q-solution-title').value || "Official Marking Scheme",
+          question_type: document.getElementById('q-type').value,
+          difficulty: document.getElementById('q-difficulty').value,
+          schedule: document.getElementById('q-schedule').value,
+          source: document.getElementById('q-source').value,
+          source_details: document.getElementById('q-source-details').value,
+          allocated_marks: parseInt(document.getElementById('q-marks').value) || 25,
+          is_premium: document.getElementById('q-premium').checked,
+          is_published: document.getElementById('q-published').checked,
+          scheduled_date: document.getElementById('q-date').value || null,
+        };
+
+        const res = await fetch('/api/questions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Question created successfully! ID: ${data.question.id}`);
+          document.getElementById('q-title').value = '';
+          document.getElementById('q-id').value = '';
+          document.getElementById('q-content').value = '';
+          document.getElementById('q-solution').value = '';
+          renderPreview();
+          loadRecentQuestions();
+        } else {
+          showToast('Failed to save question: ' + (data.detail || data.message || 'Unknown error'), 'error');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> Publish Question to Cloud SQL`;
+        lucide.createIcons();
+      }
+    }
+
+    async function submitLesson(e) {
+      e.preventDefault();
+      try {
+        const payload = {
+          id: document.getElementById('new-les-id').value,
+          subject_id: document.getElementById('new-les-subject').value,
+          title: document.getElementById('new-les-title').value,
+          sinhala_title: document.getElementById('new-les-sin-title').value,
+          order_index: parseInt(document.getElementById('new-les-order').value) || 1,
+        };
+
+        const res = await fetch('/api/lessons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          showToast('Lesson created in Cloud SQL!');
+          document.getElementById('new-les-id').value = '';
+          document.getElementById('new-les-title').value = '';
+          document.getElementById('new-les-sin-title').value = '';
+          await loadCurriculum();
+        } else {
+          const errData = await res.json();
+          showToast('Failed to create lesson: ' + (errData.detail || 'Error'), 'error');
+        }
+      } catch (err) {
+        showToast('Network error: ' + err.message, 'error');
+      }
+    }
+
+    async function loadRecentQuestions() {
+      const tbody = document.getElementById('recent-questions-body');
+      try {
+        const res = await fetch('/api/questions/recent');
+        const list = await res.json();
+        
+        if (!list || list.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-500">No questions found yet. Create one!</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = list.map(q => `
+          <tr class="hover:bg-slate-900/40 transition">
+            <td class="py-2.5 px-3 font-medium text-white">${q.title}</td>
+            <td class="py-2.5 px-3 text-slate-400">${q.subject_name || q.subject_id} <span class="text-[10px] text-slate-500">(${q.lesson_title || 'General'})</span></td>
+            <td class="py-2.5 px-3"><span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono">${q.type}</span></td>
+            <td class="py-2.5 px-3 text-[11px]">${q.difficulty}</td>
+            <td class="py-2.5 px-3 text-[11px] font-mono text-indigo-400">${q.schedule}</td>
+            <td class="py-2.5 px-3 font-bold">${q.allocated_marks}m</td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] ${q.is_published ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400'}">
+                ${q.is_published ? 'Live' : 'Draft'}
+              </span>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-rose-400">Failed to load questions.</td></tr>`;
+      }
+    }
+
+    async function seedCurriculum() {
+      if (!confirm('Populate standard Pure Maths & Applied Maths curriculum into Cloud SQL?')) return;
+      try {
+        const res = await fetch('/api/seed', { method: 'POST' });
+        const data = await res.json();
+        showToast(data.message || 'Seeded successfully!');
+        await loadCurriculum();
+      } catch (err) {
+        showToast('Seed failed: ' + err.message, 'error');
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-500', 'text-indigo-400');
+        btn.classList.add('border-transparent', 'text-slate-400');
+      });
+
+      document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tab}`);
+      activeBtn.classList.add('border-indigo-500', 'text-indigo-400');
+      activeBtn.classList.remove('border-transparent', 'text-slate-400');
+
+      if (tab === 'recent') loadRecentQuestions();
+    }
+  </script>
+</body>
+</html>

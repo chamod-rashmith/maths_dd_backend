@@ -4,18 +4,23 @@ Designed for deployment on Google Cloud Run with Cloud SQL (PostgreSQL).
 """
 
 import os
-from fastapi import FastAPI
+from typing import Optional, List
+from pathlib import Path
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from database import get_db_connection
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+
+import database
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="Maths DD Backend API",
-    description="Backend microservice for Maths DD content management, database automation, and AI workflows.",
+    title="Maths DD Content Studio API",
+    description="Backend microservice for Maths DD content studio, curriculum management, and task automation.",
     version="1.0.0",
 )
 
-# Enable CORS for local testing and web clients
+# Enable CORS for local development and client apps
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,18 +29,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
-@app.get("/")
-def read_root():
+
+# -----------------------------------------------------------------------------
+# Pydantic Request Models
+# -----------------------------------------------------------------------------
+
+class SubjectCreate(BaseModel):
+    id: str
+    name: str
+    sinhala_name: Optional[str] = ""
+    code: str
+    order_index: int = 1
+    description: Optional[str] = ""
+
+
+class LessonCreate(BaseModel):
+    id: str
+    subject_id: str
+    title: str
+    sinhala_title: Optional[str] = ""
+    order_index: int = 1
+    description: Optional[str] = ""
+
+
+class QuestionCreate(BaseModel):
+    title: str
+    custom_id: Optional[str] = None
+    subject_id: str
+    lesson_id: Optional[str] = None
+    content_text: str
+    solution_text: str
+    solution_title: str = "Official Marking Scheme"
+    question_type: str = "SHORT"
+    difficulty: str = "MEDIUM"
+    schedule: str = "REGULAR"
+    source: str = "PAST_PAPER"
+    source_details: Optional[str] = ""
+    allocated_marks: int = 25
+    is_premium: bool = False
+    is_published: bool = True
+    scheduled_date: Optional[str] = None
+
+
+# -----------------------------------------------------------------------------
+# Web UI Endpoints
+# -----------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/admin", response_class=HTMLResponse)
+def serve_admin_studio():
     """
-    Root endpoint for basic service discovery.
+    Renders the modern Maths DD Content Studio Admin UI.
     """
-    return {
-        "service": "Maths DD Backend",
-        "status": "online",
-        "environment": os.environ.get("ENV", "production"),
-        "version": "1.0.0",
-    }
+    html_path = TEMPLATES_DIR / "admin.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Admin studio template not found")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 @app.get("/health")
@@ -50,10 +101,9 @@ def health_check():
 async def test_database():
     """
     Tests live connectivity to Google Cloud SQL (PostgreSQL).
-    Executes sample queries to verify credentials, database name, and public tables.
     """
     try:
-        conn = await get_db_connection()
+        conn = await database.get_db_connection()
         version = await conn.fetchval("SELECT version();")
         now = await conn.fetchval("SELECT NOW();")
         tables = await conn.fetch(
@@ -77,8 +127,105 @@ async def test_database():
         }
 
 
+# -----------------------------------------------------------------------------
+# REST API: Curriculum & Content Management
+# -----------------------------------------------------------------------------
+
+@app.get("/api/subjects")
+async def list_subjects():
+    """Fetches all master subjects from Cloud SQL."""
+    try:
+        return await database.get_subjects()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/subjects")
+async def add_subject(sub: SubjectCreate):
+    """Creates or updates a subject."""
+    try:
+        return await database.create_subject(
+            id=sub.id,
+            name=sub.name,
+            sinhala_name=sub.sinhala_name or "",
+            code=sub.code,
+            order_index=sub.order_index,
+            description=sub.description or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/lessons")
+async def list_lessons(subject_id: Optional[str] = Query(None)):
+    """Fetches syllabus lessons, optionally filtered by subject ID."""
+    try:
+        return await database.get_lessons(subject_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/lessons")
+async def add_lesson(les: LessonCreate):
+    """Creates or updates a syllabus lesson."""
+    try:
+        return await database.create_lesson(
+            id=les.id,
+            subject_id=les.subject_id,
+            title=les.title,
+            sinhala_title=les.sinhala_title or "",
+            order_index=les.order_index,
+            description=les.description or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/questions")
+async def add_question(q: QuestionCreate):
+    """Creates a new question with its corresponding marking scheme in Cloud SQL."""
+    try:
+        return await database.create_question_with_solution(
+            title=q.title,
+            subject_id=q.subject_id,
+            lesson_id=q.lesson_id,
+            content_text=q.content_text,
+            solution_text=q.solution_text,
+            solution_title=q.solution_title,
+            question_type=q.question_type,
+            difficulty=q.difficulty,
+            schedule=q.schedule,
+            source=q.source,
+            source_details=q.source_details or "",
+            allocated_marks=q.allocated_marks,
+            is_premium=q.is_premium,
+            is_published=q.is_published,
+            scheduled_date=q.scheduled_date,
+            custom_id=q.custom_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/questions/recent")
+async def list_recent_questions(limit: int = 15):
+    """Fetches the latest questions stored in Cloud SQL."""
+    try:
+        return await database.get_recent_questions(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/seed")
+async def seed_database():
+    """Seeds default Pure & Applied Maths curriculum if empty."""
+    try:
+        return await database.seed_default_curriculum()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
-
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
