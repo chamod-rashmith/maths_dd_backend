@@ -102,6 +102,27 @@ async def create_subject(id: str, name: str, sinhala_name: str, code: str, order
         await conn.close()
 
 
+async def delete_subject(subject_id: str) -> Dict[str, Any]:
+    conn = await get_db_connection()
+    try:
+        if not subject_id or subject_id.strip() == "":
+            res = await conn.execute("DELETE FROM subjects WHERE id = '' OR order_index = 0;")
+        else:
+            res = await conn.execute("DELETE FROM subjects WHERE id = $1;", subject_id)
+        return {"status": "success", "result": res}
+    finally:
+        await conn.close()
+
+
+async def cleanup_empty_subjects() -> Dict[str, Any]:
+    conn = await get_db_connection()
+    try:
+        res = await conn.execute("DELETE FROM subjects WHERE id = '' OR name = '' OR order_index = 0;")
+        return {"status": "success", "result": res}
+    finally:
+        await conn.close()
+
+
 async def create_lesson(id: str, subject_id: str, title: str, sinhala_title: str, order_index: int, description: str = "") -> Dict[str, Any]:
     conn = await get_db_connection()
     try:

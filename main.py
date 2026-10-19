@@ -156,6 +156,24 @@ async def add_subject(sub: SubjectCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/subjects/cleanup")
+async def cleanup_empty():
+    """Deletes empty or accidental subject entries (id = '' or order_index = 0)."""
+    try:
+        return await database.cleanup_empty_subjects()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/subjects/{subject_id}")
+async def remove_subject(subject_id: str):
+    """Deletes a subject by ID."""
+    try:
+        return await database.delete_subject(subject_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/lessons")
 async def list_lessons(subject_id: Optional[str] = Query(None)):
     """Fetches syllabus lessons, optionally filtered by subject ID."""
