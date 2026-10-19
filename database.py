@@ -4,6 +4,7 @@ Database operations for Maths DD Content Studio & Cloud SQL (PostgreSQL).
 
 import os
 import uuid
+import datetime
 from typing import List, Dict, Any, Optional
 import asyncpg
 
@@ -145,6 +146,14 @@ async def create_question_with_solution(
         # Generate question ID
         q_id = custom_id.strip() if (custom_id and custom_id.strip()) else f"q_{uuid.uuid4().hex[:10]}"
 
+        # Parse scheduled_date string into python datetime.date if present
+        parsed_date = None
+        if scheduled_date and str(scheduled_date).strip():
+            try:
+                parsed_date = datetime.date.fromisoformat(str(scheduled_date).strip())
+            except (ValueError, TypeError):
+                parsed_date = None
+
         # Insert question
         q_query = """
         INSERT INTO questions (
@@ -155,7 +164,7 @@ async def create_question_with_solution(
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9, $10,
-            $11, $12, $13, $14::date,
+            $11, $12, $13, $14,
             NOW(), NOW()
         )
         RETURNING id, title, subject_id, lesson_id, created_at;
@@ -164,7 +173,7 @@ async def create_question_with_solution(
             q_query,
             q_id, title, subject_id, lesson_id, content_text,
             question_type, difficulty, schedule, source, source_details,
-            allocated_marks, is_premium, is_published, scheduled_date
+            allocated_marks, is_premium, is_published, parsed_date
         )
 
         # Insert marking scheme / solution
