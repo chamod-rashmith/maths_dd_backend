@@ -409,7 +409,7 @@ async def create_or_update_study_note(
     title: str,
     subject_id: str,
     lesson_id: Optional[str],
-    content_text: str,
+    content_text: Optional[str] = "",
     description: Optional[str] = "",
     pdf_url: Optional[str] = None,
     is_premium: bool = False,

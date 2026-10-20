@@ -341,30 +341,79 @@
               ></textarea>
             </div>
 
-            <!-- Optional PDF URL / Cloud Storage Attachment -->
-            <div class="space-y-1">
-              <label for="note-pdf-url" class="block text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span class="flex items-center gap-1.5">
-                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-red-500"></i>
-                  PDF Document Link
+            <!-- =============================================================== -->
+            <!-- CONTENT FORMAT SELECTOR (Markdown/LaTeX vs PDF URL) -->
+            <!-- =============================================================== -->
+            <div class="space-y-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-slate-900">
+                  Select Content Type <span class="text-red-500">*</span>
+                </label>
+                <span id="format-active-badge" class="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                  Markdown Mode
                 </span>
-                <span class="text-[10px] text-slate-400">Firebase Storage or Web URL (Optional)</span>
-              </label>
-              <div class="flex gap-2">
-                <input 
-                  type="url" 
-                  id="note-pdf-url" 
-                  placeholder="https://storage.googleapis.com/.../handout.pdf" 
-                  class="flex-1 text-xs px-3 py-2 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400"
-                />
-                <button type="button" onclick="testPdfLink()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
-                  Test Link
+              </div>
+
+              <!-- Format Switcher Buttons -->
+              <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                <button 
+                  type="button" 
+                  id="format-btn-markdown" 
+                  onclick="setNoteFormat('markdown')" 
+                  class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-xs border border-indigo-100"
+                >
+                  <i data-lucide="file-code" class="w-4 h-4"></i>
+                  <span>📝 Markdown & LaTeX Math</span>
+                </button>
+                <button 
+                  type="button" 
+                  id="format-btn-pdf" 
+                  onclick="setNoteFormat('pdf')" 
+                  class="py-2.5 px-3 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900"
+                >
+                  <i data-lucide="file-text" class="w-4 h-4 text-red-500"></i>
+                  <span>📄 PDF (Firebase Storage)</span>
                 </button>
               </div>
             </div>
 
-            <!-- Mathematical Content Editor (LaTeX & Markdown) -->
-            <div class="space-y-2 pt-2">
+            <!-- =============================================================== -->
+            <!-- OPTION A: PDF Document Mode Panel -->
+            <!-- =============================================================== -->
+            <div id="format-pane-pdf" class="hidden space-y-3 p-4 bg-red-50/40 rounded-xl border border-red-200/70">
+              <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <i data-lucide="file-text" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-red-900">PDF Document Study Material</h4>
+                  <p class="text-[11px] text-red-700">Enter your Firebase Cloud Storage URL or web document link. Markdown theory content is not required.</p>
+                </div>
+              </div>
+
+              <div class="space-y-1">
+                <label for="note-pdf-url" class="block text-xs font-semibold text-slate-700">
+                  Firebase Cloud Storage PDF URL <span class="text-red-500">*</span>
+                </label>
+                <div class="flex gap-2">
+                  <input 
+                    type="url" 
+                    id="note-pdf-url" 
+                    placeholder="https://firebasestorage.googleapis.com/v0/b/.../notes.pdf" 
+                    oninput="renderLivePreview()"
+                    class="flex-1 text-xs px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition text-slate-900 placeholder-slate-400"
+                  />
+                  <button type="button" onclick="testPdfLink()" class="px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 transition shrink-0 flex items-center gap-1.5">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Test Link
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- =============================================================== -->
+            <!-- OPTION B: Markdown & LaTeX Math Mode Panel -->
+            <!-- =============================================================== -->
+            <div id="format-pane-markdown" class="space-y-2">
               <div class="flex items-center justify-between">
                 <label for="note-content" class="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                   <i data-lucide="sigma" class="w-4 h-4 text-indigo-600"></i>
@@ -418,12 +467,11 @@
                 </button>
               </div>
 
-              <!-- Main Textarea -->
+              <!-- Main Textarea (Note: required removed from HTML so it doesn't block PDF mode) -->
               <div class="relative">
                 <textarea 
                   id="note-content" 
                   rows="14" 
-                  required 
                   placeholder="# Lesson Topic&#10;&#10;### Theorem or Formula&#10;Write theory with inline math $a^2 + b^2 = c^2$ or display math:&#10;$$\int \frac{1}{x}\,dx = \ln|x| + C$$&#10;&#10;**Key Properties:**&#10;1. Point 1&#10;2. Point 2"
                   oninput="renderLivePreview()" 
                   class="w-full text-xs sm:text-sm font-mono px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400 leading-relaxed"
@@ -473,14 +521,14 @@
           <div class="flex items-center justify-between border-b border-slate-100 pb-3">
             <div class="flex items-center gap-2">
               <i data-lucide="eye" class="w-4 h-4 text-indigo-600"></i>
-              <h3 class="text-sm font-bold text-slate-900">Live Mathematical Preview</h3>
+              <h3 id="preview-heading" class="text-sm font-bold text-slate-900">Live Mathematical Preview</h3>
             </div>
             
             <div class="flex items-center gap-2">
               <span id="preview-badge" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                 KaTeX Active
               </span>
-              <button onclick="renderLivePreview()" title="Refresh Math Render" class="p-1 text-slate-400 hover:text-slate-600 rounded transition">
+              <button onclick="renderLivePreview()" title="Refresh Render" class="p-1 text-slate-400 hover:text-slate-600 rounded transition">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
               </button>
             </div>
@@ -512,19 +560,29 @@
               </p>
             </div>
 
-            <!-- PDF Attachment Callout (if entered) -->
-            <div id="preview-pdf-box" class="hidden p-3 rounded-xl bg-red-50/80 border border-red-200 flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <i data-lucide="file-text" class="w-4 h-4 text-red-600"></i>
-                <span class="text-xs font-semibold text-red-900">PDF Document Included</span>
+            <!-- PDF Attachment Callout (when in PDF mode or PDF URL entered) -->
+            <div id="preview-pdf-box" class="hidden p-4 rounded-xl bg-red-50/80 border border-red-200 space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-xs font-bold text-red-950 block">PDF Study Material Linked</span>
+                    <span class="text-[10px] text-red-600 font-mono truncate max-w-[200px] block" id="preview-pdf-url-label"></span>
+                  </div>
+                </div>
+                <a id="preview-pdf-link" href="#" target="_blank" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1 transition shadow-xs">
+                  <span>Open PDF</span> <i data-lucide="external-link" class="w-3 h-3"></i>
+                </a>
               </div>
-              <a id="preview-pdf-link" href="#" target="_blank" class="text-xs text-red-700 hover:text-red-900 font-semibold underline flex items-center gap-1">
-                Open PDF <i data-lucide="external-link" class="w-3 h-3"></i>
-              </a>
+              <p class="text-[11px] text-red-700 pt-1">
+                Students will be able to view and download this PDF directly on mobile.
+              </p>
             </div>
 
             <!-- Rendered Markdown & Math Body -->
-            <div class="max-h-[500px] overflow-y-auto pr-1">
+            <div id="preview-markdown-wrapper" class="max-h-[500px] overflow-y-auto pr-1">
               <div id="preview-rendered-body" class="note-prose text-slate-700 text-sm">
                 <p class="text-slate-400 italic text-center py-8">
                   Type your markdown notes and LaTeX equations on the left to see the instant live preview here.
@@ -713,7 +771,8 @@
       subjects: [],
       lessons: [],
       notes: [],
-      activeView: 'create', // 'create' or 'catalog'
+      noteFormat: 'markdown', // 'markdown' or 'pdf'
+      activeView: 'create',   // 'create' or 'catalog'
       activeMobileTab: 'edit', // 'edit', 'preview', or 'catalog'
       editingNoteId: null,
       searchTimeout: null,
@@ -726,6 +785,51 @@
       await loadNotesList();
       renderLivePreview();
     });
+
+    // -------------------------------------------------------------------------
+    // Format Selection (Markdown / LaTeX vs PDF Document)
+    // -------------------------------------------------------------------------
+
+    function setNoteFormat(format) {
+      state.noteFormat = format;
+
+      const btnMd = document.getElementById("format-btn-markdown");
+      const btnPdf = document.getElementById("format-btn-pdf");
+      const paneMd = document.getElementById("format-pane-markdown");
+      const panePdf = document.getElementById("format-pane-pdf");
+      const badge = document.getElementById("format-active-badge");
+
+      if (format === 'pdf') {
+        btnPdf.className = "py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 bg-white text-red-600 shadow-xs border border-red-200";
+        btnMd.className = "py-2.5 px-3 rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900";
+        
+        panePdf.classList.remove("hidden");
+        paneMd.classList.add("hidden");
+
+        badge.textContent = "PDF Document Mode";
+        badge.className = "text-[10px] font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-200";
+        
+        document.getElementById("preview-heading").textContent = "PDF Study Note Preview";
+        document.getElementById("preview-badge").textContent = "PDF Mode";
+        document.getElementById("preview-badge").className = "px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200";
+      } else {
+        btnMd.className = "py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 bg-white text-indigo-700 shadow-xs border border-indigo-100";
+        btnPdf.className = "py-2.5 px-3 rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 text-slate-600 hover:text-slate-900";
+        
+        paneMd.classList.remove("hidden");
+        panePdf.classList.add("hidden");
+
+        badge.textContent = "Markdown Mode";
+        badge.className = "text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200";
+        
+        document.getElementById("preview-heading").textContent = "Live Mathematical Preview";
+        document.getElementById("preview-badge").textContent = "KaTeX Active";
+        document.getElementById("preview-badge").className = "px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200";
+      }
+
+      renderLivePreview();
+      lucide.createIcons();
+    }
 
     // -------------------------------------------------------------------------
     // API Data Loaders
@@ -871,6 +975,7 @@
         const lessonName = note.lesson_title || "General Lesson";
         const isPremium = note.is_premium;
         const hasPdf = !!note.pdf_url;
+        const isPdfOnly = hasPdf && (!note.content_text || note.content_text.trim() === '');
 
         card.innerHTML = `
           <div class="space-y-2">
@@ -879,10 +984,21 @@
               <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
                 ${escapeHtml(subjectName)}
               </span>
-              ${isPremium 
-                ? '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1"><i data-lucide="crown" class="w-3 h-3 text-amber-500"></i> PRO</span>'
-                : '<span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600">FREE</span>'
-              }
+              <div class="flex items-center gap-1">
+                ${hasPdf ? `
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 flex items-center gap-1">
+                    <i data-lucide="file-text" class="w-3 h-3"></i> PDF
+                  </span>
+                ` : `
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600">
+                    MATH / MD
+                  </span>
+                `}
+                ${isPremium 
+                  ? '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1"><i data-lucide="crown" class="w-3 h-3 text-amber-500"></i> PRO</span>'
+                  : '<span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600">FREE</span>'
+                }
+              </div>
             </div>
 
             <!-- Title -->
@@ -901,12 +1017,6 @@
             <p class="text-xs text-slate-600 line-clamp-2 italic pt-1">
               ${escapeHtml(note.description || "No description provided.")}
             </p>
-
-            ${hasPdf ? `
-              <div class="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
-                <i data-lucide="file-text" class="w-3 h-3"></i> PDF Document Attached
-              </div>
-            ` : ''}
           </div>
 
           <!-- Card Actions Footer -->
@@ -936,7 +1046,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // Form Handlers & Submission
+    // Form Handlers & Submission (EITHER Markdown OR PDF URL)
     // -------------------------------------------------------------------------
 
     async function handleNoteSubmit(e) {
@@ -953,12 +1063,36 @@
       const orderIndex = parseInt(document.getElementById("note-order").value) || 0;
       const isPremium = document.getElementById("note-is-premium").checked;
       const description = document.getElementById("note-description").value.trim();
+      
       const pdfUrl = document.getElementById("note-pdf-url").value.trim();
       const contentText = document.getElementById("note-content").value;
 
-      if (!title || !subjectId || !contentText) {
-        showToast("Please fill in Title, Subject, and Theory Content.", "error");
+      // 1. Basic Metadata Validation
+      if (!title) {
+        showToast("Please provide a Note Title.", "error");
+        document.getElementById("note-title").focus();
         return;
+      }
+      if (!subjectId) {
+        showToast("Please select a Subject Category.", "error");
+        document.getElementById("note-subject").focus();
+        return;
+      }
+
+      // 2. Either/Or Content Validation based on selected format
+      const isPdfMode = state.noteFormat === 'pdf';
+      if (isPdfMode) {
+        if (!pdfUrl) {
+          showToast("Please provide the PDF URL / Firebase Storage link.", "error");
+          document.getElementById("note-pdf-url").focus();
+          return;
+        }
+      } else {
+        if (!contentText || !contentText.trim()) {
+          showToast("Please write your Markdown / LaTeX theory content.", "error");
+          document.getElementById("note-content").focus();
+          return;
+        }
       }
 
       submitBtn.disabled = true;
@@ -966,14 +1100,16 @@
       lucide.createIcons();
       statusMsg.textContent = "Writing to PostgreSQL database...";
 
+      // Clean payload: if PDF mode, pdf_url is saved and content_text is empty
+      // If Markdown mode, content_text is saved and pdf_url is null
       const payload = {
         id: customId || (state.editingNoteId ? state.editingNoteId : null),
         title: title,
         subject_id: subjectId,
         lesson_id: lessonId || null,
         description: description,
-        content_text: contentText,
-        pdf_url: pdfUrl || null,
+        content_text: isPdfMode ? (contentText.trim() || "") : contentText,
+        pdf_url: isPdfMode ? pdfUrl : (pdfUrl || null),
         is_premium: isPremium,
         order_index: orderIndex,
         author: author,
@@ -1031,6 +1167,13 @@
       document.getElementById("note-pdf-url").value = note.pdf_url || "";
       document.getElementById("note-content").value = note.content_text || "";
 
+      // Smart format switch
+      if (note.pdf_url && (!note.content_text || note.content_text.trim() === '')) {
+        setNoteFormat('pdf');
+      } else {
+        setNoteFormat('markdown');
+      }
+
       handleSubjectChange(note.subject_id).then(() => {
         if (note.lesson_id) {
           document.getElementById("note-lesson").value = note.lesson_id;
@@ -1066,6 +1209,7 @@
       document.getElementById("note-form").reset();
       document.getElementById("form-heading").textContent = "Add New Study Note";
       document.getElementById("save-status-msg").textContent = "Ready to save note to Cloud SQL.";
+      setNoteFormat('markdown');
       if (state.subjects.length > 0) {
         document.getElementById("note-subject").value = state.subjects[0].id;
         handleSubjectChange(state.subjects[0].id);
@@ -1074,7 +1218,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // KaTeX & Markdown Live Preview Renderer
+    // KaTeX & Live Preview Renderer
     // -------------------------------------------------------------------------
 
     function renderLivePreview() {
@@ -1084,6 +1228,7 @@
       const isPremium = document.getElementById("note-is-premium").checked;
       const pdfUrl = document.getElementById("note-pdf-url").value.trim();
       const rawContent = document.getElementById("note-content").value;
+      const isPdfMode = state.noteFormat === 'pdf';
 
       // Update Header preview
       document.getElementById("preview-title").textContent = title;
@@ -1103,17 +1248,31 @@
         premiumBadge.innerHTML = '<i data-lucide="check-circle" class="w-3 h-3"></i> FREE NOTE';
       }
 
-      // PDF Callout box
+      // PDF Callout box in preview
       const pdfBox = document.getElementById("preview-pdf-box");
       const pdfLink = document.getElementById("preview-pdf-link");
-      if (pdfUrl) {
+      const pdfLabel = document.getElementById("preview-pdf-url-label");
+      const mdWrapper = document.getElementById("preview-markdown-wrapper");
+
+      if (isPdfMode) {
         pdfBox.classList.remove("hidden");
-        pdfLink.href = pdfUrl;
+        pdfLink.href = pdfUrl || "#";
+        pdfLabel.textContent = pdfUrl || "Enter PDF URL on left...";
+        mdWrapper.classList.add("hidden");
+        lucide.createIcons();
+        return;
       } else {
-        pdfBox.classList.add("hidden");
+        mdWrapper.classList.remove("hidden");
+        if (pdfUrl) {
+          pdfBox.classList.remove("hidden");
+          pdfLink.href = pdfUrl;
+          pdfLabel.textContent = pdfUrl;
+        } else {
+          pdfBox.classList.add("hidden");
+        }
       }
 
-      // Stats
+      // Stats for markdown
       const wordCount = rawContent.trim() ? rawContent.trim().split(/\s+/).length : 0;
       const charCount = rawContent.length;
       document.getElementById("content-stats").textContent = `${wordCount} words • ${charCount} chars`;
@@ -1279,21 +1438,25 @@
 
       // Render Markdown & Math
       const contentContainer = document.getElementById("modal-content");
-      try {
-        contentContainer.innerHTML = marked.parse(note.content_text || "");
-        if (window.renderMathInElement) {
-          renderMathInElement(contentContainer, {
-            delimiters: [
-              { left: "$$", right: "$$", display: true },
-              { left: "$", right: "$", display: false },
-              { left: "\\(", right: "\\)", display: false },
-              { left: "\\[", right: "\\]", display: true }
-            ],
-            throwOnError: false,
-          });
+      if (note.content_text && note.content_text.trim()) {
+        try {
+          contentContainer.innerHTML = marked.parse(note.content_text);
+          if (window.renderMathInElement) {
+            renderMathInElement(contentContainer, {
+              delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+              ],
+              throwOnError: false,
+            });
+          }
+        } catch (e) {
+          contentContainer.textContent = note.content_text;
         }
-      } catch (e) {
-        contentContainer.textContent = note.content_text;
+      } else {
+        contentContainer.innerHTML = '<p class="text-slate-400 italic">This is a PDF-based study document. Use the button above to view or download.</p>';
       }
 
       // Edit Button in Modal

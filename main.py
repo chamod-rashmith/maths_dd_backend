@@ -79,7 +79,7 @@ class StudyNoteCreate(BaseModel):
     description: Optional[str] = ""
     subject_id: str
     lesson_id: Optional[str] = None
-    content_text: str = ""
+    content_text: Optional[str] = ""
     pdf_url: Optional[str] = None
     is_premium: bool = False
     order_index: int = 0
