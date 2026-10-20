@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50 text-slate-800">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Maths DD — Study Notes Studio</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Marked Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* KaTeX equation display adjustments */
+    .katex-display {
+      margin: 1em 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.5em 0;
+    }
+    
+    /* Custom light prose styling */
+    .note-prose h1 { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-top: 1.25rem; margin-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.35rem; }
+    .note-prose h2 { font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-top: 1.25rem; margin-bottom: 0.5rem; }
+    .note-prose h3 { font-size: 1.1rem; font-weight: 600; color: #334155; margin-top: 1rem; margin-bottom: 0.5rem; }
+    .note-prose p { margin-bottom: 0.85rem; line-height: 1.65; color: #334155; font-size: 0.95rem; }
+    .note-prose ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.85rem; color: #334155; }
+    .note-prose ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.85rem; color: #334155; }
+    .note-prose li { margin-bottom: 0.25rem; line-height: 1.55; }
+    .note-prose blockquote {
+      border-left: 4px solid #6366f1;
+      background-color: #f8fafc;
+      padding: 0.65rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 0.5rem 0.5rem 0;
+      color: #475569;
+      font-style: italic;
+    }
+    .note-prose code {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      padding: 0.15rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.875em;
+      font-family: monospace;
+    }
+    .note-prose pre {
+      background-color: #0f172a;
+      color: #f8fafc;
+      padding: 0.85rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .note-prose pre code {
+      background-color: transparent;
+      color: inherit;
+      padding: 0;
+    }
+    .note-prose table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .note-prose th, .note-prose td {
+      border: 1px solid #cbd5e1;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    .note-prose th {
+      background-color: #f1f5f9;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    /* Hide scrollbars for toolbars */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased text-slate-800 bg-slate-50 selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- ========================================================================= -->
+  <!-- Top Navigation Header (Light Theme) -->
+  <!-- ========================================================================= -->
+  <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+          <i data-lucide="book-open" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-base sm:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            Maths DD <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">Notes Studio</span>
+          </span>
+          <p class="text-xs text-slate-500 hidden sm:block">A/L Theory, Formulae & Study Materials</p>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          Cloud SQL Connected
+        </div>
+
+        <a href="/admin" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 flex items-center gap-1.5 transition">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span class="hidden sm:inline">Questions Studio</span>
+        </a>
+
+        <a href="/docs" target="_blank" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 flex items-center gap-1.5 transition">
+          <i data-lucide="code" class="w-3.5 h-3.5"></i>
+          <span>API</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- View Mode Switcher (Desktop Tabs & Mobile Segments) -->
+  <!-- ========================================================================= -->
+  <div class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <!-- Desktop & Tablet Tabs -->
+      <div class="hidden lg:flex space-x-6">
+        <button onclick="switchView('create')" id="tab-btn-create" class="view-tab-btn py-3 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 flex items-center gap-2 transition">
+          <i data-lucide="pen-tool" class="w-4 h-4"></i> Create & Edit Note
+        </button>
+        <button onclick="switchView('catalog')" id="tab-btn-catalog" class="view-tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition">
+          <i data-lucide="library" class="w-4 h-4"></i> Notes Library (<span id="notes-counter">0</span>)
+        </button>
+      </div>
+
+      <!-- Mobile Segmented Control (< 1024px) -->
+      <div class="lg:hidden py-2.5 flex items-center justify-between gap-2">
+        <div class="grid grid-cols-3 bg-slate-100 p-1 rounded-xl w-full text-xs font-medium">
+          <button onclick="switchMobileTab('edit')" id="mob-btn-edit" class="mob-tab py-1.5 rounded-lg bg-white text-indigo-600 shadow-xs text-center font-semibold transition">
+            ✍️ Editor
+          </button>
+          <button onclick="switchMobileTab('preview')" id="mob-btn-preview" class="mob-tab py-1.5 rounded-lg text-slate-600 hover:text-slate-900 text-center transition">
+            👁️ Preview
+          </button>
+          <button onclick="switchMobileTab('catalog')" id="mob-btn-catalog" class="mob-tab py-1.5 rounded-lg text-slate-600 hover:text-slate-900 text-center transition">
+            📚 Library
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- Toast Notification System -->
+  <!-- ========================================================================= -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4"></div>
+
+  <!-- ========================================================================= -->
+  <!-- Main Content Layout -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- --------------------------------------------------------------------- -->
+    <!-- VIEW 1: NOTE EDITOR & LIVE PREVIEW -->
+    <!-- --------------------------------------------------------------------- -->
+    <div id="view-create" class="space-y-6">
+
+      <!-- Form & Preview Grid (Side-by-side on desktop, toggled on mobile) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- =================================================================== -->
+        <!-- LEFT COLUMN: The Note Input Form (Col 1-7 on desktop) -->
+        <!-- =================================================================== -->
+        <div id="mobile-editor-pane" class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-6 space-y-5">
+          
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+              <h2 id="form-heading" class="text-base sm:text-lg font-bold text-slate-900">Add New Study Note</h2>
+            </div>
+            
+            <button onclick="resetNoteForm()" title="Clear Form" class="px-2.5 py-1.5 text-xs text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 flex items-center gap-1.5 transition">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>Clear</span>
+            </button>
+          </div>
+
+          <!-- Note Form -->
+          <form id="note-form" onsubmit="handleNoteSubmit(event)" class="space-y-4">
+
+            <!-- Title & Custom ID Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="sm:col-span-2 space-y-1">
+                <label for="note-title" class="block text-xs font-semibold text-slate-700">
+                  Note Title <span class="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="note-title" 
+                  required 
+                  placeholder="e.g. Differentiation from First Principles" 
+                  oninput="handleTitleInput(this.value)"
+                  class="w-full text-sm px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900 placeholder-slate-400"
+                />
+              </div>
+
+              <div class="space-y-1">
+                <label for="note-id" class="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>Custom ID</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Optional</span>
+                </label>
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="note-id" 
+                    placeholder="Auto-generated if empty" 
+                    class="w-full text-xs font-mono px-3 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Subject & Syllabus Lesson Cascade Selectors -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label for="note-subject" class="block text-xs font-semibold text-slate-700">
+                  Subject Category <span class="text-red-500">*</span>
+                </label>
+                <div class="relative">
+                  <select 
+                    id="note-subject" 
+                    required 
+                    onchange="handleSubjectChange(this.value)"
+                    class="w-full text-sm px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900 cursor-pointer"
+                  >
+                    <option value="" disabled selected>Loading subjects...</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="space-y-1">
+                <label for="note-lesson" class="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>Syllabus Lesson</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Optional</span>
+                </label>
+                <div class="relative">
+                  <select 
+                    id="note-lesson" 
+                    class="w-full text-sm px-3.5 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900 cursor-pointer"
+                  >
+                    <option value="">Select subject first</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Metadata Row: Author, Order Index, Premium Tier Switch -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/70">
+              
+              <!-- Author -->
+              <div class="space-y-1">
+                <label for="note-author" class="block text-xs font-semibold text-slate-700">Author / Teacher</label>
+                <input 
+                  type="text" 
+                  id="note-author" 
+                  placeholder="e.g. Teacher or Faculty Name" 
+                  class="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition text-slate-800 placeholder-slate-400"
+                />
+              </div>
+
+              <!-- Order Index -->
+              <div class="space-y-1">
+                <label for="note-order" class="block text-xs font-semibold text-slate-700">Sort Priority Order</label>
+                <input 
+                  type="number" 
+                  id="note-order" 
+                  value="1" 
+                  min="0"
+                  class="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition text-slate-800"
+                />
+              </div>
+
+              <!-- Premium Flag Toggle -->
+              <div class="space-y-1 flex flex-col justify-end">
+                <label class="flex items-center gap-2 cursor-pointer pt-2 sm:pt-0">
+                  <input type="checkbox" id="note-is-premium" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 transition" />
+                  <span class="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    <i data-lucide="crown" class="w-3.5 h-3.5 text-amber-500"></i>
+                    PRO / Premium Note
+                  </span>
+                </label>
+                <span class="text-[10px] text-slate-500">Subscribers only access</span>
+              </div>
+
+            </div>
+
+            <!-- Description / Synopsis -->
+            <div class="space-y-1">
+              <label for="note-description" class="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Brief Synopsis / Summary</span>
+                <span class="text-[10px] text-slate-400">Shown in note card preview</span>
+              </label>
+              <textarea 
+                id="note-description" 
+                rows="2" 
+                placeholder="A concise summary of key formulas, theorems, and examination techniques covered..." 
+                oninput="renderLivePreview()"
+                class="w-full text-xs sm:text-sm px-3.5 py-2 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400"
+              ></textarea>
+            </div>
+
+            <!-- Optional PDF URL / Cloud Storage Attachment -->
+            <div class="space-y-1">
+              <label for="note-pdf-url" class="block text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-red-500"></i>
+                  PDF Document Link
+                </span>
+                <span class="text-[10px] text-slate-400">Firebase Storage or Web URL (Optional)</span>
+              </label>
+              <div class="flex gap-2">
+                <input 
+                  type="url" 
+                  id="note-pdf-url" 
+                  placeholder="https://storage.googleapis.com/.../handout.pdf" 
+                  class="flex-1 text-xs px-3 py-2 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400"
+                />
+                <button type="button" onclick="testPdfLink()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
+                  Test Link
+                </button>
+              </div>
+            </div>
+
+            <!-- Mathematical Content Editor (LaTeX & Markdown) -->
+            <div class="space-y-2 pt-2">
+              <div class="flex items-center justify-between">
+                <label for="note-content" class="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <i data-lucide="sigma" class="w-4 h-4 text-indigo-600"></i>
+                  Theory Content (Markdown + LaTeX Math) <span class="text-red-500">*</span>
+                </label>
+                
+                <span id="content-stats" class="text-[11px] text-slate-400">
+                  0 words • 0 chars
+                </span>
+              </div>
+
+              <!-- Quick Math Equations & Symbols Toolbar (Horizontally scrollable for mobile) -->
+              <div class="p-1.5 bg-slate-100 rounded-xl border border-slate-200/80 flex items-center gap-1 overflow-x-auto no-scrollbar">
+                <span class="text-[10px] uppercase font-bold text-slate-400 px-1.5 select-none shrink-0">Quick Math:</span>
+                
+                <button type="button" onclick="insertMath('\\frac{a}{b}')" title="Fraction" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \frac{a}{b}
+                </button>
+                <button type="button" onclick="insertMath('\\sqrt{x}')" title="Square Root" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \sqrt{x}
+                </button>
+                <button type="button" onclick="insertMath('x^{n}')" title="Power / Exponent" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  x^{n}
+                </button>
+                <button type="button" onclick="insertMath('x_{i}')" title="Subscript" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  x_{i}
+                </button>
+                <button type="button" onclick="insertMath('\\int_{a}^{b} f(x)\\,dx')" title="Definite Integral" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \int_{a}^{b}
+                </button>
+                <button type="button" onclick="insertMath('\\lim_{x \\to 0}')" title="Limit" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \lim
+                </button>
+                <button type="button" onclick="insertMath('\\sum_{i=1}^{n}')" title="Summation" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \sum
+                </button>
+                <button type="button" onclick="insertMath('\\mathbf{v}')" title="Bold Vector" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \mathbf{v}
+                </button>
+                <button type="button" onclick="insertMath('\\theta')" title="Theta" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \theta
+                </button>
+                <button type="button" onclick="insertMath('\\pi')" title="Pi" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  \pi
+                </button>
+                <button type="button" onclick="insertMath('$$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$')" title="Matrix" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  Matrix
+                </button>
+                <button type="button" onclick="insertMath('> **Key Formula:**\n> $$e^{i\\pi} + 1 = 0$$\n')" title="Formula Box" class="px-2 py-1 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded text-xs font-mono text-slate-700 border border-slate-200 transition shrink-0">
+                  Box 📦
+                </button>
+              </div>
+
+              <!-- Main Textarea -->
+              <div class="relative">
+                <textarea 
+                  id="note-content" 
+                  rows="14" 
+                  required 
+                  placeholder="# Lesson Topic&#10;&#10;### Theorem or Formula&#10;Write theory with inline math $a^2 + b^2 = c^2$ or display math:&#10;$$\int \frac{1}{x}\,dx = \ln|x| + C$$&#10;&#10;**Key Properties:**&#10;1. Point 1&#10;2. Point 2"
+                  oninput="renderLivePreview()" 
+                  class="w-full text-xs sm:text-sm font-mono px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-800 placeholder-slate-400 leading-relaxed"
+                ></textarea>
+              </div>
+
+              <p class="text-[11px] text-slate-500">
+                💡 <strong>LaTeX Math Syntax:</strong> Use single <code class="text-indigo-600">$equation$</code> for inline formulas and double <code class="text-indigo-600">$$equation$$</code> for centered equations.
+              </p>
+            </div>
+
+            <!-- Form Action Buttons -->
+            <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span id="save-status-msg" class="text-xs text-slate-500 order-2 sm:order-1 text-center sm:text-left">
+                Ready to save note to Cloud SQL.
+              </span>
+
+              <div class="flex items-center gap-2.5 w-full sm:w-auto order-1 sm:order-2">
+                <button 
+                  type="button" 
+                  onclick="switchMobileTab('preview')"
+                  class="lg:hidden flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                >
+                  <i data-lucide="eye" class="w-4 h-4"></i> Preview
+                </button>
+
+                <button 
+                  type="submit" 
+                  id="submit-btn" 
+                  class="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs sm:text-sm font-semibold shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition active:scale-[0.98]"
+                >
+                  <i data-lucide="save" class="w-4 h-4"></i> Save Study Note
+                </button>
+              </div>
+            </div>
+
+          </form>
+
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- RIGHT COLUMN: KaTeX Live Math & Markdown Preview (Col 8-12 on desktop) -->
+        <!-- =================================================================== -->
+        <div id="mobile-preview-pane" class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-6 space-y-4 lg:sticky lg:top-24 hidden lg:block">
+          
+          <!-- Preview Header -->
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="eye" class="w-4 h-4 text-indigo-600"></i>
+              <h3 class="text-sm font-bold text-slate-900">Live Mathematical Preview</h3>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span id="preview-badge" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                KaTeX Active
+              </span>
+              <button onclick="renderLivePreview()" title="Refresh Math Render" class="p-1 text-slate-400 hover:text-slate-600 rounded transition">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview Content Card -->
+          <div class="space-y-3">
+            <!-- Simulated Mobile Note Banner -->
+            <div class="p-4 rounded-xl bg-gradient-to-br from-indigo-50 via-white to-slate-50 border border-indigo-100/80 shadow-xs">
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <span id="preview-subject-badge" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100/80 text-indigo-800 uppercase tracking-wide">
+                  SUBJECT
+                </span>
+                <span id="preview-premium-badge" class="text-[11px] font-medium text-emerald-600 flex items-center gap-1">
+                  <i data-lucide="check-circle" class="w-3 h-3"></i> FREE NOTE
+                </span>
+              </div>
+              <h2 id="preview-title" class="text-base font-bold text-slate-900 leading-snug">
+                Note Title Will Appear Here
+              </h2>
+              <p id="preview-lesson-meta" class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                <i data-lucide="book" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span id="preview-lesson-name">General Theory</span>
+                <span class="text-slate-300">•</span>
+                <span id="preview-author-name">Author</span>
+              </p>
+              <p id="preview-desc" class="text-xs text-slate-600 mt-2 italic border-l-2 border-indigo-400 pl-2">
+                Synopsis or brief overview...
+              </p>
+            </div>
+
+            <!-- PDF Attachment Callout (if entered) -->
+            <div id="preview-pdf-box" class="hidden p-3 rounded-xl bg-red-50/80 border border-red-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="file-text" class="w-4 h-4 text-red-600"></i>
+                <span class="text-xs font-semibold text-red-900">PDF Document Included</span>
+              </div>
+              <a id="preview-pdf-link" href="#" target="_blank" class="text-xs text-red-700 hover:text-red-900 font-semibold underline flex items-center gap-1">
+                Open PDF <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+            </div>
+
+            <!-- Rendered Markdown & Math Body -->
+            <div class="max-h-[500px] overflow-y-auto pr-1">
+              <div id="preview-rendered-body" class="note-prose text-slate-700 text-sm">
+                <p class="text-slate-400 italic text-center py-8">
+                  Type your markdown notes and LaTeX equations on the left to see the instant live preview here.
+                </p>
+              </div>
+            </div>
+
+            <!-- Back to Editor button on mobile -->
+            <div class="lg:hidden pt-2 border-t border-slate-100">
+              <button onclick="switchMobileTab('edit')" class="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                <i data-lucide="edit-3" class="w-4 h-4"></i> Return to Editor
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- --------------------------------------------------------------------- -->
+    <!-- VIEW 2: NOTES LIBRARY / CATALOG -->
+    <!-- --------------------------------------------------------------------- -->
+    <div id="view-catalog" class="space-y-6 hidden">
+      
+      <!-- Catalog Controls & Filters -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+        
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900">Curriculum Study Notes Catalog</h2>
+            <p class="text-xs text-slate-500">Live notes synchronized with Cloud SQL (PostgreSQL)</p>
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button onclick="loadNotesList()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+            </button>
+            <button onclick="switchView('create'); resetNoteForm();" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add New Note
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2 border-t border-slate-100">
+          
+          <!-- Search Input -->
+          <div class="sm:col-span-5 relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+            <input 
+              type="text" 
+              id="catalog-search" 
+              placeholder="Search by title, author, or keyword..." 
+              oninput="debounceSearch()"
+              class="w-full text-xs sm:text-sm pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900"
+            />
+          </div>
+
+          <!-- Subject Filter -->
+          <div class="sm:col-span-4">
+            <select 
+              id="catalog-subject-filter" 
+              onchange="handleCatalogSubjectChange(this.value)"
+              class="w-full text-xs sm:text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900 cursor-pointer"
+            >
+              <option value="">All Subjects</option>
+            </select>
+          </div>
+
+          <!-- Lesson Filter -->
+          <div class="sm:col-span-3">
+            <select 
+              id="catalog-lesson-filter" 
+              onchange="loadNotesList()"
+              class="w-full text-xs sm:text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition text-slate-900 cursor-pointer"
+            >
+              <option value="">All Lessons</option>
+            </select>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Notes Grid Container -->
+      <div id="catalog-loading" class="text-center py-12 text-slate-400 text-sm flex items-center justify-center gap-2">
+        <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-indigo-600"></i> Loading study notes catalog...
+      </div>
+
+      <div id="catalog-empty" class="hidden bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+          <i data-lucide="book-open" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-800">No Study Notes Found</h3>
+        <p class="text-xs text-slate-500 max-w-md mx-auto">
+          No notes in database yet or matching your filters.
+        </p>
+        <div class="pt-2 flex justify-center">
+          <button onclick="switchView('create'); resetNoteForm();" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition">
+            ✍️ Create Your First Note
+          </button>
+        </div>
+      </div>
+
+      <div id="catalog-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Rendered Note Cards will be injected here via JavaScript -->
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- View Note Modal (Light Theme Full Screen or Dialog Preview) -->
+  <!-- ========================================================================= -->
+  <div id="view-note-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 hidden">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2">
+          <span id="modal-subject-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase">
+            SUBJECT
+          </span>
+          <span id="modal-premium-badge" class="text-xs font-semibold text-emerald-600">
+            FREE
+          </span>
+        </div>
+        <button onclick="closeNoteModal()" class="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-5 sm:p-6 overflow-y-auto space-y-4">
+        <h2 id="modal-title" class="text-xl font-bold text-slate-900"></h2>
+        
+        <div class="text-xs text-slate-500 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+          <span id="modal-lesson" class="font-medium text-slate-700"></span>
+          <span>•</span>
+          <span id="modal-author"></span>
+          <span>•</span>
+          <span id="modal-date" class="text-slate-400"></span>
+        </div>
+
+        <p id="modal-desc" class="text-xs sm:text-sm text-slate-600 italic bg-slate-50 p-3 rounded-xl border border-slate-200/60"></p>
+
+        <div id="modal-pdf-box" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between">
+          <span class="text-xs font-semibold text-red-900 flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4 text-red-600"></i> PDF Attachment
+          </span>
+          <a id="modal-pdf-link" href="#" target="_blank" class="text-xs text-red-700 hover:text-red-900 font-semibold underline flex items-center gap-1">
+            Open / Download PDF <i data-lucide="external-link" class="w-3 h-3"></i>
+          </a>
+        </div>
+
+        <div id="modal-content" class="note-prose pt-2"></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+        <span id="modal-note-id" class="text-[11px] font-mono text-slate-400"></span>
+        <div class="flex items-center gap-2">
+          <button id="modal-edit-btn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition">
+            Edit Note
+          </button>
+          <button onclick="closeNoteModal()" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- JavaScript Client Logic -->
+  <!-- ========================================================================= -->
+  <script>
+    // Global state
+    let state = {
+      subjects: [],
+      lessons: [],
+      notes: [],
+      activeView: 'create', // 'create' or 'catalog'
+      activeMobileTab: 'edit', // 'edit', 'preview', or 'catalog'
+      editingNoteId: null,
+      searchTimeout: null,
+    };
+
+    // Initialize application on DOM ready
+    document.addEventListener("DOMContentLoaded", async () => {
+      lucide.createIcons();
+      await loadSubjects();
+      await loadNotesList();
+      renderLivePreview();
+    });
+
+    // -------------------------------------------------------------------------
+    // API Data Loaders
+    // -------------------------------------------------------------------------
+
+    async function loadSubjects() {
+      try {
+        const res = await fetch("/api/subjects");
+        if (!res.ok) throw new Error("Failed to load subjects");
+        state.subjects = await res.json();
+        
+        populateSubjectDropdowns();
+      } catch (err) {
+        showToast("Error loading subjects: " + err.message, "error");
+      }
+    }
+
+    function populateSubjectDropdowns() {
+      const select = document.getElementById("note-subject");
+      const filterSelect = document.getElementById("catalog-subject-filter");
+      
+      select.innerHTML = '<option value="" disabled selected>Select Subject...</option>';
+      filterSelect.innerHTML = '<option value="">All Subjects</option>';
+
+      state.subjects.forEach(sub => {
+        const label = sub.sinhala_name ? `${sub.name} (${sub.sinhala_name})` : sub.name;
+        
+        const opt1 = document.createElement("option");
+        opt1.value = sub.id;
+        opt1.textContent = label;
+        select.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = sub.id;
+        opt2.textContent = label;
+        filterSelect.appendChild(opt2);
+      });
+
+      // Default select first subject if available
+      if (state.subjects.length > 0) {
+        select.value = state.subjects[0].id;
+        handleSubjectChange(state.subjects[0].id);
+      }
+    }
+
+    async function handleSubjectChange(subjectId) {
+      const lessonSelect = document.getElementById("note-lesson");
+      lessonSelect.innerHTML = '<option value="">Loading lessons...</option>';
+
+      // Auto update preview badge
+      const sub = state.subjects.find(s => s.id === subjectId);
+      if (sub) {
+        document.getElementById("preview-subject-badge").textContent = sub.name.toUpperCase();
+      }
+
+      try {
+        const res = await fetch(`/api/lessons?subject_id=${encodeURIComponent(subjectId)}`);
+        if (!res.ok) throw new Error("Failed to load lessons");
+        const lessons = await res.json();
+
+        lessonSelect.innerHTML = '<option value="">-- General / No Specific Lesson --</option>';
+        lessons.forEach(l => {
+          const opt = document.createElement("option");
+          opt.value = l.id;
+          opt.textContent = l.sinhala_title ? `${l.title} (${l.sinhala_title})` : l.title;
+          lessonSelect.appendChild(opt);
+        });
+      } catch (err) {
+        lessonSelect.innerHTML = '<option value="">No lessons available</option>';
+      }
+      renderLivePreview();
+    }
+
+    async function handleCatalogSubjectChange(subjectId) {
+      const lessonFilter = document.getElementById("catalog-lesson-filter");
+      lessonFilter.innerHTML = '<option value="">All Lessons</option>';
+
+      if (subjectId) {
+        try {
+          const res = await fetch(`/api/lessons?subject_id=${encodeURIComponent(subjectId)}`);
+          if (res.ok) {
+            const lessons = await res.json();
+            lessons.forEach(l => {
+              const opt = document.createElement("option");
+              opt.value = l.id;
+              opt.textContent = l.title;
+              lessonFilter.appendChild(opt);
+            });
+          }
+        } catch (e) {}
+      }
+      loadNotesList();
+    }
+
+    async function loadNotesList() {
+      const grid = document.getElementById("catalog-grid");
+      const loading = document.getElementById("catalog-loading");
+      const empty = document.getElementById("catalog-empty");
+      const counter = document.getElementById("notes-counter");
+
+      loading.classList.remove("hidden");
+      empty.classList.add("hidden");
+      grid.innerHTML = "";
+
+      const subjectId = document.getElementById("catalog-subject-filter").value;
+      const lessonId = document.getElementById("catalog-lesson-filter").value;
+      const search = document.getElementById("catalog-search").value;
+
+      let url = `/api/notes?limit=100`;
+      if (subjectId) url += `&subject_id=${encodeURIComponent(subjectId)}`;
+      if (lessonId) url += `&lesson_id=${encodeURIComponent(lessonId)}`;
+      if (search && search.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load notes");
+        state.notes = await res.json();
+
+        counter.textContent = state.notes.length;
+        loading.classList.add("hidden");
+
+        if (state.notes.length === 0) {
+          empty.classList.remove("hidden");
+          return;
+        }
+
+        renderNotesCards(state.notes);
+      } catch (err) {
+        loading.classList.add("hidden");
+        showToast("Error fetching notes: " + err.message, "error");
+      }
+    }
+
+    function renderNotesCards(notes) {
+      const grid = document.getElementById("catalog-grid");
+      grid.innerHTML = "";
+
+      notes.forEach(note => {
+        const card = document.createElement("div");
+        card.className = "bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition p-4 sm:p-5 flex flex-col justify-between space-y-3";
+
+        const subjectName = note.subject_name || note.subject_id;
+        const lessonName = note.lesson_title || "General Lesson";
+        const isPremium = note.is_premium;
+        const hasPdf = !!note.pdf_url;
+
+        card.innerHTML = `
+          <div class="space-y-2">
+            <!-- Header Badges -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                ${escapeHtml(subjectName)}
+              </span>
+              ${isPremium 
+                ? '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1"><i data-lucide="crown" class="w-3 h-3 text-amber-500"></i> PRO</span>'
+                : '<span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600">FREE</span>'
+              }
+            </div>
+
+            <!-- Title -->
+            <h3 class="text-sm sm:text-base font-bold text-slate-900 line-clamp-2">
+              ${escapeHtml(note.title)}
+            </h3>
+
+            <!-- Lesson & Author Meta -->
+            <p class="text-xs text-slate-500 flex items-center gap-1.5">
+              <i data-lucide="bookmark" class="w-3 h-3 text-indigo-400 shrink-0"></i>
+              <span class="truncate">${escapeHtml(lessonName)}</span>
+              ${note.author ? `<span class="text-slate-300">•</span><span class="truncate text-slate-600">${escapeHtml(note.author)}</span>` : ''}
+            </p>
+
+            <!-- Description / Snippet -->
+            <p class="text-xs text-slate-600 line-clamp-2 italic pt-1">
+              ${escapeHtml(note.description || "No description provided.")}
+            </p>
+
+            ${hasPdf ? `
+              <div class="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
+                <i data-lucide="file-text" class="w-3 h-3"></i> PDF Document Attached
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Card Actions Footer -->
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-mono text-slate-400 truncate max-w-[120px]">
+              ${escapeHtml(note.id)}
+            </span>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="openNoteModal('${note.id}')" title="Preview Full Note" class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+              <button onclick="editNote('${note.id}')" title="Edit Note" class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="deleteNote('${note.id}')" title="Delete Note" class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    // -------------------------------------------------------------------------
+    // Form Handlers & Submission
+    // -------------------------------------------------------------------------
+
+    async function handleNoteSubmit(e) {
+      e.preventDefault();
+      
+      const submitBtn = document.getElementById("submit-btn");
+      const statusMsg = document.getElementById("save-status-msg");
+
+      const title = document.getElementById("note-title").value.trim();
+      const customId = document.getElementById("note-id").value.trim();
+      const subjectId = document.getElementById("note-subject").value;
+      const lessonId = document.getElementById("note-lesson").value;
+      const author = document.getElementById("note-author").value.trim();
+      const orderIndex = parseInt(document.getElementById("note-order").value) || 0;
+      const isPremium = document.getElementById("note-is-premium").checked;
+      const description = document.getElementById("note-description").value.trim();
+      const pdfUrl = document.getElementById("note-pdf-url").value.trim();
+      const contentText = document.getElementById("note-content").value;
+
+      if (!title || !subjectId || !contentText) {
+        showToast("Please fill in Title, Subject, and Theory Content.", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving to Cloud SQL...';
+      lucide.createIcons();
+      statusMsg.textContent = "Writing to PostgreSQL database...";
+
+      const payload = {
+        id: customId || (state.editingNoteId ? state.editingNoteId : null),
+        title: title,
+        subject_id: subjectId,
+        lesson_id: lessonId || null,
+        description: description,
+        content_text: contentText,
+        pdf_url: pdfUrl || null,
+        is_premium: isPremium,
+        order_index: orderIndex,
+        author: author,
+      };
+
+      try {
+        const res = await fetch("/api/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.detail || "Failed to save note");
+        }
+
+        const savedNote = await res.json();
+        showToast("🎉 Study Note saved successfully!", "success");
+        statusMsg.textContent = `Saved successfully as ID: ${savedNote.id}`;
+        
+        // Reset state
+        state.editingNoteId = null;
+        document.getElementById("form-heading").textContent = "Add New Study Note";
+        await loadNotesList();
+        
+        // If on mobile, switch to catalog or show success
+        if (window.innerWidth < 1024) {
+          setTimeout(() => switchMobileTab('catalog'), 900);
+        }
+      } catch (err) {
+        showToast("Error: " + err.message, "error");
+        statusMsg.textContent = "Error saving note: " + err.message;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Save Study Note';
+        lucide.createIcons();
+      }
+    }
+
+    function editNote(noteId) {
+      const note = state.notes.find(n => n.id === noteId);
+      if (!note) return;
+
+      state.editingNoteId = note.id;
+      document.getElementById("form-heading").textContent = `Edit Note (${note.id})`;
+
+      document.getElementById("note-title").value = note.title;
+      document.getElementById("note-id").value = note.id;
+      document.getElementById("note-subject").value = note.subject_id;
+      document.getElementById("note-author").value = note.author || "";
+      document.getElementById("note-order").value = note.order_index || 0;
+      document.getElementById("note-is-premium").checked = !!note.is_premium;
+      document.getElementById("note-description").value = note.description || "";
+      document.getElementById("note-pdf-url").value = note.pdf_url || "";
+      document.getElementById("note-content").value = note.content_text || "";
+
+      handleSubjectChange(note.subject_id).then(() => {
+        if (note.lesson_id) {
+          document.getElementById("note-lesson").value = note.lesson_id;
+        }
+      });
+
+      switchView('create');
+      switchMobileTab('edit');
+      renderLivePreview();
+      showToast(`Loaded note "${note.title}" into editor`, "info");
+    }
+
+    async function deleteNote(noteId) {
+      if (!confirm(`Are you sure you want to delete note "${noteId}"? This action cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/notes/${encodeURIComponent(noteId)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete note");
+        
+        showToast("Note deleted successfully", "success");
+        await loadNotesList();
+      } catch (err) {
+        showToast("Delete failed: " + err.message, "error");
+      }
+    }
+
+    function resetNoteForm() {
+      state.editingNoteId = null;
+      document.getElementById("note-form").reset();
+      document.getElementById("form-heading").textContent = "Add New Study Note";
+      document.getElementById("save-status-msg").textContent = "Ready to save note to Cloud SQL.";
+      if (state.subjects.length > 0) {
+        document.getElementById("note-subject").value = state.subjects[0].id;
+        handleSubjectChange(state.subjects[0].id);
+      }
+      renderLivePreview();
+    }
+
+    // -------------------------------------------------------------------------
+    // KaTeX & Markdown Live Preview Renderer
+    // -------------------------------------------------------------------------
+
+    function renderLivePreview() {
+      const title = document.getElementById("note-title").value.trim() || "Note Title Will Appear Here";
+      const desc = document.getElementById("note-description").value.trim() || "Synopsis or brief overview...";
+      const author = document.getElementById("note-author").value.trim() || "Author";
+      const isPremium = document.getElementById("note-is-premium").checked;
+      const pdfUrl = document.getElementById("note-pdf-url").value.trim();
+      const rawContent = document.getElementById("note-content").value;
+
+      // Update Header preview
+      document.getElementById("preview-title").textContent = title;
+      document.getElementById("preview-desc").textContent = desc;
+      document.getElementById("preview-author-name").textContent = author;
+      
+      const lessonSelect = document.getElementById("note-lesson");
+      const lessonText = lessonSelect.options[lessonSelect.selectedIndex]?.text || "General Theory";
+      document.getElementById("preview-lesson-name").textContent = lessonText.split('(')[0].trim();
+
+      const premiumBadge = document.getElementById("preview-premium-badge");
+      if (isPremium) {
+        premiumBadge.className = "text-[11px] font-bold text-amber-600 flex items-center gap-1";
+        premiumBadge.innerHTML = '<i data-lucide="crown" class="w-3 h-3 text-amber-500"></i> PRO NOTE';
+      } else {
+        premiumBadge.className = "text-[11px] font-medium text-emerald-600 flex items-center gap-1";
+        premiumBadge.innerHTML = '<i data-lucide="check-circle" class="w-3 h-3"></i> FREE NOTE';
+      }
+
+      // PDF Callout box
+      const pdfBox = document.getElementById("preview-pdf-box");
+      const pdfLink = document.getElementById("preview-pdf-link");
+      if (pdfUrl) {
+        pdfBox.classList.remove("hidden");
+        pdfLink.href = pdfUrl;
+      } else {
+        pdfBox.classList.add("hidden");
+      }
+
+      // Stats
+      const wordCount = rawContent.trim() ? rawContent.trim().split(/\s+/).length : 0;
+      const charCount = rawContent.length;
+      document.getElementById("content-stats").textContent = `${wordCount} words • ${charCount} chars`;
+
+      // Render Markdown to HTML
+      const container = document.getElementById("preview-rendered-body");
+      if (!rawContent.trim()) {
+        container.innerHTML = '<p class="text-slate-400 italic text-center py-8">Type your markdown notes and LaTeX equations on the left to see the instant live preview here.</p>';
+        lucide.createIcons();
+        return;
+      }
+
+      try {
+        const parsedHtml = marked.parse(rawContent);
+        container.innerHTML = parsedHtml;
+
+        // Auto render math formulas with KaTeX
+        if (window.renderMathInElement) {
+          renderMathInElement(container, {
+            delimiters: [
+              { left: "$$", right: "$$", display: true },
+              { left: "$", right: "$", display: false },
+              { left: "\\(", right: "\\)", display: false },
+              { left: "\\[", right: "\\]", display: true }
+            ],
+            throwOnError: false,
+          });
+        }
+      } catch (err) {
+        container.innerHTML = `<div class="p-3 bg-red-50 text-red-700 text-xs rounded-lg">Render error: ${escapeHtml(err.message)}</div>`;
+      }
+
+      lucide.createIcons();
+    }
+
+    function insertMath(snippet) {
+      const textarea = document.getElementById("note-content");
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+
+      textarea.value = text.substring(0, start) + snippet + text.substring(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+
+      renderLivePreview();
+    }
+
+    function handleTitleInput(title) {
+      if (!state.editingNoteId) {
+        const sub = document.getElementById("note-subject").value || "note";
+        const prefix = sub.replace("_maths", "").replace("_helper", "");
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 20);
+        if (slug) {
+          document.getElementById("note-id").placeholder = `note_${prefix}_${slug}`;
+        }
+      }
+      renderLivePreview();
+    }
+
+    function testPdfLink() {
+      const url = document.getElementById("note-pdf-url").value.trim();
+      if (!url) {
+        showToast("Please enter a PDF URL first.", "error");
+        return;
+      }
+      window.open(url, "_blank");
+    }
+
+    // -------------------------------------------------------------------------
+    // View & Modal Handlers
+    // -------------------------------------------------------------------------
+
+    function switchView(viewName) {
+      state.activeView = viewName;
+
+      const viewCreate = document.getElementById("view-create");
+      const viewCatalog = document.getElementById("view-catalog");
+      const tabCreate = document.getElementById("tab-btn-create");
+      const tabCatalog = document.getElementById("tab-btn-catalog");
+
+      if (viewName === 'create') {
+        viewCreate.classList.remove("hidden");
+        viewCatalog.classList.add("hidden");
+        tabCreate.className = "view-tab-btn py-3 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 flex items-center gap-2 transition";
+        tabCatalog.className = "view-tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition";
+      } else {
+        viewCreate.classList.add("hidden");
+        viewCatalog.classList.remove("hidden");
+        tabCreate.className = "view-tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition";
+        tabCatalog.className = "view-tab-btn py-3 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 flex items-center gap-2 transition";
+        loadNotesList();
+      }
+    }
+
+    function switchMobileTab(tab) {
+      state.activeMobileTab = tab;
+
+      const editorPane = document.getElementById("mobile-editor-pane");
+      const previewPane = document.getElementById("mobile-preview-pane");
+      const viewCreate = document.getElementById("view-create");
+      const viewCatalog = document.getElementById("view-catalog");
+
+      const btnEdit = document.getElementById("mob-btn-edit");
+      const btnPreview = document.getElementById("mob-btn-preview");
+      const btnCatalog = document.getElementById("mob-btn-catalog");
+
+      // Reset button styles
+      [btnEdit, btnPreview, btnCatalog].forEach(b => {
+        b.className = "mob-tab py-1.5 rounded-lg text-slate-600 hover:text-slate-900 text-center transition";
+      });
+
+      if (tab === 'edit') {
+        btnEdit.className = "mob-tab py-1.5 rounded-lg bg-white text-indigo-600 shadow-xs text-center font-semibold transition";
+        viewCreate.classList.remove("hidden");
+        viewCatalog.classList.add("hidden");
+        editorPane.classList.remove("hidden");
+        previewPane.classList.add("hidden");
+      } else if (tab === 'preview') {
+        btnPreview.className = "mob-tab py-1.5 rounded-lg bg-white text-indigo-600 shadow-xs text-center font-semibold transition";
+        viewCreate.classList.remove("hidden");
+        viewCatalog.classList.add("hidden");
+        editorPane.classList.add("hidden");
+        previewPane.classList.remove("hidden");
+        renderLivePreview();
+      } else if (tab === 'catalog') {
+        btnCatalog.className = "mob-tab py-1.5 rounded-lg bg-white text-indigo-600 shadow-xs text-center font-semibold transition";
+        viewCreate.classList.add("hidden");
+        viewCatalog.classList.remove("hidden");
+        loadNotesList();
+      }
+    }
+
+    function openNoteModal(noteId) {
+      const note = state.notes.find(n => n.id === noteId);
+      if (!note) return;
+
+      document.getElementById("modal-title").textContent = note.title;
+      document.getElementById("modal-subject-badge").textContent = (note.subject_name || note.subject_id).toUpperCase();
+      document.getElementById("modal-lesson").textContent = note.lesson_title || "General Lesson";
+      document.getElementById("modal-author").textContent = note.author ? `By ${note.author}` : "Author";
+      document.getElementById("modal-date").textContent = note.created_at ? new Date(note.created_at).toLocaleDateString() : "";
+      document.getElementById("modal-desc").textContent = note.description || "No description provided.";
+      document.getElementById("modal-note-id").textContent = `ID: ${note.id}`;
+
+      const modalPremium = document.getElementById("modal-premium-badge");
+      if (note.is_premium) {
+        modalPremium.className = "text-xs font-bold text-amber-600 flex items-center gap-1";
+        modalPremium.innerHTML = '<i data-lucide="crown" class="w-3.5 h-3.5 text-amber-500"></i> PRO RESOURCE';
+      } else {
+        modalPremium.className = "text-xs font-semibold text-emerald-600";
+        modalPremium.textContent = "FREE NOTE";
+      }
+
+      const pdfBox = document.getElementById("modal-pdf-box");
+      const pdfLink = document.getElementById("modal-pdf-link");
+      if (note.pdf_url) {
+        pdfBox.classList.remove("hidden");
+        pdfLink.href = note.pdf_url;
+      } else {
+        pdfBox.classList.add("hidden");
+      }
+
+      // Render Markdown & Math
+      const contentContainer = document.getElementById("modal-content");
+      try {
+        contentContainer.innerHTML = marked.parse(note.content_text || "");
+        if (window.renderMathInElement) {
+          renderMathInElement(contentContainer, {
+            delimiters: [
+              { left: "$$", right: "$$", display: true },
+              { left: "$", right: "$", display: false },
+              { left: "\\(", right: "\\)", display: false },
+              { left: "\\[", right: "\\]", display: true }
+            ],
+            throwOnError: false,
+          });
+        }
+      } catch (e) {
+        contentContainer.textContent = note.content_text;
+      }
+
+      // Edit Button in Modal
+      document.getElementById("modal-edit-btn").onclick = () => {
+        closeNoteModal();
+        editNote(note.id);
+      };
+
+      document.getElementById("view-note-modal").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function closeNoteModal() {
+      document.getElementById("view-note-modal").classList.add("hidden");
+    }
+
+    function debounceSearch() {
+      clearTimeout(state.searchTimeout);
+      state.searchTimeout = setTimeout(() => {
+        loadNotesList();
+      }, 350);
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+
+      let bg = "bg-slate-900 text-white";
+      let icon = "info";
+
+      if (type === "success") {
+        bg = "bg-emerald-600 text-white";
+        icon = "check-circle";
+      } else if (type === "error") {
+        bg = "bg-rose-600 text-white";
+        icon = "alert-circle";
+      }
+
+      toast.className = `${bg} px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-xs sm:text-sm font-medium transition transform translate-y-2 pointer-events-auto`;
+      toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i><span>${escapeHtml(message)}</span>`;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-4");
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+
+</body>
+</html>

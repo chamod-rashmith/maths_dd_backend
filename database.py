@@ -281,3 +281,190 @@ async def seed_default_curriculum():
         return {"status": "success", "message": "Standard Pure Maths and Applied Maths curriculum seeded successfully!"}
     finally:
         await conn.close()
+
+
+# -----------------------------------------------------------------------------
+# Study Notes Operations (Conforming strictly to Data Connect Schema)
+# -----------------------------------------------------------------------------
+
+async def ensure_study_notes_table(conn: asyncpg.Connection):
+    """
+    Ensures subjects, syllabus_lessons, and study_notes tables and indexes exist.
+    """
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS subjects (
+            id VARCHAR(100) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            sinhala_name VARCHAR(255),
+            code VARCHAR(50) UNIQUE NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 1,
+            description TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS syllabus_lessons (
+            id VARCHAR(100) PRIMARY KEY,
+            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            sinhala_title VARCHAR(255),
+            order_index INTEGER NOT NULL DEFAULT 1,
+            description TEXT,
+            question_count INTEGER NOT NULL DEFAULT 0,
+            premium_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS study_notes (
+            id VARCHAR(100) PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
+            content_text TEXT NOT NULL DEFAULT '',
+            pdf_url TEXT,
+            is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            author VARCHAR(255),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_study_notes_subject_order ON study_notes(subject_id, order_index, created_at);
+        CREATE INDEX IF NOT EXISTS idx_study_notes_subject_lesson ON study_notes(subject_id, lesson_id, order_index);
+    """)
+
+
+async def get_study_notes(
+    subject_id: Optional[str] = None,
+    lesson_id: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    conn = await get_db_connection()
+    try:
+        await ensure_study_notes_table(conn)
+        query = """
+            SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id, 
+                   n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
+                   n.created_at, n.updated_at,
+                   s.name as subject_name, s.sinhala_name as subject_sinhala_name,
+                   l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
+            FROM study_notes n
+            LEFT JOIN subjects s ON n.subject_id = s.id
+            LEFT JOIN syllabus_lessons l ON n.lesson_id = l.id
+            WHERE 1=1
+        """
+        params = []
+        param_idx = 1
+        
+        if subject_id and subject_id.strip():
+            query += f" AND n.subject_id = ${param_idx}"
+            params.append(subject_id.strip())
+            param_idx += 1
+            
+        if lesson_id and lesson_id.strip():
+            query += f" AND n.lesson_id = ${param_idx}"
+            params.append(lesson_id.strip())
+            param_idx += 1
+            
+        if search and search.strip():
+            query += f" AND (n.title ILIKE ${param_idx} OR n.description ILIKE ${param_idx} OR n.author ILIKE ${param_idx})"
+            params.append(f"%{search.strip()}%")
+            param_idx += 1
+            
+        query += f" ORDER BY n.order_index ASC, n.created_at DESC LIMIT ${param_idx} OFFSET ${param_idx + 1};"
+        params.extend([limit, offset])
+        
+        rows = await conn.fetch(query, *params)
+        return [dict(r) for r in rows]
+    finally:
+        await conn.close()
+
+
+async def get_study_note_by_id(note_id: str) -> Optional[Dict[str, Any]]:
+    conn = await get_db_connection()
+    try:
+        await ensure_study_notes_table(conn)
+        row = await conn.fetchrow(
+            """
+            SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id, 
+                   n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
+                   n.created_at, n.updated_at,
+                   s.name as subject_name, s.sinhala_name as subject_sinhala_name,
+                   l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
+            FROM study_notes n
+            LEFT JOIN subjects s ON n.subject_id = s.id
+            LEFT JOIN syllabus_lessons l ON n.lesson_id = l.id
+            WHERE n.id = $1;
+            """,
+            note_id,
+        )
+        return dict(row) if row else None
+    finally:
+        await conn.close()
+
+
+async def create_or_update_study_note(
+    id: Optional[str],
+    title: str,
+    subject_id: str,
+    lesson_id: Optional[str],
+    content_text: str,
+    description: Optional[str] = "",
+    pdf_url: Optional[str] = None,
+    is_premium: bool = False,
+    order_index: int = 0,
+    author: Optional[str] = "",
+) -> Dict[str, Any]:
+    conn = await get_db_connection()
+    try:
+        await ensure_study_notes_table(conn)
+        
+        # Generate clean note ID if not provided
+        prefix = subject_id.replace("_maths", "") if subject_id else "note"
+        note_id = id.strip() if (id and id.strip()) else f"note_{prefix}_{uuid.uuid4().hex[:8]}"
+        
+        # Clean lesson_id
+        cleaned_lesson_id = lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
+
+        query = """
+        INSERT INTO study_notes (
+            id, title, description, subject_id, lesson_id,
+            content_text, pdf_url, is_premium, order_index, author,
+            created_at, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            subject_id = EXCLUDED.subject_id,
+            lesson_id = EXCLUDED.lesson_id,
+            content_text = EXCLUDED.content_text,
+            pdf_url = EXCLUDED.pdf_url,
+            is_premium = EXCLUDED.is_premium,
+            order_index = EXCLUDED.order_index,
+            author = EXCLUDED.author,
+            updated_at = NOW()
+        RETURNING *;
+        """
+        row = await conn.fetchrow(
+            query,
+            note_id, title, description or "", subject_id, cleaned_lesson_id,
+            content_text or "", pdf_url or None, is_premium, order_index, author or ""
+        )
+        return dict(row)
+    finally:
+        await conn.close()
+
+
+async def delete_study_note(note_id: str) -> Dict[str, Any]:
+    conn = await get_db_connection()
+    try:
+        await ensure_study_notes_table(conn)
+        res = await conn.execute("DELETE FROM study_notes WHERE id = $1;", note_id)
+        return {"status": "success", "result": res}
+    finally:
+        await conn.close()

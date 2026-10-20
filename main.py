@@ -16,7 +16,7 @@ import database
 # Initialize FastAPI application
 app = FastAPI(
     title="Maths DD Content Studio API",
-    description="Backend microservice for Maths DD content studio, curriculum management, and task automation.",
+    description="Backend microservice for Maths DD content studio, curriculum management, and study notes automation.",
     version="1.0.0",
 )
 
@@ -73,6 +73,19 @@ class QuestionCreate(BaseModel):
     scheduled_date: Optional[str] = None
 
 
+class StudyNoteCreate(BaseModel):
+    id: Optional[str] = None
+    title: str
+    description: Optional[str] = ""
+    subject_id: str
+    lesson_id: Optional[str] = None
+    content_text: str = ""
+    pdf_url: Optional[str] = None
+    is_premium: bool = False
+    order_index: int = 0
+    author: Optional[str] = ""
+
+
 # -----------------------------------------------------------------------------
 # Web UI Endpoints
 # -----------------------------------------------------------------------------
@@ -81,11 +94,23 @@ class QuestionCreate(BaseModel):
 @app.get("/admin", response_class=HTMLResponse)
 def serve_admin_studio():
     """
-    Renders the modern Maths DD Content Studio Admin UI.
+    Renders the modern Maths DD Question Studio Admin UI.
     """
     html_path = TEMPLATES_DIR / "admin.html"
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="Admin studio template not found")
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+@app.get("/notes", response_class=HTMLResponse)
+@app.get("/admin/notes", response_class=HTMLResponse)
+def serve_notes_studio():
+    """
+    Renders the modern Maths DD Study Notes Studio (Light Theme & Mobile Responsive).
+    """
+    html_path = TEMPLATES_DIR / "notes.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Notes studio template not found")
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
@@ -262,9 +287,77 @@ async def list_recent_questions(limit: int = 15):
 
 @app.post("/api/seed")
 async def seed_database():
-    """Seeds default Pure & Applied Maths curriculum if empty."""
+    """Seeds default Pure & Applied Maths curriculum taxonomy if empty."""
     try:
         return await database.seed_default_curriculum()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -----------------------------------------------------------------------------
+# REST API: Study Notes Management (Conforming to Data Connect Schema)
+# -----------------------------------------------------------------------------
+
+@app.get("/api/notes")
+async def list_study_notes(
+    subject_id: Optional[str] = Query(None),
+    lesson_id: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Fetches study notes according to Data Connect schema filters."""
+    try:
+        return await database.get_study_notes(
+            subject_id=subject_id,
+            lesson_id=lesson_id,
+            search=search,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notes/{note_id}")
+async def get_study_note(note_id: str):
+    """Fetches single study note details by ID."""
+    try:
+        note = await database.get_study_note_by_id(note_id)
+        if not note:
+            raise HTTPException(status_code=404, detail=f"Study note '{note_id}' not found")
+        return note
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notes")
+async def save_study_note(note: StudyNoteCreate):
+    """Creates or updates a study note."""
+    try:
+        return await database.create_or_update_study_note(
+            id=note.id,
+            title=note.title,
+            subject_id=note.subject_id,
+            lesson_id=note.lesson_id,
+            content_text=note.content_text,
+            description=note.description or "",
+            pdf_url=note.pdf_url,
+            is_premium=note.is_premium,
+            order_index=note.order_index,
+            author=note.author or "",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/notes/{note_id}")
+async def remove_study_note(note_id: str):
+    """Deletes a study note by ID."""
+    try:
+        return await database.delete_study_note(note_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
