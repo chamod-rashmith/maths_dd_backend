@@ -3,12 +3,11 @@ FastAPI Router for v1 Study Notes operations.
 """
 
 from typing import List, Optional, Dict, Any
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.database import get_db
+from app.api.deps import get_study_note_repository
 from app.core.security import get_current_user
-from app.repositories.study_note_repository import StudyNoteRepository
+from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.schemas.study_note import StudyNoteCreateOrUpdate, StudyNoteResponse
 
 router = APIRouter(prefix="/study-notes", tags=["Study Notes v1"])
@@ -21,10 +20,9 @@ async def list_study_notes(
     search: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: StudyNoteRepository = Depends(get_study_note_repository),
 ) -> List[Dict[str, Any]]:
     """Lists study notes filtered by subject, lesson, or search query."""
-    repo = StudyNoteRepository(conn)
     try:
         return await repo.list_notes(
             subject_id=subject_id,
@@ -43,10 +41,9 @@ async def list_study_notes(
 @router.get("/{note_id}", response_model=StudyNoteResponse)
 async def get_study_note(
     note_id: str,
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: StudyNoteRepository = Depends(get_study_note_repository),
 ) -> Dict[str, Any]:
     """Fetches a single study note by ID."""
-    repo = StudyNoteRepository(conn)
     note = await repo.get_by_id(note_id)
     if not note:
         raise HTTPException(
@@ -60,10 +57,9 @@ async def get_study_note(
 async def create_or_update_study_note(
     body: StudyNoteCreateOrUpdate,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: StudyNoteRepository = Depends(get_study_note_repository),
 ) -> Dict[str, Any]:
     """Creates or updates a study note."""
-    repo = StudyNoteRepository(conn)
     try:
         return await repo.upsert(
             note_id=body.id,
@@ -88,10 +84,9 @@ async def create_or_update_study_note(
 async def delete_study_note(
     note_id: str,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: StudyNoteRepository = Depends(get_study_note_repository),
 ) -> Dict[str, Any]:
     """Deletes a study note by ID."""
-    repo = StudyNoteRepository(conn)
     try:
         return await repo.delete(note_id)
     except Exception as exc:

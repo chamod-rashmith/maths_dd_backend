@@ -3,12 +3,11 @@ FastAPI Router for v1 Questions and Marking Schemes operations.
 """
 
 from typing import List, Dict, Any
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.database import get_db
+from app.api.deps import get_question_repository
 from app.core.security import get_current_user
-from app.repositories.question_repository import QuestionRepository
+from app.domain.repositories.question_repository import QuestionRepository
 from app.schemas.question import (
     QuestionCreate,
     QuestionSummaryResponse,
@@ -21,10 +20,9 @@ router = APIRouter(prefix="/questions", tags=["Questions v1"])
 @router.get("/recent", response_model=List[QuestionSummaryResponse])
 async def list_recent_questions(
     limit: int = Query(15, ge=1, le=100),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: QuestionRepository = Depends(get_question_repository),
 ) -> List[Dict[str, Any]]:
     """Fetches the latest questions stored in Cloud SQL."""
-    repo = QuestionRepository(conn)
     try:
         return await repo.get_recent(limit=limit)
     except Exception as exc:
@@ -38,10 +36,9 @@ async def list_recent_questions(
 async def add_question(
     q: QuestionCreate,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: QuestionRepository = Depends(get_question_repository),
 ) -> Dict[str, Any]:
     """Creates a new question with its corresponding marking scheme in Cloud SQL."""
-    repo = QuestionRepository(conn)
     try:
         return await repo.create_question_with_solution(
             title=q.title,

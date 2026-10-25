@@ -1,5 +1,5 @@
 """
-PostgreSQL Repository for Questions and Marking Schemes.
+Concrete PostgreSQL Implementation of QuestionRepository.
 """
 
 import uuid
@@ -7,9 +7,11 @@ import datetime
 from typing import List, Dict, Any, Optional
 import asyncpg
 
+from app.domain.repositories.question_repository import QuestionRepository
 
-class QuestionRepository:
-    """Encapsulates database operations for `questions` and `marking_schemes`."""
+
+class PostgresQuestionRepository(QuestionRepository):
+    """PostgreSQL implementation of `QuestionRepository` using asyncpg."""
 
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn

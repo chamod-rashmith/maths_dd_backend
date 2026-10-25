@@ -1,13 +1,15 @@
 """
-PostgreSQL Repository for Curriculum (Subjects & Syllabus Lessons).
+Concrete PostgreSQL Implementation of CurriculumRepository.
 """
 
 from typing import List, Dict, Any, Optional
 import asyncpg
 
+from app.domain.repositories.curriculum_repository import CurriculumRepository
 
-class CurriculumRepository:
-    """Encapsulates all database queries for `subjects` and `syllabus_lessons`."""
+
+class PostgresCurriculumRepository(CurriculumRepository):
+    """PostgreSQL implementation of `CurriculumRepository` using asyncpg."""
 
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn

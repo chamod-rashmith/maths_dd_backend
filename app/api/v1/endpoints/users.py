@@ -3,12 +3,11 @@ FastAPI Router for v1 User Profile operations.
 """
 
 from typing import Dict, Any
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.database import get_db
+from app.api.deps import get_user_repository
 from app.core.security import get_current_user
-from app.repositories.user_repository import UserRepository
+from app.domain.repositories.user_repository import UserRepository
 from app.schemas.user import UserProfileResponse, UserProfileSyncRequest
 
 router = APIRouter(prefix="/users", tags=["Users v1"])
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/users", tags=["Users v1"])
 @router.get("/me", response_model=UserProfileResponse)
 async def get_my_profile(
     current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: UserRepository = Depends(get_user_repository),
 ) -> Dict[str, Any]:
     """
     Returns the authenticated student's profile and telemetry stats.
@@ -30,7 +29,6 @@ async def get_my_profile(
             detail="Invalid token payload",
         )
 
-    repo = UserRepository(conn)
     user = await repo.get_by_uid(uid)
     if not user:
         raise HTTPException(
@@ -44,7 +42,7 @@ async def get_my_profile(
 async def sync_user_profile(
     body: UserProfileSyncRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: UserRepository = Depends(get_user_repository),
 ) -> Dict[str, Any]:
     """
     Idempotent User Profile Sync endpoint.
@@ -63,7 +61,6 @@ async def sync_user_profile(
     display_name = body.name or current_user.get("name") or email.split("@")[0]
     avatar = body.avatar_url or current_user.get("picture")
 
-    repo = UserRepository(conn)
     try:
         return await repo.sync_or_create(
             uid=uid,

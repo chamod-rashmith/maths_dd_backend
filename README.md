@@ -1,10 +1,10 @@
 # Maths DD Backend Service (Google Cloud Run + Cloud SQL PostgreSQL)
 
-Production-grade FastAPI microservice for the **Maths DD** mobile & web ecosystem, engineered with a clean, layered architecture (`API -> Schemas -> Repositories -> Database Pool`).
+Production-grade FastAPI microservice for the **Maths DD** mobile & web ecosystem, engineered with **Strict Clean Architecture** (`API -> DI Container -> Abstract Domain Repositories -> Concrete PostgreSQL Repositories -> Database Pool`).
 
 ---
 
-## 📁 Industry-Standard Directory Structure
+## 📁 Industry-Standard Clean Architecture Structure
 
 ```text
 backend/
@@ -17,20 +17,29 @@ backend/
 │   │   ├── database.py                # asyncpg Connection Pool & Idempotent DDL Schema
 │   │   ├── security.py                # Firebase Admin SDK & Bearer JWT Dependency
 │   │   └── storage.py                 # Google Cloud / Firebase Storage Client
+│   ├── domain/                        # Pure Domain Layer (Ports / Contracts)
+│   │   ├── __init__.py
+│   │   └── repositories/              # Abstract Base Classes (ABC)
+│   │       ├── __init__.py
+│   │       ├── curriculum_repository.py   # `CurriculumRepository(ABC)`
+│   │       ├── question_repository.py     # `QuestionRepository(ABC)`
+│   │       ├── study_note_repository.py   # `StudyNoteRepository(ABC)`
+│   │       └── user_repository.py         # `UserRepository(ABC)`
+│   ├── repositories/                  # Data / Infrastructure Layer (Concrete Adapters)
+│   │   ├── __init__.py
+│   │   ├── curriculum_repository.py   # `PostgresCurriculumRepository(CurriculumRepository)`
+│   │   ├── question_repository.py     # `PostgresQuestionRepository(QuestionRepository)`
+│   │   ├── study_note_repository.py   # `PostgresStudyNoteRepository(StudyNoteRepository)`
+│   │   └── user_repository.py         # `PostgresUserRepository(UserRepository)`
 │   ├── schemas/                       # Strict Pydantic Request & Response DTOs
 │   │   ├── __init__.py
 │   │   ├── curriculum.py              # Subject & Syllabus Lesson DTOs
 │   │   ├── question.py                # Question & Marking Scheme DTOs
 │   │   ├── study_note.py              # Study Note DTOs
 │   │   └── user.py                    # User Profile & Telemetry DTOs
-│   ├── repositories/                  # Data Access Layer (Pure Parameterized SQL)
-│   │   ├── __init__.py
-│   │   ├── curriculum_repository.py   # Subjects & Lessons Persistence
-│   │   ├── question_repository.py     # Transactional Question & Solution Persistence
-│   │   ├── study_note_repository.py   # Study Notes Persistence & Filtering
-│   │   └── user_repository.py         # User Profile Persistence
-│   └── api/                           # Presentation / HTTP Routing Layer
+│   └── api/                           # Presentation / HTTP Routing & DI Layer
 │       ├── __init__.py
+│       ├── deps.py                    # Centralized Dependency Injection Providers
 │       └── v1/
 │           ├── __init__.py
 │           ├── router.py              # Aggregated /api/v1 Router
@@ -75,29 +84,11 @@ uvicorn app.main:app --reload --port 8080
 ```
 *(Or `python main.py`)*
 
-### Step 4: Verify Endpoints & OpenAPI Docs
-- **Health Check:** `http://localhost:8080/health`
-- **Database Readiness Probe:** `http://localhost:8080/db-test`
-- **Swagger UI:** `http://localhost:8080/docs`
-- **ReDoc:** `http://localhost:8080/redoc`
-
 ---
 
 ## 🧪 2. Running Tests
 
 ```bash
 cd backend
-python -m unittest discover -s tests
-```
-
----
-
-## ☁️ 3. Deploying to Google Cloud Run
-
-```bash
-cd backend
-gcloud run deploy maths-dd-backend \
-  --source . \
-  --region asia-south1 \
-  --allow-unauthenticated
+python -m unittest discover -s tests -v
 ```

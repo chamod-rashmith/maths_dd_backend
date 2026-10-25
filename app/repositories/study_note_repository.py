@@ -1,14 +1,16 @@
 """
-PostgreSQL Repository for Study Notes.
+Concrete PostgreSQL Implementation of StudyNoteRepository.
 """
 
 import uuid
 from typing import List, Dict, Any, Optional
 import asyncpg
 
+from app.domain.repositories.study_note_repository import StudyNoteRepository
 
-class StudyNoteRepository:
-    """Encapsulates all database queries for `study_notes`."""
+
+class PostgresStudyNoteRepository(StudyNoteRepository):
+    """PostgreSQL implementation of `StudyNoteRepository` using asyncpg."""
 
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn

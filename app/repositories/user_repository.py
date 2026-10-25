@@ -1,13 +1,15 @@
 """
-PostgreSQL Repository for User Profile persistence.
+Concrete PostgreSQL Implementation of UserRepository.
 """
 
 from typing import Optional, Dict, Any
 import asyncpg
 
+from app.domain.repositories.user_repository import UserRepository
 
-class UserRepository:
-    """Encapsulates all database queries for the `users` table."""
+
+class PostgresUserRepository(UserRepository):
+    """PostgreSQL implementation of `UserRepository` using asyncpg."""
 
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
@@ -29,9 +31,6 @@ class UserRepository:
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Idempotently creates or updates a user record upon authentication sync.
-        """
         query = """
         INSERT INTO users (
             uid, email, name, avatar_url, telephone_no,

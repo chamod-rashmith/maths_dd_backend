@@ -3,12 +3,11 @@ FastAPI Router for v1 Curriculum (Subjects & Syllabus Lessons) operations.
 """
 
 from typing import List, Optional, Dict, Any
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.database import get_db
+from app.api.deps import get_curriculum_repository
 from app.core.security import get_current_user
-from app.repositories.curriculum_repository import CurriculumRepository
+from app.domain.repositories.curriculum_repository import CurriculumRepository
 from app.schemas.curriculum import (
     LessonCreate,
     LessonResponse,
@@ -21,10 +20,9 @@ router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
 
 @router.get("/subjects", response_model=List[SubjectResponse])
 async def list_subjects(
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: CurriculumRepository = Depends(get_curriculum_repository),
 ) -> List[Dict[str, Any]]:
     """Fetches syllabus subjects."""
-    repo = CurriculumRepository(conn)
     try:
         return await repo.get_subjects()
     except Exception as exc:
@@ -38,10 +36,9 @@ async def list_subjects(
 async def add_subject(
     sub: SubjectCreate,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: CurriculumRepository = Depends(get_curriculum_repository),
 ) -> Dict[str, Any]:
     """Creates or updates a syllabus subject."""
-    repo = CurriculumRepository(conn)
     try:
         return await repo.upsert_subject(
             subject_id=sub.id,
@@ -62,10 +59,9 @@ async def add_subject(
 async def remove_subject(
     subject_id: str,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: CurriculumRepository = Depends(get_curriculum_repository),
 ) -> Dict[str, Any]:
     """Deletes a syllabus subject by ID."""
-    repo = CurriculumRepository(conn)
     try:
         return await repo.delete_subject(subject_id)
     except Exception as exc:
@@ -78,10 +74,9 @@ async def remove_subject(
 @router.get("/lessons", response_model=List[LessonResponse])
 async def list_lessons(
     subject_id: Optional[str] = Query(None),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: CurriculumRepository = Depends(get_curriculum_repository),
 ) -> List[Dict[str, Any]]:
     """Fetches syllabus lessons, optionally filtered by subject ID."""
-    repo = CurriculumRepository(conn)
     try:
         return await repo.get_lessons(subject_id)
     except Exception as exc:
@@ -95,10 +90,9 @@ async def list_lessons(
 async def add_lesson(
     les: LessonCreate,
     _current_user: Dict[str, Any] = Depends(get_current_user),
-    conn: asyncpg.Connection = Depends(get_db),
+    repo: CurriculumRepository = Depends(get_curriculum_repository),
 ) -> Dict[str, Any]:
     """Creates or updates a syllabus lesson."""
-    repo = CurriculumRepository(conn)
     try:
         return await repo.upsert_lesson(
             lesson_id=les.id,
