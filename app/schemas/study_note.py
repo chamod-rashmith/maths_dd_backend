@@ -1,6 +1,7 @@
 """
 Pydantic DTO schemas for Study Notes.
 Enforces lightweight Summary for listings and mutually exclusive Content for detail view.
+Supports cloud storage paths with on-demand short-lived signed URLs.
 """
 
 from datetime import datetime
@@ -11,7 +12,10 @@ from app.domain.exceptions import ValidationDomainError
 
 
 class StudyNoteCreateOrUpdate(BaseModel):
-    """Request schema for creating or updating a study note."""
+    """
+    Request schema for creating or updating a study note.
+    Supports either storage path/url (pdf_path / pdf_url) OR markdown (content_text).
+    """
 
     id: Optional[str] = None
     title: str = Field(..., min_length=1, max_length=255)
@@ -19,6 +23,7 @@ class StudyNoteCreateOrUpdate(BaseModel):
     lesson_id: Optional[str] = None
     content_text: Optional[str] = None
     description: Optional[str] = ""
+    # Can accept either storage relative path (e.g. 'notes/pure/induction.pdf') or full url
     pdf_url: Optional[str] = None
     is_premium: bool = False
     order_index: int = 0
@@ -31,7 +36,7 @@ class StudyNoteCreateOrUpdate(BaseModel):
 
         if has_pdf and has_text:
             raise ValidationDomainError(
-                "A study note must have either 'pdf_url' OR 'content_text', not both."
+                "A study note must have either 'pdf_url' (storage path) OR 'content_text', not both."
             )
         if not has_pdf and not has_text:
             raise ValidationDomainError(
@@ -66,7 +71,8 @@ class StudyNoteSummaryResponse(BaseModel):
 class StudyNoteDetailResponse(BaseModel):
     """
     Detailed representation of a single Study Note.
-    Loaded on-demand when user opens the note. Guarantees ONLY pdf_url OR content_text.
+    Loaded on-demand when user opens the note.
+    Guarantees ONLY signed pdf_url OR content_text (never both).
     """
 
     id: str
@@ -90,7 +96,7 @@ class StudyNoteDetailResponse(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def enforce_single_content(cls, data: dict) -> dict:
-        """Enforces that detail payload contains ONLY pdf_url OR content_text (never both)."""
+        """Enforces that detail payload contains ONLY signed pdf_url OR content_text (never both)."""
         if isinstance(data, dict):
             item = dict(data)
             has_pdf = bool(item.get("pdf_url") and str(item.get("pdf_url")).strip())

@@ -356,6 +356,41 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         self.assertEqual(detail["content_text"], "$$E = mc^2$$")
         self.assertIsNone(detail["pdf_url"])
 
+    def test_study_note_signed_storage_url_generation(self) -> None:
+        """Verifies that relative storage paths are resolved to signed URLs upon detail retrieval."""
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "uid_123",
+            "role": "ADMIN",
+        }
+        app.dependency_overrides[get_user_repository] = (
+            lambda: _InMemoryUserRepository(role="ADMIN")
+        )
+        repo = _InMemoryStudyNoteRepository()
+        app.dependency_overrides[get_study_note_repository] = lambda: repo
+
+        # Create note with a cloud storage relative path
+        create_res = self.client.post(
+            "/api/v1/study-notes",
+            json={
+                "id": "pdf_note_storage_path",
+                "title": "Complex Numbers PDF",
+                "subject_id": "pure_maths",
+                "pdf_url": "study_notes/pure/complex_numbers.pdf",
+            },
+        )
+        self.assertEqual(create_res.status_code, 201)
+
+        # Retrieve detail: pdf_url must be converted into a signed URL with expiration
+        detail_res = self.client.get("/api/v1/study-notes/pdf_note_storage_path")
+        self.assertEqual(detail_res.status_code, 200)
+        detail = detail_res.json()
+        self.assertEqual(detail["content_type"], "pdf")
+        self.assertIsNone(detail["content_text"])
+        self.assertIsNotNone(detail["pdf_url"])
+        self.assertIn("storage.googleapis.com", detail["pdf_url"])
+        self.assertIn("study_notes/pure/complex_numbers.pdf", detail["pdf_url"])
+        self.assertIn("X-Goog-Expires=", detail["pdf_url"])
+
 
 if __name__ == "__main__":
     unittest.main()
