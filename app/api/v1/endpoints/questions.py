@@ -6,7 +6,6 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import get_question_service, require_admin_or_editor
-from app.domain.entities import QuestionSummaryEntity, QuestionWithSolutionEntity
 from app.schemas.question import (
     QuestionCreate,
     QuestionSummaryResponse,
@@ -21,7 +20,7 @@ router = APIRouter(prefix="/questions", tags=["Questions v1"])
 async def list_recent_questions(
     limit: int = Query(15, ge=1, le=100),
     service: QuestionService = Depends(get_question_service),
-) -> List[QuestionSummaryEntity]:
+) -> List[Dict[str, Any]]:
     """Fetches the latest questions stored in Cloud SQL."""
     return await service.list_recent_questions(limit=limit)
 
@@ -35,6 +34,6 @@ async def add_question(
     q: QuestionCreate,
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: QuestionService = Depends(get_question_service),
-) -> QuestionWithSolutionEntity:
+) -> Dict[str, Any]:
     """Creates a new question with its corresponding marking scheme (requires ADMIN or EDITOR role)."""
     return await service.create_question(q)

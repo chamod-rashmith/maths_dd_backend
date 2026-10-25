@@ -4,7 +4,6 @@ Application Service for User Profile business logic.
 
 from typing import Any, Dict
 
-from app.domain.entities import UserEntity
 from app.domain.exceptions import EntityNotFoundError, ValidationDomainError
 from app.domain.repositories.user_repository import UserRepository
 from app.schemas.user import UserProfileSyncRequest
@@ -16,7 +15,7 @@ class UserService:
     def __init__(self, repo: UserRepository) -> None:
         self._repo = repo
 
-    async def get_my_profile(self, current_user: Dict[str, Any]) -> UserEntity:
+    async def get_my_profile(self, current_user: Dict[str, Any]) -> Dict[str, Any]:
         uid = current_user.get("uid")
         if not uid:
             raise ValidationDomainError("Authenticated token payload is missing 'uid'.")
@@ -30,7 +29,7 @@ class UserService:
 
     async def sync_profile(
         self, current_user: Dict[str, Any], payload: UserProfileSyncRequest
-    ) -> UserEntity:
+    ) -> Dict[str, Any]:
         uid = current_user.get("uid")
         email = current_user.get("email")
 

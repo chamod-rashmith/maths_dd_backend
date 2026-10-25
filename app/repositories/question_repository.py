@@ -1,13 +1,12 @@
 """
-Concrete PostgreSQL Implementation of QuestionRepository returning pure Domain Entities.
+Concrete PostgreSQL Implementation of QuestionRepository.
 """
 
 import uuid
 import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import asyncpg
 
-from app.domain.entities import QuestionSummaryEntity, QuestionWithSolutionEntity
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.question_repository import QuestionRepository
 
@@ -36,7 +35,7 @@ class PostgresQuestionRepository(QuestionRepository):
         is_published: bool = True,
         scheduled_date: Optional[str] = None,
         custom_id: Optional[str] = None,
-    ) -> QuestionWithSolutionEntity:
+    ) -> Dict[str, Any]:
         try:
             async with self._conn.transaction():
                 q_id = (
@@ -106,14 +105,14 @@ class PostgresQuestionRepository(QuestionRepository):
                     allocated_marks,
                 )
 
-                return QuestionWithSolutionEntity(
-                    question=dict(q_row),
-                    marking_scheme=dict(sol_row),
-                )
+                return {
+                    "question": dict(q_row),
+                    "marking_scheme": dict(sol_row),
+                }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
-    async def get_recent(self, limit: int = 15) -> List[QuestionSummaryEntity]:
+    async def get_recent(self, limit: int = 15) -> List[Dict[str, Any]]:
         try:
             rows = await self._conn.fetch(
                 """
@@ -128,25 +127,6 @@ class PostgresQuestionRepository(QuestionRepository):
                 """,
                 limit,
             )
-            result: List[QuestionSummaryEntity] = []
-            for r in rows:
-                d = dict(r)
-                result.append(
-                    QuestionSummaryEntity(
-                        id=d["id"],
-                        title=d["title"],
-                        subject_id=d["subject_id"],
-                        type=d["type"],
-                        difficulty=d["difficulty"],
-                        schedule=d["schedule"],
-                        source=d["source"],
-                        allocated_marks=int(d["allocated_marks"]),
-                        is_published=bool(d["is_published"]),
-                        created_at=d["created_at"],
-                        subject_name=d.get("subject_name"),
-                        lesson_title=d.get("lesson_title"),
-                    )
-                )
-            return result
+            return [dict(r) for r in rows]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

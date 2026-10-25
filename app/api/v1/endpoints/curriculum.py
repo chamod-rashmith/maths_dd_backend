@@ -6,7 +6,6 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import get_curriculum_service, require_admin_or_editor
-from app.domain.entities import LessonEntity, SubjectEntity
 from app.schemas.curriculum import (
     LessonCreate,
     LessonResponse,
@@ -21,7 +20,7 @@ router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
 @router.get("/subjects", response_model=List[SubjectResponse])
 async def list_subjects(
     service: CurriculumService = Depends(get_curriculum_service),
-) -> List[SubjectEntity]:
+) -> List[Dict[str, Any]]:
     """Fetches syllabus subjects (cached via TTL cache)."""
     return await service.list_subjects()
 
@@ -35,7 +34,7 @@ async def add_subject(
     sub: SubjectCreate,
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
-) -> SubjectEntity:
+) -> Dict[str, Any]:
     """Creates or updates a syllabus subject (requires ADMIN or EDITOR role)."""
     return await service.upsert_subject(sub)
 
@@ -54,7 +53,7 @@ async def remove_subject(
 async def list_lessons(
     subject_id: Optional[str] = Query(None),
     service: CurriculumService = Depends(get_curriculum_service),
-) -> List[LessonEntity]:
+) -> List[Dict[str, Any]]:
     """Fetches syllabus lessons, optionally filtered by subject ID (cached via TTL cache)."""
     return await service.list_lessons(subject_id)
 
@@ -68,6 +67,6 @@ async def add_lesson(
     les: LessonCreate,
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
-) -> LessonEntity:
+) -> Dict[str, Any]:
     """Creates or updates a syllabus lesson (requires ADMIN or EDITOR role)."""
     return await service.upsert_lesson(les)

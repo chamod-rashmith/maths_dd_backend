@@ -1,11 +1,10 @@
 """
-Concrete PostgreSQL Implementation of UserRepository returning pure UserEntity objects.
+Concrete PostgreSQL Implementation of UserRepository.
 """
 
-from typing import Optional
+from typing import Any, Dict, Optional
 import asyncpg
 
-from app.domain.entities import UserEntity
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
 
@@ -16,35 +15,10 @@ class PostgresUserRepository(UserRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
-    @staticmethod
-    def _to_entity(row: asyncpg.Record) -> UserEntity:
-        data = dict(row)
-        return UserEntity(
-            uid=data["uid"],
-            email=data["email"],
-            name=data["name"],
-            telephone_no=data.get("telephone_no"),
-            role=data.get("role") or "USER",
-            avatar_url=data.get("avatar_url"),
-            school_name=data.get("school_name"),
-            district=data.get("district"),
-            stream=data.get("stream"),
-            grade=data.get("grade"),
-            attempt=data.get("attempt"),
-            is_premium=bool(data.get("is_premium", False)),
-            current_streak_days=int(data.get("current_streak_days") or 0),
-            longest_streak_days=int(data.get("longest_streak_days") or 0),
-            total_solved_count=int(data.get("total_solved_count") or 0),
-            total_study_time_seconds=int(data.get("total_study_time_seconds") or 0),
-            last_active_date=data.get("last_active_date"),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
-        )
-
-    async def get_by_uid(self, uid: str) -> Optional[UserEntity]:
+    async def get_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         try:
             row = await self._conn.fetchrow("SELECT * FROM users WHERE uid = $1;", uid)
-            return self._to_entity(row) if row else None
+            return dict(row) if row else None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -60,7 +34,7 @@ class PostgresUserRepository(UserRepository):
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
-    ) -> UserEntity:
+    ) -> Dict[str, Any]:
         query = """
         INSERT INTO users (
             uid, email, name, avatar_url, telephone_no,
@@ -102,6 +76,6 @@ class PostgresUserRepository(UserRepository):
                 grade,
                 attempt,
             )
-            return self._to_entity(row)
+            return dict(row)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

@@ -4,7 +4,6 @@ Application Service for Study Notes.
 
 from typing import Any, Dict, List, Optional
 
-from app.domain.entities import StudyNoteEntity
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.schemas.study_note import StudyNoteCreateOrUpdate
@@ -23,7 +22,7 @@ class StudyNoteService:
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[StudyNoteEntity]:
+    ) -> List[Dict[str, Any]]:
         return await self._repo.list_notes(
             subject_id=subject_id,
             lesson_id=lesson_id,
@@ -32,13 +31,13 @@ class StudyNoteService:
             offset=offset,
         )
 
-    async def get_note_by_id(self, note_id: str) -> StudyNoteEntity:
+    async def get_note_by_id(self, note_id: str) -> Dict[str, Any]:
         note = await self._repo.get_by_id(note_id)
         if not note:
             raise EntityNotFoundError(f"Study note '{note_id}' not found.")
         return note
 
-    async def upsert_note(self, payload: StudyNoteCreateOrUpdate) -> StudyNoteEntity:
+    async def upsert_note(self, payload: StudyNoteCreateOrUpdate) -> Dict[str, Any]:
         return await self._repo.upsert(
             note_id=payload.id,
             title=payload.title,

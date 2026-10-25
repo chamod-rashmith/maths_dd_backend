@@ -1,7 +1,6 @@
 """
 Unit tests verifying FastAPI application wiring, OpenAPI routes, health probes,
-Domain Entities, Application Services, Global Exception Handlers, TTL Caching,
-and Role-Based Access Control (RBAC).
+Application Services, Global Exception Handlers, TTL Caching, and RBAC.
 """
 
 import unittest
@@ -11,29 +10,28 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_curriculum_repository, get_user_repository
 from app.core.cache import curriculum_cache
 from app.core.security import get_current_user
-from app.domain.entities import LessonEntity, SubjectEntity, UserEntity
 from app.domain.repositories.curriculum_repository import CurriculumRepository
 from app.domain.repositories.user_repository import UserRepository
 from app.main import app
 
 
 class _InMemoryCurriculumRepository(CurriculumRepository):
-    """Test double implementing the abstract `CurriculumRepository` contract with pure Domain Entities."""
+    """Test double implementing the abstract `CurriculumRepository` contract."""
 
     def __init__(self) -> None:
         self.call_count = 0
 
-    async def get_subjects(self) -> List[SubjectEntity]:
+    async def get_subjects(self) -> List[Dict[str, Any]]:
         self.call_count += 1
         return [
-            SubjectEntity(
-                id="pure_maths",
-                name="Pure Mathematics",
-                sinhala_name=None,
-                code="PM",
-                order_index=1,
-                description="Algebra and Calculus",
-            )
+            {
+                "id": "pure_maths",
+                "name": "Pure Mathematics",
+                "sinhala_name": None,
+                "code": "PM",
+                "order_index": 1,
+                "description": "Algebra and Calculus",
+            }
         ]
 
     async def upsert_subject(
@@ -44,22 +42,22 @@ class _InMemoryCurriculumRepository(CurriculumRepository):
         code: str,
         order_index: int,
         description: str = "",
-    ) -> SubjectEntity:
-        return SubjectEntity(
-            id=subject_id,
-            name=name,
-            sinhala_name=sinhala_name,
-            code=code,
-            order_index=order_index,
-            description=description,
-        )
+    ) -> Dict[str, Any]:
+        return {
+            "id": subject_id,
+            "name": name,
+            "sinhala_name": sinhala_name,
+            "code": code,
+            "order_index": order_index,
+            "description": description,
+        }
 
     async def delete_subject(self, subject_id: str) -> Dict[str, Any]:
         return {"status": "success", "deleted_id": subject_id}
 
     async def get_lessons(
         self, subject_id: Optional[str] = None
-    ) -> List[LessonEntity]:
+    ) -> List[Dict[str, Any]]:
         return []
 
     async def upsert_lesson(
@@ -70,31 +68,31 @@ class _InMemoryCurriculumRepository(CurriculumRepository):
         sinhala_title: str,
         order_index: int,
         description: str = "",
-    ) -> LessonEntity:
-        return LessonEntity(
-            id=lesson_id,
-            subject_id=subject_id,
-            title=title,
-            sinhala_title=sinhala_title,
-            order_index=order_index,
-            description=description,
-        )
+    ) -> Dict[str, Any]:
+        return {
+            "id": lesson_id,
+            "subject_id": subject_id,
+            "title": title,
+            "sinhala_title": sinhala_title,
+            "order_index": order_index,
+            "description": description,
+        }
 
 
 class _InMemoryUserRepository(UserRepository):
-    """Test double implementing the abstract `UserRepository` contract with pure `UserEntity`."""
+    """Test double implementing the abstract `UserRepository` contract."""
 
     def __init__(self, role: str = "USER") -> None:
         self._role = role
 
-    async def get_by_uid(self, uid: str) -> Optional[UserEntity]:
+    async def get_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         if uid == "uid_123":
-            return UserEntity(
-                uid="uid_123",
-                email="student@mathsdd.lk",
-                name="Test Student",
-                role=self._role,
-            )
+            return {
+                "uid": "uid_123",
+                "email": "student@mathsdd.lk",
+                "name": "Test Student",
+                "role": self._role,
+            }
         return None
 
     async def sync_or_create(
@@ -109,20 +107,20 @@ class _InMemoryUserRepository(UserRepository):
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
-    ) -> UserEntity:
-        return UserEntity(
-            uid=uid,
-            email=email,
-            name=name,
-            avatar_url=avatar_url,
-            telephone_no=telephone_no,
-            school_name=school_name,
-            district=district,
-            stream=stream,
-            grade=grade,
-            attempt=attempt,
-            role=self._role,
-        )
+    ) -> Dict[str, Any]:
+        return {
+            "uid": uid,
+            "email": email,
+            "name": name,
+            "avatar_url": avatar_url,
+            "telephone_no": telephone_no,
+            "school_name": school_name,
+            "district": district,
+            "stream": stream,
+            "grade": grade,
+            "attempt": attempt,
+            "role": self._role,
+        }
 
 
 class TestBackendCleanArchitecture(unittest.TestCase):

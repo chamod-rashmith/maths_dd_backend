@@ -109,7 +109,7 @@ async def require_admin_or_editor(
     uid = current_user.get("uid")
     if uid:
         db_user = await user_repo.get_by_uid(uid)
-        if db_user and db_user.role.upper() in _PRIVILEGED_ROLES:
+        if db_user and str(db_user.get("role", "")).upper() in _PRIVILEGED_ROLES:
             return current_user
 
     raise PermissionDeniedError(
