@@ -1,22 +1,22 @@
 """
-Maths DD - Content Automation & Management Backend
-Designed for deployment on Google Cloud Run with Cloud SQL (PostgreSQL).
+Maths DD - Backend Microservice (Google Cloud Run + Cloud SQL PostgreSQL).
+Production-grade REST API architecture with v1 versioning.
 """
 
 import os
-from typing import Optional, List
 from pathlib import Path
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 import database
+from users_router import router as users_v1_router
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="Maths DD Content Studio API",
-    description="Backend microservice for Maths DD content studio, curriculum management, and study notes automation.",
+    title="Maths DD API",
+    description="Production REST API service for Maths DD mobile & web ecosystem.",
     version="1.0.0",
 )
 
@@ -29,11 +29,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+# Register v1 Clean Architecture API Routers
+app.include_router(users_v1_router)
 
 
 # -----------------------------------------------------------------------------
-# Pydantic Request Models
+# System & Infrastructure Probes
+# -----------------------------------------------------------------------------
+
+@app.get("/health")
+def health_check():
+    """
+    Liveness and readiness probe for Google Cloud Run.
+    """
+    return {"status": "healthy", "service": "maths_dd_backend", "version": "1.0.0"}
+
+
+@app.get("/db-test")
+async def test_database():
+    """
+    Tests live connectivity to Google Cloud SQL (PostgreSQL).
+    """
+    try:
+        conn = await database.get_db_connection()
+        version = await conn.fetchval("SELECT version();")
+        now = await conn.fetchval("SELECT NOW();")
+        tables = await conn.fetch(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name LIMIT 15;"
+        )
+        await conn.close()
+
+        return {
+            "status": "success",
+            "message": "Connected to Cloud SQL PostgreSQL successfully!",
+            "database": os.environ.get("DB_NAME", "math-master-981fe-database"),
+            "postgres_version": version,
+            "server_timestamp": str(now),
+            "tables_found": [r["table_name"] for r in tables],
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "Failed to connect to Cloud SQL database",
+            "details": str(e),
+        }
+
+
+# -----------------------------------------------------------------------------
+# Curriculum & Questions API (v1 Compatibility)
 # -----------------------------------------------------------------------------
 
 class SubjectCreate(BaseModel):
@@ -73,127 +116,20 @@ class QuestionCreate(BaseModel):
     scheduled_date: Optional[str] = None
 
 
-class StudyNoteCreate(BaseModel):
-    id: Optional[str] = None
-    title: str
-    description: Optional[str] = ""
-    subject_id: str
-    lesson_id: Optional[str] = None
-    content_text: Optional[str] = ""
-    pdf_url: Optional[str] = None
-    is_premium: bool = False
-    order_index: int = 0
-    author: Optional[str] = ""
-
-
-# -----------------------------------------------------------------------------
-# Web UI Endpoints
-# -----------------------------------------------------------------------------
-
-@app.get("/", response_class=HTMLResponse)
-@app.get("/admin", response_class=HTMLResponse)
-def serve_admin_studio():
-    """
-    Renders the modern Maths DD Question Studio Admin UI.
-    """
-    html_path = TEMPLATES_DIR / "admin.html"
-    if not html_path.exists():
-        raise HTTPException(status_code=404, detail="Admin studio template not found")
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-
-
-@app.get("/notes", response_class=HTMLResponse)
-@app.get("/admin/notes", response_class=HTMLResponse)
-def serve_notes_studio():
-    """
-    Renders the modern Maths DD Study Notes Studio (Light Theme & Mobile Responsive).
-    """
-    html_path = TEMPLATES_DIR / "notes.html"
-    if not html_path.exists():
-        raise HTTPException(status_code=404, detail="Notes studio template not found")
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-
-
-@app.get("/health")
-def health_check():
-    """
-    Liveness and readiness probe for Google Cloud Run.
-    """
-    return {"status": "healthy", "service": "maths_dd_backend"}
-
-
-@app.get("/db-test")
-async def test_database():
-    """
-    Tests live connectivity to Google Cloud SQL (PostgreSQL).
-    """
-    try:
-        conn = await database.get_db_connection()
-        version = await conn.fetchval("SELECT version();")
-        now = await conn.fetchval("SELECT NOW();")
-        tables = await conn.fetch(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name LIMIT 15;"
-        )
-        await conn.close()
-
-        return {
-            "status": "success",
-            "message": "Connected to Cloud SQL PostgreSQL successfully! 🐘🚀",
-            "database": os.environ.get("DB_NAME", "math-master-981fe-database"),
-            "postgres_version": version,
-            "server_timestamp": str(now),
-            "tables_found": [r["table_name"] for r in tables],
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": "Failed to connect to Cloud SQL database",
-            "details": str(e),
-        }
-
-
-@app.get("/storage-test")
-def test_storage():
-    """
-    Tests live connectivity to Google Cloud Storage (Firebase Storage) bucket.
-    """
-    try:
-        import storage as storage_helper
-        bucket = storage_helper.get_storage_bucket()
-        exists = bucket.exists()
-        
-        return {
-            "status": "success" if exists else "error",
-            "message": "Connected to Google Cloud Storage bucket successfully! 🪣🚀" if exists else "Bucket not found or permission denied",
-            "bucket_name": bucket.name,
-            "exists": exists,
-            "location": bucket.location if exists else None,
-            "storage_class": bucket.storage_class if exists else None,
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": "Failed to connect to Cloud Storage bucket",
-            "details": str(e),
-        }
-
-
-# -----------------------------------------------------------------------------
-# REST API: Curriculum & Content Management
-# -----------------------------------------------------------------------------
-
+@app.get("/api/v1/curriculum/subjects")
 @app.get("/api/subjects")
 async def list_subjects():
-    """Fetches all master subjects from Cloud SQL."""
+    """Fetches syllabus subjects (Combined Maths: Pure & Applied)."""
     try:
         return await database.get_subjects()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/curriculum/subjects")
 @app.post("/api/subjects")
 async def add_subject(sub: SubjectCreate):
-    """Creates or updates a subject."""
+    """Creates a new syllabus subject."""
     try:
         return await database.create_subject(
             id=sub.id,
@@ -207,24 +143,7 @@ async def add_subject(sub: SubjectCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/subjects/cleanup")
-async def cleanup_empty():
-    """Deletes empty or accidental subject entries (id = '' or order_index = 0)."""
-    try:
-        return await database.cleanup_empty_subjects()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/subjects/{subject_id}")
-async def remove_subject(subject_id: str):
-    """Deletes a subject by ID."""
-    try:
-        return await database.delete_subject(subject_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+@app.get("/api/v1/curriculum/lessons")
 @app.get("/api/lessons")
 async def list_lessons(subject_id: Optional[str] = Query(None)):
     """Fetches syllabus lessons, optionally filtered by subject ID."""
@@ -234,6 +153,7 @@ async def list_lessons(subject_id: Optional[str] = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/curriculum/lessons")
 @app.post("/api/lessons")
 async def add_lesson(les: LessonCreate):
     """Creates or updates a syllabus lesson."""
@@ -250,6 +170,17 @@ async def add_lesson(les: LessonCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/questions/recent")
+@app.get("/api/questions/recent")
+async def list_recent_questions(limit: int = 15):
+    """Fetches the latest questions stored in Cloud SQL."""
+    try:
+        return await database.get_recent_questions(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/questions")
 @app.post("/api/questions")
 async def add_question(q: QuestionCreate):
     """Creates a new question with its corresponding marking scheme in Cloud SQL."""
@@ -276,88 +207,11 @@ async def add_question(q: QuestionCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/questions/recent")
-async def list_recent_questions(limit: int = 15):
-    """Fetches the latest questions stored in Cloud SQL."""
-    try:
-        return await database.get_recent_questions(limit=limit)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/api/seed")
 async def seed_database():
     """Seeds default Pure & Applied Maths curriculum taxonomy if empty."""
     try:
         return await database.seed_default_curriculum()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# -----------------------------------------------------------------------------
-# REST API: Study Notes Management (Conforming to Data Connect Schema)
-# -----------------------------------------------------------------------------
-
-@app.get("/api/notes")
-async def list_study_notes(
-    subject_id: Optional[str] = Query(None),
-    lesson_id: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
-    limit: int = 50,
-    offset: int = 0,
-):
-    """Fetches study notes according to Data Connect schema filters."""
-    try:
-        return await database.get_study_notes(
-            subject_id=subject_id,
-            lesson_id=lesson_id,
-            search=search,
-            limit=limit,
-            offset=offset,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/notes/{note_id}")
-async def get_study_note(note_id: str):
-    """Fetches single study note details by ID."""
-    try:
-        note = await database.get_study_note_by_id(note_id)
-        if not note:
-            raise HTTPException(status_code=404, detail=f"Study note '{note_id}' not found")
-        return note
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/notes")
-async def save_study_note(note: StudyNoteCreate):
-    """Creates or updates a study note."""
-    try:
-        return await database.create_or_update_study_note(
-            id=note.id,
-            title=note.title,
-            subject_id=note.subject_id,
-            lesson_id=note.lesson_id,
-            content_text=note.content_text,
-            description=note.description or "",
-            pdf_url=note.pdf_url,
-            is_premium=note.is_premium,
-            order_index=note.order_index,
-            author=note.author or "",
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/notes/{note_id}")
-async def remove_study_note(note_id: str):
-    """Deletes a study note by ID."""
-    try:
-        return await database.delete_study_note(note_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

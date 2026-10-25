@@ -8,12 +8,12 @@ import datetime
 from typing import List, Dict, Any, Optional
 import asyncpg
 
-DB_USER = os.environ.get("DB_USER", "chamod_rashmith")
+DB_USER = os.environ.get("DB_USER")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 DB_NAME = os.environ.get("DB_NAME", "math-master-981fe-database")
 INSTANCE_CONNECTION_NAME = os.environ.get(
-    "INSTANCE_CONNECTION_NAME",
-    "math-master-981fe:asia-south1:math-master-981fe-instance",
+    "INSTANCE_CONNECTION_NAME"
+    
 )
 
 
@@ -466,5 +466,102 @@ async def delete_study_note(note_id: str) -> Dict[str, Any]:
         await ensure_study_notes_table(conn)
         res = await conn.execute("DELETE FROM study_notes WHERE id = $1;", note_id)
         return {"status": "success", "result": res}
+    finally:
+        await conn.close()
+
+
+# -----------------------------------------------------------------------------
+# User Profile Database Operations (PostgreSQL)
+# -----------------------------------------------------------------------------
+
+async def ensure_users_table(conn: asyncpg.Connection):
+    """
+    Ensures the users table exists in PostgreSQL matching the clean architecture schema.
+    """
+    await conn.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        uid VARCHAR(128) PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        telephone_no VARCHAR(50),
+        role VARCHAR(50) DEFAULT 'USER',
+        avatar_url TEXT,
+        school_name VARCHAR(255),
+        district VARCHAR(100) DEFAULT 'Colombo',
+        stream VARCHAR(50) DEFAULT 'PHYSICAL_SCIENCE',
+        grade VARCHAR(50) DEFAULT 'GRADE_12',
+        attempt VARCHAR(50) DEFAULT 'FIRST',
+        is_premium BOOLEAN DEFAULT FALSE,
+        current_streak_days INT DEFAULT 0,
+        longest_streak_days INT DEFAULT 0,
+        total_solved_count INT DEFAULT 0,
+        total_study_time_seconds INT DEFAULT 0,
+        last_active_date DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    """)
+
+
+async def get_user_by_uid(uid: str) -> Optional[Dict[str, Any]]:
+    conn = await get_db_connection()
+    try:
+        await ensure_users_table(conn)
+        row = await conn.fetchrow("SELECT * FROM users WHERE uid = $1;", uid)
+        return dict(row) if row else None
+    finally:
+        await conn.close()
+
+
+async def sync_or_create_user_profile(
+    uid: str,
+    email: str,
+    name: str,
+    avatar_url: Optional[str] = None,
+    telephone_no: Optional[str] = None,
+    school_name: Optional[str] = None,
+    district: Optional[str] = "Colombo",
+    stream: Optional[str] = "PHYSICAL_SCIENCE",
+    grade: Optional[str] = "GRADE_12",
+    attempt: Optional[str] = "FIRST",
+) -> Dict[str, Any]:
+    """
+    Syncs user details on Google Sign-In / Auth. If user exists, updates name, email, avatar, etc.
+    If new user, inserts a fresh user record with default streak telemetry.
+    """
+    conn = await get_db_connection()
+    try:
+        await ensure_users_table(conn)
+        query = """
+        INSERT INTO users (
+            uid, email, name, avatar_url, telephone_no,
+            school_name, district, stream, grade, attempt,
+            created_at, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            NOW(), NOW()
+        )
+        ON CONFLICT (uid) DO UPDATE SET
+            email = EXCLUDED.email,
+            name = CASE WHEN EXCLUDED.name IS NOT NULL AND EXCLUDED.name != '' THEN EXCLUDED.name ELSE users.name END,
+            avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
+            telephone_no = COALESCE(EXCLUDED.telephone_no, users.telephone_no),
+            school_name = COALESCE(EXCLUDED.school_name, users.school_name),
+            district = COALESCE(EXCLUDED.district, users.district),
+            stream = COALESCE(EXCLUDED.stream, users.stream),
+            grade = COALESCE(EXCLUDED.grade, users.grade),
+            attempt = COALESCE(EXCLUDED.attempt, users.attempt),
+            updated_at = NOW()
+        RETURNING *;
+        """
+        row = await conn.fetchrow(
+            query,
+            uid, email, name, avatar_url, telephone_no,
+            school_name, district or "Colombo", stream or "PHYSICAL_SCIENCE",
+            grade or "GRADE_12", attempt or "FIRST"
+        )
+        return dict(row)
     finally:
         await conn.close()
