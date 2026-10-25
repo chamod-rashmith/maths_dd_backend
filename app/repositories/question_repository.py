@@ -41,7 +41,7 @@ class PostgresQuestionRepository(QuestionRepository):
                 q_id = (
                     custom_id.strip()
                     if (custom_id and custom_id.strip())
-                    else f"q_{uuid.uuid4().hex[:10]}"
+                    else str(uuid.uuid4())
                 )
 
                 parsed_date = None

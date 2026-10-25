@@ -106,11 +106,11 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         order_index: int = 0,
         author: Optional[str] = "",
     ) -> Dict[str, Any]:
-        prefix = subject_id.replace("_maths", "") if subject_id else "note"
+        # Generate clean, standard UUIDv4 when note_id is omitted or empty
         resolved_id = (
             note_id.strip()
             if (note_id and note_id.strip())
-            else f"note_{prefix}_{uuid.uuid4().hex[:8]}"
+            else str(uuid.uuid4())
         )
         cleaned_lesson_id = (
             lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
