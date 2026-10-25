@@ -1,18 +1,80 @@
 """
 Unit tests verifying FastAPI application wiring, OpenAPI routes, health probes,
-Application Services, Global Exception Handlers, TTL Caching, and RBAC.
+Application Services, Global Exception Handlers, TTL Caching, RBAC,
+and Study Note PDF vs Text mutual exclusivity rules.
 """
 
 import unittest
 from typing import Any, Dict, List, Optional
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_curriculum_repository, get_user_repository
+from app.api.deps import (
+    get_curriculum_repository,
+    get_study_note_repository,
+    get_user_repository,
+)
 from app.core.cache import curriculum_cache
 from app.core.security import get_current_user
 from app.domain.repositories.curriculum_repository import CurriculumRepository
+from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.domain.repositories.user_repository import UserRepository
 from app.main import app
+
+
+class _InMemoryStudyNoteRepository(StudyNoteRepository):
+    """Test double implementing StudyNoteRepository."""
+
+    def __init__(self) -> None:
+        self.notes: Dict[str, Dict[str, Any]] = {}
+
+    async def list_notes(
+        self,
+        subject_id: Optional[str] = None,
+        lesson_id: Optional[str] = None,
+        search: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        return list(self.notes.values())
+
+    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+        return self.notes.get(note_id)
+
+    async def upsert(
+        self,
+        note_id: Optional[str],
+        title: str,
+        subject_id: str,
+        lesson_id: Optional[str],
+        content_text: Optional[str] = "",
+        description: Optional[str] = "",
+        pdf_url: Optional[str] = None,
+        is_premium: bool = False,
+        order_index: int = 0,
+        author: Optional[str] = "",
+    ) -> Dict[str, Any]:
+        nid = note_id or "note_test_1"
+        final_pdf = pdf_url.strip() if (pdf_url and pdf_url.strip()) else None
+        final_content = (content_text or "").strip() if not final_pdf else ""
+
+        record = {
+            "id": nid,
+            "title": title,
+            "subject_id": subject_id,
+            "lesson_id": lesson_id,
+            "content_text": final_content,
+            "pdf_url": final_pdf,
+            "description": description,
+            "is_premium": is_premium,
+            "order_index": order_index,
+            "author": author,
+        }
+        self.notes[nid] = record
+        return record
+
+    async def delete(self, note_id: str) -> Dict[str, Any]:
+        self.notes.pop(note_id, None)
+        return {"status": "success"}
 
 
 class _InMemoryCurriculumRepository(CurriculumRepository):
@@ -166,12 +228,10 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         fake_repo = _InMemoryCurriculumRepository()
         app.dependency_overrides[get_curriculum_repository] = lambda: fake_repo
 
-        # First call -> cache MISS -> hits repository
         res1 = self.client.get("/api/v1/curriculum/subjects")
         self.assertEqual(res1.status_code, 200)
         self.assertEqual(fake_repo.call_count, 1)
 
-        # Second call -> cache HIT -> does not hit repository again
         res2 = self.client.get("/api/v1/curriculum/subjects")
         self.assertEqual(res2.status_code, 200)
         self.assertEqual(fake_repo.call_count, 1)
@@ -222,6 +282,71 @@ class TestBackendCleanArchitecture(unittest.TestCase):
             json={"id": "pure_maths", "name": "Pure Maths", "code": "PM"},
         )
         self.assertEqual(response.status_code, 201)
+
+    def test_study_note_validation_rejects_both_pdf_and_text(self) -> None:
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "uid_123",
+            "role": "ADMIN",
+        }
+        app.dependency_overrides[get_user_repository] = (
+            lambda: _InMemoryUserRepository(role="ADMIN")
+        )
+        app.dependency_overrides[get_study_note_repository] = (
+            lambda: _InMemoryStudyNoteRepository()
+        )
+
+        response = self.client.post(
+            "/api/v1/study-notes",
+            json={
+                "title": "Bad Note",
+                "subject_id": "pure_maths",
+                "content_text": "Some text",
+                "pdf_url": "https://example.com/doc.pdf",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not both", response.json()["detail"])
+
+    def test_study_note_returns_only_pdf_or_only_text(self) -> None:
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "uid_123",
+            "role": "ADMIN",
+        }
+        app.dependency_overrides[get_user_repository] = (
+            lambda: _InMemoryUserRepository(role="ADMIN")
+        )
+        repo = _InMemoryStudyNoteRepository()
+        app.dependency_overrides[get_study_note_repository] = lambda: repo
+
+        # Create PDF note
+        res1 = self.client.post(
+            "/api/v1/study-notes",
+            json={
+                "id": "pdf_note_1",
+                "title": "PDF Formula Sheet",
+                "subject_id": "pure_maths",
+                "pdf_url": "https://storage.googleapis.com/test.pdf",
+            },
+        )
+        self.assertEqual(res1.status_code, 201)
+        data1 = res1.json()
+        self.assertEqual(data1["pdf_url"], "https://storage.googleapis.com/test.pdf")
+        self.assertIsNone(data1["content_text"])
+
+        # Create Text note
+        res2 = self.client.post(
+            "/api/v1/study-notes",
+            json={
+                "id": "text_note_1",
+                "title": "LaTeX Equations Note",
+                "subject_id": "pure_maths",
+                "content_text": "$$E = mc^2$$",
+            },
+        )
+        self.assertEqual(res2.status_code, 201)
+        data2 = res2.json()
+        self.assertEqual(data2["content_text"], "$$E = mc^2$$")
+        self.assertIsNone(data2["pdf_url"])
 
 
 if __name__ == "__main__":

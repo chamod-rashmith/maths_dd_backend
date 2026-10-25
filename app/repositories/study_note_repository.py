@@ -109,6 +109,9 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
         )
 
+        final_pdf = pdf_url.strip() if (pdf_url and pdf_url.strip()) else None
+        final_content = (content_text or "").strip() if not final_pdf else ""
+
         query = """
         INSERT INTO study_notes (
             id, title, description, subject_id, lesson_id,
@@ -140,8 +143,8 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 description or "",
                 subject_id,
                 cleaned_lesson_id,
-                content_text or "",
-                pdf_url or None,
+                final_content,
+                final_pdf,
                 is_premium,
                 order_index,
                 author or "",
