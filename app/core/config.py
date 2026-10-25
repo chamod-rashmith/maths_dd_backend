@@ -54,5 +54,9 @@ class Settings:
         "math-master-981fe.firebasestorage.app",
     )
 
+    # Upstash Serverless Redis
+    UPSTASH_REDIS_REST_URL: str = os.environ.get("UPSTASH_REDIS_REST_URL", "")
+    UPSTASH_REDIS_REST_TOKEN: str = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+
 
 settings = Settings()

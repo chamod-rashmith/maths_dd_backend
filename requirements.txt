@@ -5,3 +5,4 @@ asyncpg>=0.30.0
 google-cloud-storage>=2.18.0
 firebase-admin>=7.0.0
 python-dotenv>=1.0.0
+upstash-redis>=1.8.0
