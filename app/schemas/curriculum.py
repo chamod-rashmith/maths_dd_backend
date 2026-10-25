@@ -1,8 +1,8 @@
 """
 Pydantic DTO schemas for Curriculum (Subjects & Syllabus Lessons).
+Optimized for client bandwidth by excluding internal DB audit timestamps.
 """
 
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,7 @@ class SubjectCreate(BaseModel):
 
 
 class SubjectResponse(BaseModel):
-    """Response schema for a curriculum subject."""
+    """Clean lightweight response schema for a curriculum subject."""
 
     id: str
     name: str
@@ -27,8 +27,6 @@ class SubjectResponse(BaseModel):
     code: str
     order_index: int
     description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 
 class LessonCreate(BaseModel):
@@ -43,7 +41,7 @@ class LessonCreate(BaseModel):
 
 
 class LessonResponse(BaseModel):
-    """Response schema for a syllabus lesson."""
+    """Clean lightweight response schema for a syllabus lesson."""
 
     id: str
     subject_id: str
@@ -53,5 +51,3 @@ class LessonResponse(BaseModel):
     description: Optional[str] = None
     question_count: Optional[int] = 0
     premium_count: Optional[int] = 0
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
