@@ -1,6 +1,6 @@
 """
 Pydantic DTO schemas for Study Notes.
-Enforces mutual exclusivity: either `pdf_url` OR `content_text` (never both).
+Enforces lightweight Summary for listings and mutually exclusive Content for detail view.
 """
 
 from datetime import datetime
@@ -40,8 +40,34 @@ class StudyNoteCreateOrUpdate(BaseModel):
         return self
 
 
-class StudyNoteResponse(BaseModel):
-    """Response schema for a study note. Guarantees returning ONLY pdf_url OR content_text."""
+class StudyNoteSummaryResponse(BaseModel):
+    """
+    Lightweight summary for Study Notes Catalog / List view.
+    Excludes heavy content_text and pdf_url payloads for maximum bandwidth and UI performance.
+    """
+
+    id: str
+    title: str
+    description: Optional[str] = None
+    subject_id: str
+    lesson_id: Optional[str] = None
+    content_type: str = "markdown"  # 'pdf' or 'markdown'
+    is_premium: bool = False
+    order_index: int = 0
+    author: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    subject_name: Optional[str] = None
+    subject_sinhala_name: Optional[str] = None
+    lesson_title: Optional[str] = None
+    lesson_sinhala_title: Optional[str] = None
+
+
+class StudyNoteDetailResponse(BaseModel):
+    """
+    Detailed representation of a single Study Note.
+    Loaded on-demand when user opens the note. Guarantees ONLY pdf_url OR content_text.
+    """
 
     id: str
     title: str
@@ -50,8 +76,9 @@ class StudyNoteResponse(BaseModel):
     lesson_id: Optional[str] = None
     content_text: Optional[str] = None
     pdf_url: Optional[str] = None
-    is_premium: bool
-    order_index: int
+    content_type: str = "markdown"  # 'pdf' or 'markdown'
+    is_premium: bool = False
+    order_index: int = 0
     author: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -63,7 +90,7 @@ class StudyNoteResponse(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def enforce_single_content(cls, data: dict) -> dict:
-        """Enforces that return payload has ONLY pdf_url OR content_text (never both)."""
+        """Enforces that detail payload contains ONLY pdf_url OR content_text (never both)."""
         if isinstance(data, dict):
             item = dict(data)
             has_pdf = bool(item.get("pdf_url") and str(item.get("pdf_url")).strip())
@@ -71,8 +98,10 @@ class StudyNoteResponse(BaseModel):
             if has_pdf:
                 item["pdf_url"] = str(item["pdf_url"]).strip()
                 item["content_text"] = None
+                item["content_type"] = "pdf"
             else:
                 item["pdf_url"] = None
                 item["content_text"] = item.get("content_text") or ""
+                item["content_type"] = "markdown"
             return item
         return data

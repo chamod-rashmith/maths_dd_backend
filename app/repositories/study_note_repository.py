@@ -1,5 +1,6 @@
 """
 Concrete PostgreSQL Implementation of StudyNoteRepository.
+Optimized to exclude heavy content_text during catalog listings.
 """
 
 import uuid
@@ -24,9 +25,14 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         limit: int = 50,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
+        # Exclude n.content_text and n.pdf_url; determine content_type efficiently via CASE
         query = """
             SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
-                   n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
+                   CASE 
+                       WHEN n.pdf_url IS NOT NULL AND n.pdf_url != '' THEN 'pdf'
+                       ELSE 'markdown'
+                   END as content_type,
+                   n.is_premium, n.order_index, n.author,
                    n.created_at, n.updated_at,
                    s.name as subject_name, s.sinhala_name as subject_sinhala_name,
                    l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
@@ -67,6 +73,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+        # Loads full note including content_text and pdf_url
         try:
             row = await self._conn.fetchrow(
                 """

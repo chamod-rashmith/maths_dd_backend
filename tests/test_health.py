@@ -1,7 +1,7 @@
 """
 Unit tests verifying FastAPI application wiring, OpenAPI routes, health probes,
 Application Services, Global Exception Handlers, TTL Caching, RBAC,
-and Study Note PDF vs Text mutual exclusivity rules.
+and Study Note Summary Catalog vs On-Demand Detail Loading.
 """
 
 import unittest
@@ -35,7 +35,14 @@ class _InMemoryStudyNoteRepository(StudyNoteRepository):
         limit: int = 50,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
-        return list(self.notes.values())
+        # Summary view: exclude content_text and pdf_url
+        summaries = []
+        for n in self.notes.values():
+            s = dict(n)
+            s.pop("content_text", None)
+            s.pop("pdf_url", None)
+            summaries.append(s)
+        return summaries
 
     async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
         return self.notes.get(note_id)
@@ -64,6 +71,7 @@ class _InMemoryStudyNoteRepository(StudyNoteRepository):
             "lesson_id": lesson_id,
             "content_text": final_content,
             "pdf_url": final_pdf,
+            "content_type": "pdf" if final_pdf else "markdown",
             "description": description,
             "is_premium": is_premium,
             "order_index": order_index,
@@ -307,7 +315,7 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("not both", response.json()["detail"])
 
-    def test_study_note_returns_only_pdf_or_only_text(self) -> None:
+    def test_study_notes_list_returns_summary_and_detail_loads_content(self) -> None:
         app.dependency_overrides[get_current_user] = lambda: {
             "uid": "uid_123",
             "role": "ADMIN",
@@ -318,23 +326,8 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         repo = _InMemoryStudyNoteRepository()
         app.dependency_overrides[get_study_note_repository] = lambda: repo
 
-        # Create PDF note
-        res1 = self.client.post(
-            "/api/v1/study-notes",
-            json={
-                "id": "pdf_note_1",
-                "title": "PDF Formula Sheet",
-                "subject_id": "pure_maths",
-                "pdf_url": "https://storage.googleapis.com/test.pdf",
-            },
-        )
-        self.assertEqual(res1.status_code, 201)
-        data1 = res1.json()
-        self.assertEqual(data1["pdf_url"], "https://storage.googleapis.com/test.pdf")
-        self.assertIsNone(data1["content_text"])
-
-        # Create Text note
-        res2 = self.client.post(
+        # Create note with LaTeX content
+        create_res = self.client.post(
             "/api/v1/study-notes",
             json={
                 "id": "text_note_1",
@@ -343,10 +336,25 @@ class TestBackendCleanArchitecture(unittest.TestCase):
                 "content_text": "$$E = mc^2$$",
             },
         )
-        self.assertEqual(res2.status_code, 201)
-        data2 = res2.json()
-        self.assertEqual(data2["content_text"], "$$E = mc^2$$")
-        self.assertIsNone(data2["pdf_url"])
+        self.assertEqual(create_res.status_code, 201)
+
+        # 1. Test List Endpoint: Must return summary (NO content_text or pdf_url)
+        list_res = self.client.get("/api/v1/study-notes")
+        self.assertEqual(list_res.status_code, 200)
+        items = list_res.json()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], "text_note_1")
+        self.assertEqual(items[0]["content_type"], "markdown")
+        self.assertNotIn("content_text", items[0])  # Excluded from summary!
+        self.assertNotIn("pdf_url", items[0])        # Excluded from summary!
+
+        # 2. Test Detail Endpoint: Loads full content on-demand
+        detail_res = self.client.get("/api/v1/study-notes/text_note_1")
+        self.assertEqual(detail_res.status_code, 200)
+        detail = detail_res.json()
+        self.assertEqual(detail["id"], "text_note_1")
+        self.assertEqual(detail["content_text"], "$$E = mc^2$$")
+        self.assertIsNone(detail["pdf_url"])
 
 
 if __name__ == "__main__":
