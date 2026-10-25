@@ -3,17 +3,15 @@ Abstract Repository Contract for User Profile persistence.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
-
-from app.domain.entities import UserEntity
+from typing import Any, Dict, Optional
 
 
 class UserRepository(ABC):
     """Domain contract defining user profile persistence operations."""
 
     @abstractmethod
-    async def get_by_uid(self, uid: str) -> Optional[UserEntity]:
-        """Fetches a `UserEntity` by its unique Firebase UID."""
+    async def get_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
+        """Fetches a user profile record by its unique Firebase UID."""
         raise NotImplementedError
 
     @abstractmethod
@@ -29,6 +27,6 @@ class UserRepository(ABC):
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
-    ) -> UserEntity:
+    ) -> Dict[str, Any]:
         """Idempotently creates or updates a user profile upon authentication sync."""
         raise NotImplementedError

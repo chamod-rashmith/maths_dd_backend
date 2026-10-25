@@ -1,11 +1,10 @@
 """
-Concrete PostgreSQL Implementation of CurriculumRepository returning pure Domain Entities.
+Concrete PostgreSQL Implementation of CurriculumRepository.
 """
 
 from typing import List, Dict, Any, Optional
 import asyncpg
 
-from app.domain.entities import LessonEntity, SubjectEntity
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.curriculum_repository import CurriculumRepository
 
@@ -16,37 +15,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
-    @staticmethod
-    def _to_subject_entity(row: asyncpg.Record) -> SubjectEntity:
-        data = dict(row)
-        return SubjectEntity(
-            id=data["id"],
-            name=data["name"],
-            sinhala_name=data.get("sinhala_name"),
-            code=data["code"],
-            order_index=int(data.get("order_index") or 1),
-            description=data.get("description"),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
-        )
-
-    @staticmethod
-    def _to_lesson_entity(row: asyncpg.Record) -> LessonEntity:
-        data = dict(row)
-        return LessonEntity(
-            id=data["id"],
-            subject_id=data["subject_id"],
-            title=data["title"],
-            sinhala_title=data.get("sinhala_title"),
-            order_index=int(data.get("order_index") or 1),
-            description=data.get("description"),
-            question_count=int(data.get("question_count") or 0),
-            premium_count=int(data.get("premium_count") or 0),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
-        )
-
-    async def get_subjects(self) -> List[SubjectEntity]:
+    async def get_subjects(self) -> List[Dict[str, Any]]:
         try:
             rows = await self._conn.fetch(
                 """
@@ -55,7 +24,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 ORDER BY order_index ASC;
                 """
             )
-            return [self._to_subject_entity(r) for r in rows]
+            return [dict(r) for r in rows]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -67,7 +36,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
         code: str,
         order_index: int,
         description: str = "",
-    ) -> SubjectEntity:
+    ) -> Dict[str, Any]:
         query = """
         INSERT INTO subjects (id, name, sinhala_name, code, order_index, description, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
@@ -84,7 +53,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
             row = await self._conn.fetchrow(
                 query, subject_id, name, sinhala_name, code, order_index, description
             )
-            return self._to_subject_entity(row)
+            return dict(row)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -99,7 +68,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
     async def get_lessons(
         self, subject_id: Optional[str] = None
-    ) -> List[LessonEntity]:
+    ) -> List[Dict[str, Any]]:
         try:
             if subject_id:
                 rows = await self._conn.fetch(
@@ -121,7 +90,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     ORDER BY subject_id, order_index ASC;
                     """
                 )
-            return [self._to_lesson_entity(r) for r in rows]
+            return [dict(r) for r in rows]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -133,7 +102,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
         sinhala_title: str,
         order_index: int,
         description: str = "",
-    ) -> LessonEntity:
+    ) -> Dict[str, Any]:
         query = """
         INSERT INTO syllabus_lessons (id, subject_id, title, sinhala_title, order_index, description, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
@@ -156,6 +125,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 order_index,
                 description,
             )
-            return self._to_lesson_entity(row)
+            return dict(row)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

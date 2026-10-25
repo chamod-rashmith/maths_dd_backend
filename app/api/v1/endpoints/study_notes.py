@@ -6,7 +6,6 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import get_study_note_service, require_admin_or_editor
-from app.domain.entities import StudyNoteEntity
 from app.schemas.study_note import StudyNoteCreateOrUpdate, StudyNoteResponse
 from app.services.study_note_service import StudyNoteService
 
@@ -21,7 +20,7 @@ async def list_study_notes(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> List[StudyNoteEntity]:
+) -> List[Dict[str, Any]]:
     """Lists study notes filtered by subject, lesson, or search query."""
     return await service.list_notes(
         subject_id=subject_id,
@@ -36,7 +35,7 @@ async def list_study_notes(
 async def get_study_note(
     note_id: str,
     service: StudyNoteService = Depends(get_study_note_service),
-) -> StudyNoteEntity:
+) -> Dict[str, Any]:
     """Fetches a single study note by ID."""
     return await service.get_note_by_id(note_id)
 
@@ -50,7 +49,7 @@ async def create_or_update_study_note(
     body: StudyNoteCreateOrUpdate,
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> StudyNoteEntity:
+) -> Dict[str, Any]:
     """Creates or updates a study note (requires ADMIN or EDITOR role)."""
     return await service.upsert_note(body)
 

@@ -1,12 +1,11 @@
 """
-Concrete PostgreSQL Implementation of StudyNoteRepository returning pure StudyNoteEntity objects.
+Concrete PostgreSQL Implementation of StudyNoteRepository.
 """
 
 import uuid
 from typing import List, Dict, Any, Optional
 import asyncpg
 
-from app.domain.entities import StudyNoteEntity
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 
@@ -17,28 +16,6 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
-    @staticmethod
-    def _to_entity(row: asyncpg.Record) -> StudyNoteEntity:
-        d = dict(row)
-        return StudyNoteEntity(
-            id=d["id"],
-            title=d["title"],
-            description=d.get("description"),
-            subject_id=d["subject_id"],
-            lesson_id=d.get("lesson_id"),
-            content_text=d.get("content_text") or "",
-            pdf_url=d.get("pdf_url"),
-            is_premium=bool(d.get("is_premium", False)),
-            order_index=int(d.get("order_index") or 0),
-            author=d.get("author"),
-            created_at=d.get("created_at"),
-            updated_at=d.get("updated_at"),
-            subject_name=d.get("subject_name"),
-            subject_sinhala_name=d.get("subject_sinhala_name"),
-            lesson_title=d.get("lesson_title"),
-            lesson_sinhala_title=d.get("lesson_sinhala_title"),
-        )
-
     async def list_notes(
         self,
         subject_id: Optional[str] = None,
@@ -46,7 +23,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[StudyNoteEntity]:
+    ) -> List[Dict[str, Any]]:
         query = """
             SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
                    n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
@@ -85,11 +62,11 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
 
         try:
             rows = await self._conn.fetch(query, *params)
-            return [self._to_entity(r) for r in rows]
+            return [dict(r) for r in rows]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
-    async def get_by_id(self, note_id: str) -> Optional[StudyNoteEntity]:
+    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
         try:
             row = await self._conn.fetchrow(
                 """
@@ -105,7 +82,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 """,
                 note_id,
             )
-            return self._to_entity(row) if row else None
+            return dict(row) if row else None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -121,7 +98,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         is_premium: bool = False,
         order_index: int = 0,
         author: Optional[str] = "",
-    ) -> StudyNoteEntity:
+    ) -> Dict[str, Any]:
         prefix = subject_id.replace("_maths", "") if subject_id else "note"
         resolved_id = (
             note_id.strip()
@@ -169,7 +146,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 order_index,
                 author or "",
             )
-            return self._to_entity(row)
+            return dict(row)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 

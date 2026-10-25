@@ -2,9 +2,8 @@
 Application Service for Questions and Marking Schemes.
 """
 
-from typing import List
+from typing import Any, Dict, List
 
-from app.domain.entities import QuestionSummaryEntity, QuestionWithSolutionEntity
 from app.domain.repositories.question_repository import QuestionRepository
 from app.schemas.question import QuestionCreate
 
@@ -17,12 +16,12 @@ class QuestionService:
 
     async def list_recent_questions(
         self, limit: int = 15
-    ) -> List[QuestionSummaryEntity]:
+    ) -> List[Dict[str, Any]]:
         return await self._repo.get_recent(limit=limit)
 
     async def create_question(
         self, payload: QuestionCreate
-    ) -> QuestionWithSolutionEntity:
+    ) -> Dict[str, Any]:
         return await self._repo.create_question_with_solution(
             title=payload.title,
             subject_id=payload.subject_id,
