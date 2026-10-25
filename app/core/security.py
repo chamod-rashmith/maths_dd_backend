@@ -1,5 +1,6 @@
 """
 Firebase Authentication & JWT Security verification for FastAPI backend.
+Uses `starlette.concurrency.run_in_threadpool` to prevent blocking the asyncio event loop.
 """
 
 import os
@@ -8,6 +9,7 @@ from typing import Dict, Any, Optional
 import firebase_admin
 from firebase_admin import auth, credentials
 from fastapi import Header, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
@@ -23,8 +25,12 @@ def init_firebase() -> None:
             firebase_admin.initialize_app(cred)
             logger.info("Firebase Admin SDK initialized with Service Account credentials.")
         else:
-            firebase_admin.initialize_app(options={"projectId": settings.FIREBASE_PROJECT_ID})
-            logger.info("Firebase Admin SDK initialized with default project credentials.")
+            firebase_admin.initialize_app(
+                options={"projectId": settings.FIREBASE_PROJECT_ID}
+            )
+            logger.info(
+                "Firebase Admin SDK initialized with default project credentials."
+            )
 
 
 init_firebase()
@@ -37,7 +43,8 @@ async def get_current_user(
 ) -> Dict[str, Any]:
     """
     FastAPI dependency to verify Firebase ID Token from Authorization header.
-    Returns decoded token dictionary with user info (uid, email, name, etc.).
+    Offloads synchronous `auth.verify_id_token` to a worker threadpool so the
+    main asyncio event loop never blocks during network JWKS/certificate checks.
     """
     if not authorization:
         raise HTTPException(
@@ -57,7 +64,9 @@ async def get_current_user(
     id_token = parts[1]
 
     try:
-        decoded_token = auth.verify_id_token(id_token)
+        decoded_token: Dict[str, Any] = await run_in_threadpool(
+            auth.verify_id_token, id_token
+        )
         return decoded_token
     except auth.ExpiredIdTokenError:
         raise HTTPException(

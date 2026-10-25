@@ -1,5 +1,5 @@
 """
-Maths DD - FastAPI Application Factory & Lifespan Management.
+Maths DD - FastAPI Application Factory, Lifespan & Global Exception Handlers.
 """
 
 from contextlib import asynccontextmanager
@@ -11,6 +11,7 @@ from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
+from app.core.exception_handlers import register_exception_handlers
 
 
 @asynccontextmanager
@@ -37,6 +38,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Register global domain exception handlers
+    register_exception_handlers(application)
 
     # Infrastructure & readiness probes (/health, /db-test)
     application.include_router(health_router)

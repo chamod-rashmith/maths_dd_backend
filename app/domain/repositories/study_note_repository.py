@@ -5,6 +5,8 @@ Abstract Repository Contract for Study Notes.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from app.domain.entities import StudyNoteEntity
+
 
 class StudyNoteRepository(ABC):
     """Domain contract defining study notes persistence."""
@@ -17,12 +19,12 @@ class StudyNoteRepository(ABC):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[StudyNoteEntity]:
         """Lists study notes filtered by subject, lesson, or search query."""
         raise NotImplementedError
 
     @abstractmethod
-    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+    async def get_by_id(self, note_id: str) -> Optional[StudyNoteEntity]:
         """Fetches a single study note by its unique ID."""
         raise NotImplementedError
 
@@ -39,7 +41,7 @@ class StudyNoteRepository(ABC):
         is_premium: bool = False,
         order_index: int = 0,
         author: Optional[str] = "",
-    ) -> Dict[str, Any]:
+    ) -> StudyNoteEntity:
         """Creates or updates a study note."""
         raise NotImplementedError
 

@@ -3,7 +3,9 @@ Abstract Repository Contract for Questions and Marking Schemes.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
+
+from app.domain.entities import QuestionSummaryEntity, QuestionWithSolutionEntity
 
 
 class QuestionRepository(ABC):
@@ -28,11 +30,11 @@ class QuestionRepository(ABC):
         is_published: bool = True,
         scheduled_date: Optional[str] = None,
         custom_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> QuestionWithSolutionEntity:
         """Atomically creates a question along with its official marking scheme."""
         raise NotImplementedError
 
     @abstractmethod
-    async def get_recent(self, limit: int = 15) -> List[Dict[str, Any]]:
+    async def get_recent(self, limit: int = 15) -> List[QuestionSummaryEntity]:
         """Returns the most recently created questions."""
         raise NotImplementedError

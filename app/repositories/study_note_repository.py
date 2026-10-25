@@ -1,11 +1,13 @@
 """
-Concrete PostgreSQL Implementation of StudyNoteRepository.
+Concrete PostgreSQL Implementation of StudyNoteRepository returning pure StudyNoteEntity objects.
 """
 
 import uuid
 from typing import List, Dict, Any, Optional
 import asyncpg
 
+from app.domain.entities import StudyNoteEntity
+from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 
 
@@ -15,6 +17,28 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
+    @staticmethod
+    def _to_entity(row: asyncpg.Record) -> StudyNoteEntity:
+        d = dict(row)
+        return StudyNoteEntity(
+            id=d["id"],
+            title=d["title"],
+            description=d.get("description"),
+            subject_id=d["subject_id"],
+            lesson_id=d.get("lesson_id"),
+            content_text=d.get("content_text") or "",
+            pdf_url=d.get("pdf_url"),
+            is_premium=bool(d.get("is_premium", False)),
+            order_index=int(d.get("order_index") or 0),
+            author=d.get("author"),
+            created_at=d.get("created_at"),
+            updated_at=d.get("updated_at"),
+            subject_name=d.get("subject_name"),
+            subject_sinhala_name=d.get("subject_sinhala_name"),
+            lesson_title=d.get("lesson_title"),
+            lesson_sinhala_title=d.get("lesson_sinhala_title"),
+        )
+
     async def list_notes(
         self,
         subject_id: Optional[str] = None,
@@ -22,7 +46,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[StudyNoteEntity]:
         query = """
             SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
                    n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
@@ -59,25 +83,31 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         query += f" ORDER BY n.order_index ASC, n.created_at DESC LIMIT ${param_idx} OFFSET ${param_idx + 1};"
         params.extend([limit, offset])
 
-        rows = await self._conn.fetch(query, *params)
-        return [dict(r) for r in rows]
+        try:
+            rows = await self._conn.fetch(query, *params)
+            return [self._to_entity(r) for r in rows]
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
 
-    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
-        row = await self._conn.fetchrow(
-            """
-            SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
-                   n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
-                   n.created_at, n.updated_at,
-                   s.name as subject_name, s.sinhala_name as subject_sinhala_name,
-                   l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
-            FROM study_notes n
-            LEFT JOIN subjects s ON n.subject_id = s.id
-            LEFT JOIN syllabus_lessons l ON n.lesson_id = l.id
-            WHERE n.id = $1;
-            """,
-            note_id,
-        )
-        return dict(row) if row else None
+    async def get_by_id(self, note_id: str) -> Optional[StudyNoteEntity]:
+        try:
+            row = await self._conn.fetchrow(
+                """
+                SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
+                       n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
+                       n.created_at, n.updated_at,
+                       s.name as subject_name, s.sinhala_name as subject_sinhala_name,
+                       l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
+                FROM study_notes n
+                LEFT JOIN subjects s ON n.subject_id = s.id
+                LEFT JOIN syllabus_lessons l ON n.lesson_id = l.id
+                WHERE n.id = $1;
+                """,
+                note_id,
+            )
+            return self._to_entity(row) if row else None
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
 
     async def upsert(
         self,
@@ -91,7 +121,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         is_premium: bool = False,
         order_index: int = 0,
         author: Optional[str] = "",
-    ) -> Dict[str, Any]:
+    ) -> StudyNoteEntity:
         prefix = subject_id.replace("_maths", "") if subject_id else "note"
         resolved_id = (
             note_id.strip()
@@ -125,23 +155,29 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             updated_at = NOW()
         RETURNING *;
         """
-        row = await self._conn.fetchrow(
-            query,
-            resolved_id,
-            title,
-            description or "",
-            subject_id,
-            cleaned_lesson_id,
-            content_text or "",
-            pdf_url or None,
-            is_premium,
-            order_index,
-            author or "",
-        )
-        return dict(row)
+        try:
+            row = await self._conn.fetchrow(
+                query,
+                resolved_id,
+                title,
+                description or "",
+                subject_id,
+                cleaned_lesson_id,
+                content_text or "",
+                pdf_url or None,
+                is_premium,
+                order_index,
+                author or "",
+            )
+            return self._to_entity(row)
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
 
     async def delete(self, note_id: str) -> Dict[str, Any]:
-        res = await self._conn.execute(
-            "DELETE FROM study_notes WHERE id = $1;", note_id
-        )
-        return {"status": "success", "result": res}
+        try:
+            res = await self._conn.execute(
+                "DELETE FROM study_notes WHERE id = $1;", note_id
+            )
+            return {"status": "success", "result": res}
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc

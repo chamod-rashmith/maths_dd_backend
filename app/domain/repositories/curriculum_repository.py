@@ -5,12 +5,14 @@ Abstract Repository Contract for Curriculum (Subjects & Syllabus Lessons).
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from app.domain.entities import LessonEntity, SubjectEntity
+
 
 class CurriculumRepository(ABC):
     """Domain contract defining curriculum subjects and syllabus lessons persistence."""
 
     @abstractmethod
-    async def get_subjects(self) -> List[Dict[str, Any]]:
+    async def get_subjects(self) -> List[SubjectEntity]:
         """Returns all subjects ordered by order_index ascending."""
         raise NotImplementedError
 
@@ -23,7 +25,7 @@ class CurriculumRepository(ABC):
         code: str,
         order_index: int,
         description: str = "",
-    ) -> Dict[str, Any]:
+    ) -> SubjectEntity:
         """Creates or updates a curriculum subject."""
         raise NotImplementedError
 
@@ -35,7 +37,7 @@ class CurriculumRepository(ABC):
     @abstractmethod
     async def get_lessons(
         self, subject_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[LessonEntity]:
         """Returns syllabus lessons, optionally filtered by subject_id."""
         raise NotImplementedError
 
@@ -48,6 +50,6 @@ class CurriculumRepository(ABC):
         sinhala_title: str,
         order_index: int,
         description: str = "",
-    ) -> Dict[str, Any]:
+    ) -> LessonEntity:
         """Creates or updates a syllabus lesson."""
         raise NotImplementedError
