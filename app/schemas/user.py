@@ -1,10 +1,13 @@
 """
 Pydantic DTO schemas for User Profile operations.
+Enforces type-safe UserRole enum.
 """
 
 from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+
+from app.domain.enums import UserRole
 
 
 class UserProfileSyncRequest(BaseModel):
@@ -41,18 +44,18 @@ class UserProfileResponse(BaseModel):
     email: str
     name: str
     telephone_no: Optional[str] = None
-    role: str = "USER"
+    role: UserRole = UserRole.USER
     avatar_url: Optional[str] = None
     school_name: Optional[str] = None
     district: Optional[str] = None
     stream: Optional[str] = None
     grade: Optional[str] = None
     attempt: Optional[str] = None
+    xp: int = 0
+    streak_count: int = 0
+    accuracy_rate: float = 0.0
+    questions_solved: int = 0
     is_premium: bool = False
-    current_streak_days: int = 0
-    longest_streak_days: int = 0
-    total_solved_count: int = 0
-    total_study_time_seconds: int = 0
-    last_active_date: Optional[date] = None
+    premium_expiry: Optional[date] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

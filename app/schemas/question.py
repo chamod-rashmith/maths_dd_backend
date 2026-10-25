@@ -1,10 +1,18 @@
 """
 Pydantic DTO schemas for Questions and Marking Schemes.
+Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source.
 """
 
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
+
+from app.domain.enums import (
+    QuestionDifficulty,
+    QuestionType,
+    QuestionSchedule,
+    QuestionSource,
+)
 
 
 class QuestionCreate(BaseModel):
@@ -17,10 +25,10 @@ class QuestionCreate(BaseModel):
     content_text: str = Field(..., min_length=1)
     solution_text: str = Field(..., min_length=1)
     solution_title: str = "Official Marking Scheme"
-    question_type: str = "SHORT"
-    difficulty: str = "MEDIUM"
-    schedule: str = "REGULAR"
-    source: str = "PAST_PAPER"
+    question_type: QuestionType = QuestionType.SHORT
+    difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
+    schedule: QuestionSchedule = QuestionSchedule.REGULAR
+    source: QuestionSource = QuestionSource.PAST_PAPER
     source_details: Optional[str] = ""
     allocated_marks: int = 25
     is_premium: bool = False
@@ -34,10 +42,10 @@ class QuestionSummaryResponse(BaseModel):
     id: str
     title: str
     subject_id: str
-    type: str
-    difficulty: str
-    schedule: str
-    source: str
+    type: QuestionType
+    difficulty: QuestionDifficulty
+    schedule: QuestionSchedule
+    source: QuestionSource
     allocated_marks: int
     is_published: bool
     created_at: datetime
