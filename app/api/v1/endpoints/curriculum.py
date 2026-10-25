@@ -21,7 +21,7 @@ router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
 async def list_subjects(
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> List[Dict[str, Any]]:
-    """Fetches syllabus subjects (cached via TTL cache)."""
+    """Fetches syllabus subjects (cached via Redis/TTL cache)."""
     return await service.list_subjects()
 
 
@@ -51,11 +51,23 @@ async def remove_subject(
 
 @router.get("/lessons", response_model=List[LessonResponse])
 async def list_lessons(
-    subject_id: Optional[str] = Query(None),
+    subject_code: Optional[str] = Query(
+        None,
+        description="Filter lessons by human-readable subject code (e.g. 'AMAT', 'PMAT')",
+    ),
+    subject_id: Optional[str] = Query(
+        None,
+        description="Filter lessons by subject UUID or ID (fallback)",
+    ),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> List[Dict[str, Any]]:
-    """Fetches syllabus lessons, optionally filtered by subject ID (cached via TTL cache)."""
-    return await service.list_lessons(subject_id)
+    """
+    Fetches syllabus lessons.
+    Supports filtering by human-readable subject code (`?subject_code=PMAT`) or `?subject_id=...`.
+    """
+    return await service.list_lessons(
+        subject_id=subject_id, subject_code=subject_code
+    )
 
 
 @router.post(

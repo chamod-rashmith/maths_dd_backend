@@ -126,7 +126,9 @@ class _InMemoryCurriculumRepository(CurriculumRepository):
         return {"status": "success", "deleted_id": subject_id}
 
     async def get_lessons(
-        self, subject_id: Optional[str] = None
+        self,
+        subject_id: Optional[str] = None,
+        subject_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         return []
 

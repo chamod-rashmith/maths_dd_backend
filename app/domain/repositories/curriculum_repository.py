@@ -34,9 +34,11 @@ class CurriculumRepository(ABC):
 
     @abstractmethod
     async def get_lessons(
-        self, subject_id: Optional[str] = None
+        self,
+        subject_id: Optional[str] = None,
+        subject_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Returns syllabus lessons, optionally filtered by subject_id."""
+        """Returns syllabus lessons, optionally filtered by subject_id or subject_code."""
         raise NotImplementedError
 
     @abstractmethod

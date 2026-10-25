@@ -82,29 +82,33 @@ class PostgresCurriculumRepository(CurriculumRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def get_lessons(
-        self, subject_id: Optional[str] = None
+        self,
+        subject_id: Optional[str] = None,
+        subject_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         try:
-            if subject_id:
-                rows = await self._conn.fetch(
-                    """
-                    SELECT id, subject_id, title, sinhala_title, order_index, description,
-                           question_count, premium_count, created_at, updated_at
-                    FROM syllabus_lessons
-                    WHERE subject_id = $1
-                    ORDER BY order_index ASC;
-                    """,
-                    subject_id,
-                )
-            else:
-                rows = await self._conn.fetch(
-                    """
-                    SELECT id, subject_id, title, sinhala_title, order_index, description,
-                           question_count, premium_count, created_at, updated_at
-                    FROM syllabus_lessons
-                    ORDER BY subject_id, order_index ASC;
-                    """
-                )
+            query = """
+                SELECT l.id, l.subject_id, l.title, l.sinhala_title, l.order_index, l.description,
+                       l.question_count, l.premium_count, l.created_at, l.updated_at
+                FROM syllabus_lessons l
+                JOIN subjects s ON l.subject_id = s.id
+                WHERE 1=1
+            """
+            params: List[Any] = []
+            param_idx = 1
+
+            if subject_code and subject_code.strip():
+                query += f" AND UPPER(s.code) = UPPER(${param_idx})"
+                params.append(subject_code.strip())
+                param_idx += 1
+            elif subject_id and subject_id.strip():
+                query += f" AND (l.subject_id = ${param_idx} OR UPPER(s.code) = UPPER(${param_idx}))"
+                params.append(subject_id.strip())
+                param_idx += 1
+
+            query += " ORDER BY s.order_index ASC, l.order_index ASC;"
+
+            rows = await self._conn.fetch(query, *params)
             return [dict(r) for r in rows]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
