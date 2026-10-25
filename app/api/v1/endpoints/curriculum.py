@@ -35,7 +35,7 @@ async def add_subject(
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> Dict[str, Any]:
-    """Creates or updates a syllabus subject (requires ADMIN or EDITOR role)."""
+    """Creates or updates a syllabus subject with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
     return await service.upsert_subject(sub)
 
 
@@ -68,5 +68,15 @@ async def add_lesson(
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> Dict[str, Any]:
-    """Creates or updates a syllabus lesson (requires ADMIN or EDITOR role)."""
+    """Creates or updates a syllabus lesson with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
     return await service.upsert_lesson(les)
+
+
+@router.delete("/lessons/{lesson_id}")
+async def remove_lesson(
+    lesson_id: str,
+    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    service: CurriculumService = Depends(get_curriculum_service),
+) -> Dict[str, Any]:
+    """Deletes a syllabus lesson by ID (requires ADMIN or EDITOR role)."""
+    return await service.delete_lesson(lesson_id)

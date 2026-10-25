@@ -2,6 +2,7 @@
 Concrete PostgreSQL Implementation of CurriculumRepository.
 """
 
+import uuid
 from typing import List, Dict, Any, Optional
 import asyncpg
 
@@ -30,13 +31,18 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
     async def upsert_subject(
         self,
-        subject_id: str,
+        subject_id: Optional[str],
         name: str,
         sinhala_name: str,
         code: str,
         order_index: int,
         description: str = "",
     ) -> Dict[str, Any]:
+        resolved_id = (
+            subject_id.strip()
+            if (subject_id and subject_id.strip())
+            else str(uuid.uuid4())
+        )
         query = """
         INSERT INTO subjects (id, name, sinhala_name, code, order_index, description, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
@@ -51,7 +57,13 @@ class PostgresCurriculumRepository(CurriculumRepository):
         """
         try:
             row = await self._conn.fetchrow(
-                query, subject_id, name, sinhala_name, code, order_index, description
+                query,
+                resolved_id,
+                name,
+                sinhala_name,
+                code,
+                order_index,
+                description,
             )
             return dict(row)
         except Exception as exc:
@@ -59,10 +71,13 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
     async def delete_subject(self, subject_id: str) -> Dict[str, Any]:
         try:
-            res = await self._conn.execute(
-                "DELETE FROM subjects WHERE id = $1;", subject_id
+            row = await self._conn.fetchrow(
+                "DELETE FROM subjects WHERE id = $1 RETURNING id;", subject_id
             )
-            return {"status": "success", "result": res}
+            return {
+                "status": "success",
+                "deleted_id": row["id"] if row else subject_id,
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -96,13 +111,18 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
     async def upsert_lesson(
         self,
-        lesson_id: str,
+        lesson_id: Optional[str],
         subject_id: str,
         title: str,
         sinhala_title: str,
         order_index: int,
         description: str = "",
     ) -> Dict[str, Any]:
+        resolved_id = (
+            lesson_id.strip()
+            if (lesson_id and lesson_id.strip())
+            else str(uuid.uuid4())
+        )
         query = """
         INSERT INTO syllabus_lessons (id, subject_id, title, sinhala_title, order_index, description, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
@@ -118,7 +138,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
         try:
             row = await self._conn.fetchrow(
                 query,
-                lesson_id,
+                resolved_id,
                 subject_id,
                 title,
                 sinhala_title,
@@ -126,5 +146,17 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 description,
             )
             return dict(row)
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
+
+    async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        try:
+            row = await self._conn.fetchrow(
+                "DELETE FROM syllabus_lessons WHERE id = $1 RETURNING id;", lesson_id
+            )
+            return {
+                "status": "success",
+                "deleted_id": row["id"] if row else lesson_id,
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

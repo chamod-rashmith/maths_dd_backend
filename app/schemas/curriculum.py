@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class SubjectCreate(BaseModel):
     """Request schema to create or update a curriculum subject."""
 
-    id: str = Field(..., min_length=1, max_length=100)
+    id: Optional[str] = None
     name: str = Field(..., min_length=1, max_length=255)
     sinhala_name: Optional[str] = ""
     code: str = Field(..., min_length=1, max_length=50)
@@ -34,7 +34,7 @@ class SubjectResponse(BaseModel):
 class LessonCreate(BaseModel):
     """Request schema to create or update a syllabus lesson."""
 
-    id: str = Field(..., min_length=1, max_length=100)
+    id: Optional[str] = None
     subject_id: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=255)
     sinhala_title: Optional[str] = ""

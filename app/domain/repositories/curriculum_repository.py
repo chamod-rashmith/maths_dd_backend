@@ -17,7 +17,7 @@ class CurriculumRepository(ABC):
     @abstractmethod
     async def upsert_subject(
         self,
-        subject_id: str,
+        subject_id: Optional[str],
         name: str,
         sinhala_name: str,
         code: str,
@@ -42,7 +42,7 @@ class CurriculumRepository(ABC):
     @abstractmethod
     async def upsert_lesson(
         self,
-        lesson_id: str,
+        lesson_id: Optional[str],
         subject_id: str,
         title: str,
         sinhala_title: str,
@@ -50,4 +50,9 @@ class CurriculumRepository(ABC):
         description: str = "",
     ) -> Dict[str, Any]:
         """Creates or updates a syllabus lesson."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        """Deletes a syllabus lesson by ID."""
         raise NotImplementedError

@@ -67,3 +67,8 @@ class CurriculumService:
         )
         curriculum_cache.invalidate_prefix(_LESSONS_CACHE_PREFIX)
         return lesson
+
+    async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        result = await self._repo.delete_lesson(lesson_id)
+        curriculum_cache.invalidate_prefix(_LESSONS_CACHE_PREFIX)
+        return result

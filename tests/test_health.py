@@ -132,7 +132,7 @@ class _InMemoryCurriculumRepository(CurriculumRepository):
 
     async def upsert_lesson(
         self,
-        lesson_id: str,
+        lesson_id: Optional[str],
         subject_id: str,
         title: str,
         sinhala_title: str,
@@ -140,13 +140,16 @@ class _InMemoryCurriculumRepository(CurriculumRepository):
         description: str = "",
     ) -> Dict[str, Any]:
         return {
-            "id": lesson_id,
+            "id": lesson_id or "auto_uuid_lesson",
             "subject_id": subject_id,
             "title": title,
             "sinhala_title": sinhala_title,
             "order_index": order_index,
             "description": description,
         }
+
+    async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        return {"status": "success", "deleted_id": lesson_id}
 
 
 class _InMemoryUserRepository(UserRepository):
