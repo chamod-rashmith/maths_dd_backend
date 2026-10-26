@@ -57,7 +57,7 @@ class Settings:
     )
 
     # Google Cloud SQL (PostgreSQL via Cloud Run Unix Domain Socket)
-    DB_USER: str = _env_str("DB_USER", "postgres")
+    DB_USER: str = _env_str("DB_USER", "chamod_rashmith")
     DB_PASSWORD: str = os.environ.get("DB_PASSWORD", "")
     DB_NAME: str = _env_str("DB_NAME", "math-master-981fe-database")
     INSTANCE_CONNECTION_NAME: str = _env_str(
