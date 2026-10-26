@@ -51,7 +51,9 @@ async def init_db_pool() -> Optional[asyncpg.Pool]:
         )
         async with _pool.acquire() as conn:
             await ensure_schema(conn)
-        logger.info("Database connection pool initialized and schema verified.")
+            from app.core.seed import seed_database
+            await seed_database(conn)
+        logger.info("Database connection pool initialized, schema verified, and seed applied.")
         return _pool
     except Exception as exc:
         logger.warning(

@@ -1,6 +1,6 @@
 """
 Firebase Authentication & JWT Security verification for FastAPI backend.
-Uses `starlette.concurrency.run_in_threadpool` to prevent blocking the asyncio event loop.
+Supports local development bypass when ENVIRONMENT == 'development'.
 """
 
 import os
@@ -43,10 +43,17 @@ async def get_current_user(
 ) -> Dict[str, Any]:
     """
     FastAPI dependency to verify Firebase ID Token from Authorization header.
-    Offloads synchronous `auth.verify_id_token` to a worker threadpool so the
-    main asyncio event loop never blocks during network JWKS/certificate checks.
+    In local development, if authorization is omitted or set to 'Bearer dev-admin',
+    it assigns a local mock admin user.
     """
     if not authorization:
+        if settings.ENVIRONMENT == "development":
+            return {
+                "uid": "dev_admin_local",
+                "email": "admin@mathsdd.lk",
+                "name": "Dev Admin",
+                "role": "ADMIN",
+            }
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header is required (Bearer <Firebase_ID_Token>)",
@@ -62,6 +69,15 @@ async def get_current_user(
         )
 
     id_token = parts[1]
+
+    # Quick local dev bypass
+    if settings.ENVIRONMENT == "development" and id_token in ("dev-admin", "admin"):
+        return {
+            "uid": "dev_admin_local",
+            "email": "admin@mathsdd.lk",
+            "name": "Dev Admin",
+            "role": "ADMIN",
+        }
 
     try:
         decoded_token: Dict[str, Any] = await run_in_threadpool(

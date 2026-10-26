@@ -45,7 +45,12 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         param_idx = 1
 
         if subject_id and subject_id.strip():
-            query += f" AND n.subject_id = ${param_idx}"
+            query += f""" AND (
+                n.subject_id = ${param_idx} 
+                OR UPPER(s.code) = UPPER(${param_idx})
+                OR (s.code = 'PMAT' AND ${param_idx} IN ('pure_maths', 'pure', 'subj_pmat'))
+                OR (s.code = 'AMAT' AND ${param_idx} IN ('applied_maths', 'applied', 'subj_amat'))
+            )"""
             params.append(subject_id.strip())
             param_idx += 1
 
