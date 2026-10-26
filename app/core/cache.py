@@ -126,3 +126,6 @@ class HybridCache:
 
 # Global curriculum & reference data cache
 curriculum_cache = HybridCache(default_ttl_seconds=3600)
+
+# Global study notes catalog & detail cache
+study_notes_cache = HybridCache(default_ttl_seconds=3600)
