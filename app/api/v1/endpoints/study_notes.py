@@ -1,18 +1,24 @@
 """
 FastAPI Router for v1 Study Notes operations.
+List returns lightweight StudyNoteSummaryResponse (no heavy text).
+Detail endpoint returns full StudyNoteDetailResponse (on-demand loading).
 """
 
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import get_study_note_service, require_admin_or_editor
-from app.schemas.study_note import StudyNoteCreateOrUpdate, StudyNoteResponse
+from app.schemas.study_note import (
+    StudyNoteCreateOrUpdate,
+    StudyNoteDetailResponse,
+    StudyNoteSummaryResponse,
+)
 from app.services.study_note_service import StudyNoteService
 
 router = APIRouter(prefix="/study-notes", tags=["Study Notes v1"])
 
 
-@router.get("", response_model=List[StudyNoteResponse])
+@router.get("", response_model=List[StudyNoteSummaryResponse])
 async def list_study_notes(
     subject_id: Optional[str] = Query(None),
     lesson_id: Optional[str] = Query(None),
@@ -21,7 +27,10 @@ async def list_study_notes(
     offset: int = Query(0, ge=0),
     service: StudyNoteService = Depends(get_study_note_service),
 ) -> List[Dict[str, Any]]:
-    """Lists study notes filtered by subject, lesson, or search query."""
+    """
+    Lists study notes as lightweight summaries for catalog cards.
+    Does NOT return heavy content_text or pdf_url payloads.
+    """
     return await service.list_notes(
         subject_id=subject_id,
         lesson_id=lesson_id,
@@ -31,18 +40,21 @@ async def list_study_notes(
     )
 
 
-@router.get("/{note_id}", response_model=StudyNoteResponse)
+@router.get("/{note_id}", response_model=StudyNoteDetailResponse)
 async def get_study_note(
     note_id: str,
     service: StudyNoteService = Depends(get_study_note_service),
 ) -> Dict[str, Any]:
-    """Fetches a single study note by ID."""
+    """
+    Fetches a single study note with its full content body or PDF URL on-demand.
+    Guarantees returning ONLY pdf_url OR content_text.
+    """
     return await service.get_note_by_id(note_id)
 
 
 @router.post(
     "",
-    response_model=StudyNoteResponse,
+    response_model=StudyNoteDetailResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_or_update_study_note(

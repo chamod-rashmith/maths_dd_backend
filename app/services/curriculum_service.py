@@ -13,7 +13,7 @@ _LESSONS_CACHE_PREFIX = "curriculum:lessons:"
 
 
 class CurriculumService:
-    """Orchestrates curriculum reads (with in-memory TTL caching) and cache-invalidating writes."""
+    """Orchestrates curriculum reads (with in-memory/Redis TTL caching) and cache-invalidating writes."""
 
     def __init__(self, repo: CurriculumRepository) -> None:
         self._repo = repo
@@ -45,14 +45,19 @@ class CurriculumService:
         return result
 
     async def list_lessons(
-        self, subject_id: Optional[str] = None
+        self,
+        subject_id: Optional[str] = None,
+        subject_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        cache_key = f"{_LESSONS_CACHE_PREFIX}{subject_id or 'all'}"
+        cache_key_suffix = (subject_code or subject_id or "all").lower()
+        cache_key = f"{_LESSONS_CACHE_PREFIX}{cache_key_suffix}"
         cached = curriculum_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        lessons = await self._repo.get_lessons(subject_id)
+        lessons = await self._repo.get_lessons(
+            subject_id=subject_id, subject_code=subject_code
+        )
         curriculum_cache.set(cache_key, lessons)
         return lessons
 
@@ -67,3 +72,8 @@ class CurriculumService:
         )
         curriculum_cache.invalidate_prefix(_LESSONS_CACHE_PREFIX)
         return lesson
+
+    async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        result = await self._repo.delete_lesson(lesson_id)
+        curriculum_cache.invalidate_prefix(_LESSONS_CACHE_PREFIX)
+        return result

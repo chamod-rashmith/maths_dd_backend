@@ -1,5 +1,6 @@
 """
 Concrete PostgreSQL Implementation of StudyNoteRepository.
+Optimized to exclude heavy content_text during catalog listings.
 """
 
 import uuid
@@ -24,9 +25,14 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         limit: int = 50,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
+        # Exclude n.content_text and n.pdf_url; determine content_type efficiently via CASE
         query = """
             SELECT n.id, n.title, n.description, n.subject_id, n.lesson_id,
-                   n.content_text, n.pdf_url, n.is_premium, n.order_index, n.author,
+                   CASE 
+                       WHEN n.pdf_url IS NOT NULL AND n.pdf_url != '' THEN 'pdf'
+                       ELSE 'markdown'
+                   END as content_type,
+                   n.is_premium, n.order_index, n.author,
                    n.created_at, n.updated_at,
                    s.name as subject_name, s.sinhala_name as subject_sinhala_name,
                    l.title as lesson_title, l.sinhala_title as lesson_sinhala_title
@@ -39,7 +45,12 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         param_idx = 1
 
         if subject_id and subject_id.strip():
-            query += f" AND n.subject_id = ${param_idx}"
+            query += f""" AND (
+                n.subject_id = ${param_idx} 
+                OR UPPER(s.code) = UPPER(${param_idx})
+                OR (s.code = 'PMAT' AND ${param_idx} IN ('pure_maths', 'pure', 'subj_pmat'))
+                OR (s.code = 'AMAT' AND ${param_idx} IN ('applied_maths', 'applied', 'subj_amat'))
+            )"""
             params.append(subject_id.strip())
             param_idx += 1
 
@@ -67,6 +78,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+        # Loads full note including content_text and pdf_url
         try:
             row = await self._conn.fetchrow(
                 """
@@ -99,15 +111,18 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         order_index: int = 0,
         author: Optional[str] = "",
     ) -> Dict[str, Any]:
-        prefix = subject_id.replace("_maths", "") if subject_id else "note"
+        # Generate clean, standard UUIDv4 when note_id is omitted or empty
         resolved_id = (
             note_id.strip()
             if (note_id and note_id.strip())
-            else f"note_{prefix}_{uuid.uuid4().hex[:8]}"
+            else str(uuid.uuid4())
         )
         cleaned_lesson_id = (
             lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
         )
+
+        final_pdf = pdf_url.strip() if (pdf_url and pdf_url.strip()) else None
+        final_content = (content_text or "").strip() if not final_pdf else ""
 
         query = """
         INSERT INTO study_notes (
@@ -140,8 +155,8 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 description or "",
                 subject_id,
                 cleaned_lesson_id,
-                content_text or "",
-                pdf_url or None,
+                final_content,
+                final_pdf,
                 is_premium,
                 order_index,
                 author or "",

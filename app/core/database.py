@@ -51,7 +51,9 @@ async def init_db_pool() -> Optional[asyncpg.Pool]:
         )
         async with _pool.acquire() as conn:
             await ensure_schema(conn)
-        logger.info("Database connection pool initialized and schema verified.")
+            from app.core.seed import seed_database
+            await seed_database(conn)
+        logger.info("Database connection pool initialized, schema verified, and seed applied.")
         return _pool
     except Exception as exc:
         logger.warning(
@@ -134,10 +136,10 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
             subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
             lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
             content_text TEXT NOT NULL,
-            type VARCHAR(50) NOT NULL DEFAULT 'SHORT',
-            difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
-            schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR',
-            source VARCHAR(50) NOT NULL DEFAULT 'PAST_PAPER',
+            type VARCHAR(50) NOT NULL DEFAULT 'SHORT' CHECK (type IN ('SHORT', 'ESSAY')),
+            difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM' CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
+            schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR' CHECK (schedule IN ('REGULAR', 'DAILY', 'WEEKLY', 'MONTHLY')),
+            source VARCHAR(50) NOT NULL DEFAULT 'PAST_PAPER' CHECK (source IN ('PAST_PAPER', 'MODEL_PAPER', 'PROVINCIAL', 'SCHOOL_PAPER')),
             source_details TEXT DEFAULT '',
             allocated_marks INTEGER NOT NULL DEFAULT 25,
             is_premium BOOLEAN NOT NULL DEFAULT FALSE,
@@ -185,7 +187,7 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
             email VARCHAR(255) NOT NULL UNIQUE,
             name VARCHAR(255) NOT NULL,
             telephone_no VARCHAR(50),
-            role VARCHAR(50) DEFAULT 'USER',
+            role VARCHAR(50) DEFAULT 'USER' CHECK (role IN ('ADMIN', 'EDITOR', 'USER')),
             avatar_url TEXT,
             school_name VARCHAR(255),
             district VARCHAR(100),

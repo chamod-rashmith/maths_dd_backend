@@ -4,13 +4,14 @@ Application Service for Study Notes.
 
 from typing import Any, Dict, List, Optional
 
+from app.core.storage import generate_signed_download_url
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.schemas.study_note import StudyNoteCreateOrUpdate
 
 
 class StudyNoteService:
-    """Orchestrates study note filtering, retrieval, creation, and deletion."""
+    """Orchestrates study note filtering, retrieval, creation, signed URL generation, and deletion."""
 
     def __init__(self, repo: StudyNoteRepository) -> None:
         self._repo = repo
@@ -35,9 +36,25 @@ class StudyNoteService:
         note = await self._repo.get_by_id(note_id)
         if not note:
             raise EntityNotFoundError(f"Study note '{note_id}' not found.")
-        return note
+
+        result = dict(note)
+        # If the study note is a PDF document with a storage path/URL, generate a 60-min signed URL
+        raw_pdf_path = result.get("pdf_url")
+        if raw_pdf_path and str(raw_pdf_path).strip():
+            result["pdf_url"] = generate_signed_download_url(
+                storage_path=str(raw_pdf_path),
+                expiration_minutes=60,
+            )
+
+        return result
 
     async def upsert_note(self, payload: StudyNoteCreateOrUpdate) -> Dict[str, Any]:
+        # Normalize storage path if incoming payload has full gs:// URI
+        normalized_pdf_path = payload.pdf_url
+        if normalized_pdf_path and normalized_pdf_path.startswith("gs://"):
+            parts = normalized_pdf_path.replace("gs://", "").split("/", 1)
+            normalized_pdf_path = parts[1] if len(parts) > 1 else parts[0]
+
         return await self._repo.upsert(
             note_id=payload.id,
             title=payload.title,
@@ -45,7 +62,7 @@ class StudyNoteService:
             lesson_id=payload.lesson_id,
             content_text=payload.content_text,
             description=payload.description,
-            pdf_url=payload.pdf_url,
+            pdf_url=normalized_pdf_path,
             is_premium=payload.is_premium,
             order_index=payload.order_index,
             author=payload.author,

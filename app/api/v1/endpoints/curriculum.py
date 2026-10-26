@@ -21,7 +21,7 @@ router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
 async def list_subjects(
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> List[Dict[str, Any]]:
-    """Fetches syllabus subjects (cached via TTL cache)."""
+    """Fetches syllabus subjects (cached via Redis/TTL cache)."""
     return await service.list_subjects()
 
 
@@ -35,7 +35,7 @@ async def add_subject(
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> Dict[str, Any]:
-    """Creates or updates a syllabus subject (requires ADMIN or EDITOR role)."""
+    """Creates or updates a syllabus subject with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
     return await service.upsert_subject(sub)
 
 
@@ -51,11 +51,23 @@ async def remove_subject(
 
 @router.get("/lessons", response_model=List[LessonResponse])
 async def list_lessons(
-    subject_id: Optional[str] = Query(None),
+    subject_code: Optional[str] = Query(
+        None,
+        description="Filter lessons by human-readable subject code (e.g. 'AMAT', 'PMAT')",
+    ),
+    subject_id: Optional[str] = Query(
+        None,
+        description="Filter lessons by subject UUID or ID (fallback)",
+    ),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> List[Dict[str, Any]]:
-    """Fetches syllabus lessons, optionally filtered by subject ID (cached via TTL cache)."""
-    return await service.list_lessons(subject_id)
+    """
+    Fetches syllabus lessons.
+    Supports filtering by human-readable subject code (`?subject_code=PMAT`) or `?subject_id=...`.
+    """
+    return await service.list_lessons(
+        subject_id=subject_id, subject_code=subject_code
+    )
 
 
 @router.post(
@@ -68,5 +80,15 @@ async def add_lesson(
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> Dict[str, Any]:
-    """Creates or updates a syllabus lesson (requires ADMIN or EDITOR role)."""
+    """Creates or updates a syllabus lesson with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
     return await service.upsert_lesson(les)
+
+
+@router.delete("/lessons/{lesson_id}")
+async def remove_lesson(
+    lesson_id: str,
+    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    service: CurriculumService = Depends(get_curriculum_service),
+) -> Dict[str, Any]:
+    """Deletes a syllabus lesson by ID (requires ADMIN or EDITOR role)."""
+    return await service.delete_lesson(lesson_id)
