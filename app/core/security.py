@@ -1,11 +1,10 @@
 """
-Firebase Authentication & JWT Security verification for FastAPI backend.
-Supports local development bypass when ENVIRONMENT == 'development'.
+Firebase Authentication & JWT Security verification for FastAPI backend on Google Cloud Run.
 """
 
-import os
 import logging
-from typing import Dict, Any, Optional
+import os
+from typing import Any, Dict, Optional
 import firebase_admin
 from firebase_admin import auth, credentials
 from fastapi import Header, HTTPException, status
@@ -17,7 +16,7 @@ logger = logging.getLogger("maths_dd.security")
 
 
 def init_firebase() -> None:
-    """Initializes the Firebase Admin SDK idempotently."""
+    """Initializes the Firebase Admin SDK idempotently via Cloud Run ADC or Service Account."""
     if not firebase_admin._apps:
         cred_path = settings.GOOGLE_APPLICATION_CREDENTIALS
         if cred_path and os.path.exists(cred_path):
@@ -29,7 +28,8 @@ def init_firebase() -> None:
                 options={"projectId": settings.FIREBASE_PROJECT_ID}
             )
             logger.info(
-                "Firebase Admin SDK initialized with default project credentials."
+                "Firebase Admin SDK initialized with Application Default Credentials (project=%s).",
+                settings.FIREBASE_PROJECT_ID,
             )
 
 
@@ -43,17 +43,8 @@ async def get_current_user(
 ) -> Dict[str, Any]:
     """
     FastAPI dependency to verify Firebase ID Token from Authorization header.
-    In local development, if authorization is omitted or set to 'Bearer dev-admin',
-    it assigns a local mock admin user.
     """
     if not authorization:
-        if settings.ENVIRONMENT == "development":
-            return {
-                "uid": "dev_admin_local",
-                "email": "admin@mathsdd.lk",
-                "name": "Dev Admin",
-                "role": "ADMIN",
-            }
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header is required (Bearer <Firebase_ID_Token>)",
@@ -70,12 +61,11 @@ async def get_current_user(
 
     id_token = parts[1]
 
-    # Quick local dev bypass
     if settings.ENVIRONMENT == "development" and id_token in ("dev-admin", "admin"):
         return {
-            "uid": "dev_admin_local",
+            "uid": "admin_master_001",
             "email": "admin@mathsdd.lk",
-            "name": "Dev Admin",
+            "name": "Super Admin",
             "role": "ADMIN",
         }
 

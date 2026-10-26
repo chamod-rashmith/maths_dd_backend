@@ -38,30 +38,40 @@ class PostgresCurriculumRepository(CurriculumRepository):
         order_index: int,
         description: str = "",
     ) -> Dict[str, Any]:
-        resolved_id = (
-            subject_id.strip()
-            if (subject_id and subject_id.strip())
-            else str(uuid.uuid4())
-        )
-        query = """
-        INSERT INTO subjects (id, name, sinhala_name, code, order_index, description, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            sinhala_name = EXCLUDED.sinhala_name,
-            code = EXCLUDED.code,
-            order_index = EXCLUDED.order_index,
-            description = EXCLUDED.description,
-            updated_at = NOW()
-        RETURNING *;
-        """
+        cleaned_code = code.strip().upper()
         try:
+            existing_id = await self._conn.fetchval(
+                "SELECT id FROM subjects WHERE id = $1 OR UPPER(code) = UPPER($2) LIMIT 1;",
+                subject_id.strip() if (subject_id and subject_id.strip()) else "",
+                cleaned_code,
+            )
+            resolved_id = (
+                existing_id
+                or (
+                    subject_id.strip()
+                    if (subject_id and subject_id.strip())
+                    else str(uuid.uuid4())
+                )
+            )
+
+            query = """
+            INSERT INTO subjects (id, name, sinhala_name, code, order_index, description, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                sinhala_name = EXCLUDED.sinhala_name,
+                code = EXCLUDED.code,
+                order_index = EXCLUDED.order_index,
+                description = EXCLUDED.description,
+                updated_at = NOW()
+            RETURNING *;
+            """
             row = await self._conn.fetchrow(
                 query,
                 resolved_id,
                 name,
                 sinhala_name,
-                code,
+                cleaned_code,
                 order_index,
                 description,
             )

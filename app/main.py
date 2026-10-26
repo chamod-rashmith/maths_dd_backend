@@ -2,6 +2,7 @@
 Maths DD - FastAPI Application Factory, Lifespan & Global Exception Handlers.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI
@@ -13,10 +14,15 @@ from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.exception_handlers import register_exception_handlers
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manages application startup and shutdown lifecycle resources."""
+    """Manages application startup and shutdown lifecycle resources on Cloud Run."""
     await init_db_pool()
     yield
     await close_db_pool()
