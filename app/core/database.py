@@ -56,8 +56,8 @@ def resolve_cloudsql_socket_dir() -> str:
 def _get_connection_kwargs(user_override: Optional[str] = None) -> Dict[str, Any]:
     """
     Builds connection parameters for Google Cloud SQL on Cloud Run.
-    Always prioritizes the Cloud SQL Unix domain socket (/cloudsql/<INSTANCE_CONNECTION_NAME>)
-    and ignores accidental loopback DB_HOST values (127.0.0.1 / localhost).
+    Always prioritizes the Cloud SQL Unix domain socket (/cloudsql/<INSTANCE_CONNECTION_NAME>),
+    ignores accidental loopback DB_HOST values, and enforces search_path=public.
     """
     socket_dir = resolve_cloudsql_socket_dir()
     explicit_host = settings.DB_HOST.strip() if settings.DB_HOST else ""
@@ -77,6 +77,7 @@ def _get_connection_kwargs(user_override: Optional[str] = None) -> Dict[str, Any
             "database": settings.DB_NAME,
             "host": explicit_host,
             "port": settings.DB_PORT,
+            "server_settings": {"search_path": "public"},
         }
 
     return {
@@ -84,6 +85,7 @@ def _get_connection_kwargs(user_override: Optional[str] = None) -> Dict[str, Any
         "password": settings.DB_PASSWORD,
         "database": settings.DB_NAME,
         "host": socket_dir,
+        "server_settings": {"search_path": "public"},
     }
 
 
@@ -96,6 +98,11 @@ def _candidate_users() -> List[str]:
         if fb not in users:
             users.append(fb)
     return users
+
+
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Ensures every pooled connection has search_path set to public."""
+    await conn.execute("SET search_path TO public;")
 
 
 async def _create_pool_with_fallback() -> asyncpg.Pool:
@@ -120,6 +127,7 @@ async def _create_pool_with_fallback() -> asyncpg.Pool:
                     min_size=settings.DB_POOL_MIN_SIZE,
                     max_size=settings.DB_POOL_MAX_SIZE,
                     command_timeout=30.0,
+                    init=_init_connection,
                     **conn_kwargs,
                 )
             except asyncpg.InvalidAuthorizationSpecificationError as auth_exc:
@@ -284,12 +292,20 @@ async def _safe_exec(conn: asyncpg.Connection, sql: str) -> None:
 
 async def ensure_schema(conn: asyncpg.Connection) -> None:
     """
-    Idempotently creates and evolves all core production tables, columns, and indexes in Cloud SQL.
+    Idempotently creates the `public` schema, sets `search_path`, and creates/evolves
+    all core production tables, columns, and indexes in Cloud SQL.
     """
+    # 0. Ensure `public` schema exists and is selected in search_path
+    # (Fixes PostgreSQL `no schema has been selected to create in` when public schema was dropped
+    # or role search_path was restricted to pg_catalog).
+    await conn.execute("CREATE SCHEMA IF NOT EXISTS public;")
+    await _safe_exec(conn, "GRANT ALL ON SCHEMA public TO PUBLIC;")
+    await conn.execute("SET search_path TO public;")
+
     # 1. Subjects table
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS subjects (
+        CREATE TABLE IF NOT EXISTS public.subjects (
             id VARCHAR(100) PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             sinhala_name VARCHAR(255),
@@ -302,21 +318,21 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS sinhala_name VARCHAR(255);",
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS code VARCHAR(50);",
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 1;",
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description TEXT;",
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
-        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS sinhala_name VARCHAR(255);",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS code VARCHAR(50);",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 1;",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS description TEXT;",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
     ):
         await _safe_exec(conn, stmt)
 
     # 2. Syllabus Lessons table
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS syllabus_lessons (
+        CREATE TABLE IF NOT EXISTS public.syllabus_lessons (
             id VARCHAR(100) PRIMARY KEY,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
             title VARCHAR(255) NOT NULL,
             sinhala_title VARCHAR(255),
             order_index INTEGER NOT NULL DEFAULT 1,
@@ -329,24 +345,24 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS sinhala_title VARCHAR(255);",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 1;",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS description TEXT;",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS question_count INTEGER NOT NULL DEFAULT 0;",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS premium_count INTEGER NOT NULL DEFAULT 0;",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
-        "ALTER TABLE syllabus_lessons ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS sinhala_title VARCHAR(255);",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 1;",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS description TEXT;",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS question_count INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS premium_count INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.syllabus_lessons ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
     ):
         await _safe_exec(conn, stmt)
 
     # 3. Questions table
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS questions (
+        CREATE TABLE IF NOT EXISTS public.questions (
             id VARCHAR(100) PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+            lesson_id VARCHAR(100) REFERENCES public.syllabus_lessons(id) ON DELETE SET NULL,
             content_text TEXT NOT NULL,
             type VARCHAR(50) NOT NULL DEFAULT 'SHORT' CHECK (type IN ('SHORT', 'ESSAY')),
             difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM' CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
@@ -363,28 +379,28 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(100);",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS content_text TEXT NOT NULL DEFAULT '';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'SHORT';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS source VARCHAR(50) NOT NULL DEFAULT 'PAST_PAPER';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS source_details TEXT DEFAULT '';",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS allocated_marks INTEGER NOT NULL DEFAULT 25;",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE;",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS scheduled_date DATE;",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
-        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(100);",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS content_text TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'SHORT';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS source VARCHAR(50) NOT NULL DEFAULT 'PAST_PAPER';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS source_details TEXT DEFAULT '';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS allocated_marks INTEGER NOT NULL DEFAULT 25;",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE;",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS scheduled_date DATE;",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
     ):
         await _safe_exec(conn, stmt)
 
     # 4. Marking Schemes table
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS marking_schemes (
+        CREATE TABLE IF NOT EXISTS public.marking_schemes (
             id UUID PRIMARY KEY,
-            question_id VARCHAR(100) NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+            question_id VARCHAR(100) NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
             title VARCHAR(255) NOT NULL DEFAULT 'Official Marking Scheme',
             content_text TEXT NOT NULL,
             total_marks INTEGER NOT NULL DEFAULT 25,
@@ -400,12 +416,12 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
     # 5. Study Notes table & indexes
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS study_notes (
+        CREATE TABLE IF NOT EXISTS public.study_notes (
             id VARCHAR(100) PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
             description TEXT,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+            lesson_id VARCHAR(100) REFERENCES public.syllabus_lessons(id) ON DELETE SET NULL,
             content_text TEXT NOT NULL DEFAULT '',
             pdf_url TEXT,
             is_premium BOOLEAN NOT NULL DEFAULT FALSE,
@@ -417,24 +433,24 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS description TEXT;",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(100);",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS content_text TEXT NOT NULL DEFAULT '';",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS pdf_url TEXT;",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 0;",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS author VARCHAR(255);",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
-        "ALTER TABLE study_notes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
-        "CREATE INDEX IF NOT EXISTS idx_study_notes_subject_order ON study_notes(subject_id, order_index, created_at);",
-        "CREATE INDEX IF NOT EXISTS idx_study_notes_subject_lesson ON study_notes(subject_id, lesson_id, order_index);",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS description TEXT;",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(100);",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS content_text TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS pdf_url TEXT;",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS order_index INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS author VARCHAR(255);",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "CREATE INDEX IF NOT EXISTS idx_study_notes_subject_order ON public.study_notes(subject_id, order_index, created_at);",
+        "CREATE INDEX IF NOT EXISTS idx_study_notes_subject_lesson ON public.study_notes(subject_id, lesson_id, order_index);",
     ):
         await _safe_exec(conn, stmt)
 
     # 6. Users table & indexes
     await conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS public.users (
             uid VARCHAR(128) PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
             name VARCHAR(255) NOT NULL,
@@ -463,27 +479,27 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS telephone_no VARCHAR(50);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'USER';",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name VARCHAR(255);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS district VARCHAR(100);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS stream VARCHAR(50);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS grade VARCHAR(50);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS attempt VARCHAR(50);",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_count INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS accuracy_rate DOUBLE PRECISION DEFAULT 0.0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS questions_solved INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_expiry DATE;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak_days INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS longest_streak_days INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_solved_count INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_study_time_seconds INT DEFAULT 0;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();",
-        "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS telephone_no VARCHAR(50);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'USER';",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS school_name VARCHAR(255);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS district VARCHAR(100);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS stream VARCHAR(50);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS grade VARCHAR(50);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS attempt VARCHAR(50);",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS xp INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS streak_count INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS accuracy_rate DOUBLE PRECISION DEFAULT 0.0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS questions_solved INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS premium_expiry DATE;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS current_streak_days INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS longest_streak_days INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS total_solved_count INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS total_study_time_seconds INT DEFAULT 0;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_active_date DATE;",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();",
+        "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();",
+        "CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);",
     ):
         await _safe_exec(conn, stmt)
