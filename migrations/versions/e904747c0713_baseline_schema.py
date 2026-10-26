@@ -21,7 +21,10 @@ def upgrade() -> None:
     """Create baseline production schema in Cloud SQL PostgreSQL."""
     op.execute(
         """
-        CREATE TABLE IF NOT EXISTS subjects (
+        CREATE SCHEMA IF NOT EXISTS public;
+        SET search_path TO public;
+
+        CREATE TABLE IF NOT EXISTS public.subjects (
             id VARCHAR(100) PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             sinhala_name VARCHAR(255),
@@ -32,9 +35,9 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS syllabus_lessons (
+        CREATE TABLE IF NOT EXISTS public.syllabus_lessons (
             id VARCHAR(100) PRIMARY KEY,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
             title VARCHAR(255) NOT NULL,
             sinhala_title VARCHAR(255),
             order_index INTEGER NOT NULL DEFAULT 1,
@@ -45,11 +48,11 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS questions (
+        CREATE TABLE IF NOT EXISTS public.questions (
             id VARCHAR(100) PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+            lesson_id VARCHAR(100) REFERENCES public.syllabus_lessons(id) ON DELETE SET NULL,
             content_text TEXT NOT NULL,
             type VARCHAR(50) NOT NULL DEFAULT 'SHORT' CHECK (type IN ('SHORT', 'ESSAY')),
             difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM' CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
@@ -64,9 +67,9 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS marking_schemes (
+        CREATE TABLE IF NOT EXISTS public.marking_schemes (
             id UUID PRIMARY KEY,
-            question_id VARCHAR(100) NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+            question_id VARCHAR(100) NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
             title VARCHAR(255) NOT NULL DEFAULT 'Official Marking Scheme',
             content_text TEXT NOT NULL,
             total_marks INTEGER NOT NULL DEFAULT 25,
@@ -77,12 +80,12 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS study_notes (
+        CREATE TABLE IF NOT EXISTS public.study_notes (
             id VARCHAR(100) PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
             description TEXT,
-            subject_id VARCHAR(100) NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-            lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE SET NULL,
+            subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
+            lesson_id VARCHAR(100) REFERENCES public.syllabus_lessons(id) ON DELETE SET NULL,
             content_text TEXT NOT NULL DEFAULT '',
             pdf_url TEXT,
             is_premium BOOLEAN NOT NULL DEFAULT FALSE,
@@ -93,11 +96,11 @@ def upgrade() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_study_notes_subject_order
-            ON study_notes(subject_id, order_index, created_at);
+            ON public.study_notes(subject_id, order_index, created_at);
         CREATE INDEX IF NOT EXISTS idx_study_notes_subject_lesson
-            ON study_notes(subject_id, lesson_id, order_index);
+            ON public.study_notes(subject_id, lesson_id, order_index);
 
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS public.users (
             uid VARCHAR(128) PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
             name VARCHAR(255) NOT NULL,
@@ -124,7 +127,7 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
         """
     )
 
@@ -133,11 +136,11 @@ def downgrade() -> None:
     """Drop baseline tables in reverse dependency order."""
     op.execute(
         """
-        DROP TABLE IF EXISTS marking_schemes CASCADE;
-        DROP TABLE IF EXISTS questions CASCADE;
-        DROP TABLE IF EXISTS study_notes CASCADE;
-        DROP TABLE IF EXISTS syllabus_lessons CASCADE;
-        DROP TABLE IF EXISTS subjects CASCADE;
-        DROP TABLE IF EXISTS users CASCADE;
+        DROP TABLE IF EXISTS public.marking_schemes CASCADE;
+        DROP TABLE IF EXISTS public.questions CASCADE;
+        DROP TABLE IF EXISTS public.study_notes CASCADE;
+        DROP TABLE IF EXISTS public.syllabus_lessons CASCADE;
+        DROP TABLE IF EXISTS public.subjects CASCADE;
+        DROP TABLE IF EXISTS public.users CASCADE;
         """
     )
