@@ -1,11 +1,11 @@
 """
 Database seed script for Maths DD.
-Populates initial Subjects, Lessons, Mock Study Notes, and default Admin user.
-Can be executed standalone or automatically triggered on DB initialization.
+Populates initial Subjects, Lessons, Study Notes, and default Admin user idempotently.
+Safe against existing unique constraints (email, subject code) and foreign keys.
 """
 
 import logging
-from typing import Optional
+from typing import Dict
 import asyncpg
 
 logger = logging.getLogger("maths_dd.seed")
@@ -217,23 +217,46 @@ $$ v_{\text{bottom}} \ge \sqrt{5gr} $$
 async def seed_database(conn: asyncpg.Connection) -> None:
     """
     Seeds initial reference data if tables are empty or updates existing seeds idempotently.
-    Uses ON CONFLICT DO UPDATE / NOTHING to guarantee zero duplicate key crashes.
+    Resolves unique keys (users.email, subjects.code) prior to upsert to prevent constraint errors.
     """
-    # 1. Seed Default Admin User
-    await conn.execute(
-        """
-        INSERT INTO users (uid, email, name, role, is_premium)
-        VALUES ($1, $2, $3, 'ADMIN', TRUE)
-        ON CONFLICT (uid) DO UPDATE 
-        SET role = 'ADMIN', is_premium = TRUE, name = EXCLUDED.name;
-        """,
+    # 1. Seed Default Admin User (handle conflict on either uid or email)
+    existing_admin_uid = await conn.fetchval(
+        "SELECT uid FROM users WHERE uid = $1 OR LOWER(email) = LOWER($2) LIMIT 1;",
         DEFAULT_ADMIN_UID,
         DEFAULT_ADMIN_EMAIL,
-        DEFAULT_ADMIN_NAME,
     )
+    if existing_admin_uid:
+        await conn.execute(
+            """
+            UPDATE users
+            SET role = 'ADMIN', is_premium = TRUE, updated_at = NOW()
+            WHERE uid = $1;
+            """,
+            existing_admin_uid,
+        )
+    else:
+        await conn.execute(
+            """
+            INSERT INTO users (uid, email, name, role, is_premium)
+            VALUES ($1, $2, $3, 'ADMIN', TRUE)
+            ON CONFLICT (uid) DO NOTHING;
+            """,
+            DEFAULT_ADMIN_UID,
+            DEFAULT_ADMIN_EMAIL,
+            DEFAULT_ADMIN_NAME,
+        )
 
-    # 2. Seed Subjects
+    # 2. Seed Subjects (resolve by id or code to avoid unique constraint violations on subjects.code)
+    subject_id_map: Dict[str, str] = {}
     for s in SUBJECTS_SEED:
+        existing_subj_id = await conn.fetchval(
+            "SELECT id FROM subjects WHERE id = $1 OR UPPER(code) = UPPER($2) LIMIT 1;",
+            s["id"],
+            s["code"],
+        )
+        target_subj_id = existing_subj_id or s["id"]
+        subject_id_map[s["id"]] = target_subj_id
+
         await conn.execute(
             """
             INSERT INTO subjects (id, name, sinhala_name, code, order_index, description)
@@ -243,9 +266,10 @@ async def seed_database(conn: asyncpg.Connection) -> None:
                 sinhala_name = EXCLUDED.sinhala_name,
                 code = EXCLUDED.code,
                 order_index = EXCLUDED.order_index,
-                description = EXCLUDED.description;
+                description = EXCLUDED.description,
+                updated_at = NOW();
             """,
-            s["id"],
+            target_subj_id,
             s["name"],
             s["sinhala_name"],
             s["code"],
@@ -253,28 +277,41 @@ async def seed_database(conn: asyncpg.Connection) -> None:
             s["description"],
         )
 
-    # 3. Seed Lessons
+    # 3. Seed Lessons (using resolved subject_id)
+    lesson_id_map: Dict[str, str] = {}
     for l in LESSONS_SEED:
+        resolved_subj_id = subject_id_map.get(l["subject_id"], l["subject_id"])
+        lesson_id_map[l["id"]] = l["id"]
+
         await conn.execute(
             """
             INSERT INTO syllabus_lessons (id, subject_id, title, sinhala_title, order_index, description)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (id) DO UPDATE
-            SET title = EXCLUDED.title,
+            SET subject_id = EXCLUDED.subject_id,
+                title = EXCLUDED.title,
                 sinhala_title = EXCLUDED.sinhala_title,
                 order_index = EXCLUDED.order_index,
-                description = EXCLUDED.description;
+                description = EXCLUDED.description,
+                updated_at = NOW();
             """,
             l["id"],
-            l["subject_id"],
+            resolved_subj_id,
             l["title"],
             l["sinhala_title"],
             l["order_index"],
             l["description"],
         )
 
-    # 4. Seed Study Notes
+    # 4. Seed Study Notes (using resolved subject_id and lesson_id)
     for n in STUDY_NOTES_SEED:
+        resolved_subj_id = subject_id_map.get(n["subject_id"], n["subject_id"])
+        resolved_lesson_id = (
+            lesson_id_map.get(n["lesson_id"], n["lesson_id"])
+            if n.get("lesson_id")
+            else None
+        )
+
         await conn.execute(
             """
             INSERT INTO study_notes (id, title, description, subject_id, lesson_id, content_text, pdf_url, is_premium, order_index, author)
@@ -288,13 +325,14 @@ async def seed_database(conn: asyncpg.Connection) -> None:
                 pdf_url = EXCLUDED.pdf_url,
                 is_premium = EXCLUDED.is_premium,
                 order_index = EXCLUDED.order_index,
-                author = EXCLUDED.author;
+                author = EXCLUDED.author,
+                updated_at = NOW();
             """,
             n["id"],
             n["title"],
             n["description"],
-            n["subject_id"],
-            n["lesson_id"],
+            resolved_subj_id,
+            resolved_lesson_id,
             n["content_text"],
             n["pdf_url"],
             n["is_premium"],

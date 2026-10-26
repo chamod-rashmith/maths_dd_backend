@@ -1,15 +1,22 @@
 """
-System health and infrastructure readiness probes.
-Hardened to never leak internal schema metadata, table names, or database versions.
+System health and Cloud SQL readiness probes for Google Cloud Run.
 """
 
-from typing import Dict, Any
-import asyncpg
-from fastapi import APIRouter, Depends, status
+import logging
+from typing import Any, Dict
+from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import (
+    ensure_schema,
+    get_db_connection,
+    init_db_pool,
+    list_public_tables,
+)
+from app.core.seed import seed_database
+
+logger = logging.getLogger("maths_dd.health")
 
 router = APIRouter(tags=["System & Health"])
 
@@ -25,22 +32,39 @@ def health_check() -> Dict[str, str]:
 
 
 @router.get("/db-test")
-async def test_database(conn: asyncpg.Connection = Depends(get_db)) -> Any:
+async def test_database() -> Any:
     """
-    Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL).
-    Does not expose internal table names, database versions, or exception stack traces.
+    Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL)
+    and ensuring the production database schema and seed data are initialized.
     """
     try:
-        await conn.fetchval("SELECT 1;")
+        pool = await init_db_pool()
+        if pool is not None:
+            async with pool.acquire() as conn:
+                await ensure_schema(conn)
+                await seed_database(conn)
+                tables = await list_public_tables(conn)
+        else:
+            conn = await get_db_connection()
+            try:
+                tables = await list_public_tables(conn)
+            finally:
+                await conn.close()
+
         return {
             "status": "success",
             "database": "connected",
+            "schema_initialized": True,
+            "tables_count": len(tables),
+            "tables": tables,
         }
-    except Exception:
+    except Exception as exc:
+        logger.error("Cloud SQL readiness probe (/db-test) failed: %s", exc)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "status": "error",
                 "database": "unavailable",
+                "detail": str(exc),
             },
         )

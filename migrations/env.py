@@ -1,22 +1,19 @@
 import os
 import sys
+import urllib.parse
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
+from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Ensure backend root is on Python sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
+from app.core.database import resolve_cloudsql_socket_dir
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -24,15 +21,17 @@ target_metadata = None
 
 
 def get_database_url() -> str:
-    """Builds standard postgresql+psycopg2:// connection URL from app settings."""
-    user = settings.DB_USER
-    password = settings.DB_PASSWORD
-    host = settings.DB_HOST
-    port = settings.DB_PORT
+    """Builds Cloud SQL Unix socket or TCP postgresql+psycopg2:// URL from settings."""
+    user = urllib.parse.quote_plus(settings.DB_USER)
+    encoded_pass = urllib.parse.quote_plus(settings.DB_PASSWORD)
     name = settings.DB_NAME
-    import urllib.parse
-    encoded_pass = urllib.parse.quote_plus(password)
-    return f"postgresql+psycopg2://{user}:{encoded_pass}@{host}:{port}/{name}"
+
+    explicit_host = settings.DB_HOST.strip() if settings.DB_HOST else ""
+    if explicit_host and not explicit_host.startswith("/"):
+        return f"postgresql+psycopg2://{user}:{encoded_pass}@{explicit_host}:{settings.DB_PORT}/{name}"
+
+    socket_dir = urllib.parse.quote_plus(resolve_cloudsql_socket_dir())
+    return f"postgresql+psycopg2://{user}:{encoded_pass}@/{name}?host={socket_dir}"
 
 
 def run_migrations_offline() -> None:
@@ -61,9 +60,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
