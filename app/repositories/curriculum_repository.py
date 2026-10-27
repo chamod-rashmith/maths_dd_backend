@@ -99,24 +99,36 @@ class PostgresCurriculumRepository(CurriculumRepository):
         try:
             query = """
                 SELECT l.id, l.subject_id, l.title, l.sinhala_title, l.order_index, l.description,
-                       l.question_count, l.premium_count, l.created_at, l.updated_at
+                       COUNT(q.id)::int AS question_count,
+                       COUNT(q.id) FILTER (WHERE q.is_premium = TRUE)::int AS premium_count,
+                       l.created_at, l.updated_at,
+                       s.code AS subject_code, s.name AS subject_name
                 FROM syllabus_lessons l
                 JOIN subjects s ON l.subject_id = s.id
+                LEFT JOIN questions q
+                  ON q.lesson_id = l.id
+                 AND q.is_published = TRUE
+                 AND (q.scheduled_date IS NULL OR q.scheduled_date <= (NOW() AT TIME ZONE 'Asia/Colombo')::date)
                 WHERE 1=1
             """
             params: List[Any] = []
             param_idx = 1
 
-            if subject_code and subject_code.strip():
-                query += f" AND UPPER(s.code) = UPPER(${param_idx})"
-                params.append(subject_code.strip())
-                param_idx += 1
-            elif subject_id and subject_id.strip():
-                query += f" AND (l.subject_id = ${param_idx} OR UPPER(s.code) = UPPER(${param_idx}))"
-                params.append(subject_id.strip())
+            raw_filter = (subject_code or subject_id or "").strip()
+            if raw_filter:
+                query += f""" AND (
+                    l.subject_id = ${param_idx}
+                    OR UPPER(s.code) = UPPER(${param_idx})
+                    OR (s.code = 'PMAT' AND LOWER(${param_idx}) IN ('pure_maths', 'puremaths', 'pure', 'subj_pmat'))
+                    OR (s.code = 'AMAT' AND LOWER(${param_idx}) IN ('applied_maths', 'appliedmaths', 'applied', 'subj_amat'))
+                )"""
+                params.append(raw_filter)
                 param_idx += 1
 
-            query += " ORDER BY s.order_index ASC, l.order_index ASC;"
+            query += """
+                GROUP BY l.id, s.order_index, s.code, s.name
+                ORDER BY s.order_index ASC, l.order_index ASC;
+            """
 
             rows = await self._conn.fetch(query, *params)
             return [dict(r) for r in rows]

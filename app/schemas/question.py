@@ -1,29 +1,34 @@
 """
 Pydantic DTO schemas for Questions and Marking Schemes.
-Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source.
+Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source,
+lightweight Summary responses for catalog listings, and on-demand Detail/Solution schemas.
 """
 
-from datetime import datetime
-from typing import Optional, Dict, Any
+from datetime import date, datetime
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from app.domain.enums import (
     QuestionDifficulty,
-    QuestionType,
     QuestionSchedule,
     QuestionSource,
+    QuestionType,
 )
 
 
 class QuestionCreate(BaseModel):
-    """Request schema for creating a mathematical question and its marking scheme."""
+    """Request schema for creating or updating a mathematical question and its marking scheme."""
 
-    title: str = Field(..., min_length=1, max_length=255)
+    id: Optional[str] = None
     custom_id: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = ""
     subject_id: str = Field(..., min_length=1, max_length=100)
     lesson_id: Optional[str] = None
-    content_text: str = Field(..., min_length=1)
-    solution_text: str = Field(..., min_length=1)
+    content_text: Optional[str] = ""
+    content_url: Optional[str] = None
+    solution_text: Optional[str] = ""
+    solution_pdf_url: Optional[str] = None
     solution_title: str = "Official Marking Scheme"
     question_type: QuestionType = QuestionType.SHORT
     difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
@@ -37,24 +42,86 @@ class QuestionCreate(BaseModel):
 
 
 class QuestionSummaryResponse(BaseModel):
-    """Summary representation of a question in list/recent views."""
+    """
+    Lightweight summary representation of a question in catalog/lesson list views.
+    Omits heavy problem content_text and solution payloads for fast network responses.
+    """
 
     id: str
     title: str
+    description: Optional[str] = ""
     subject_id: str
+    subject_code: Optional[str] = None
+    subject_name: Optional[str] = None
+    lesson_id: Optional[str] = None
+    lesson_title: Optional[str] = None
+    lesson_sinhala_title: Optional[str] = None
+    content_type: str = "markdown"
     type: QuestionType
     difficulty: QuestionDifficulty
-    schedule: QuestionSchedule
+    schedule: QuestionSchedule = QuestionSchedule.REGULAR
     source: QuestionSource
-    allocated_marks: int
-    is_published: bool
-    created_at: datetime
+    source_details: Optional[str] = ""
+    allocated_marks: int = 25
+    is_premium: bool = False
+    is_published: bool = True
+    scheduled_date: Optional[date] = None
+    has_marking_scheme: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class MarkingSchemeResponse(BaseModel):
+    """Detailed representation of a question's official marking scheme / worked solution."""
+
+    id: str
+    question_id: str
+    title: str = "Official Marking Scheme"
+    content_text: Optional[str] = ""
+    pdf_url: Optional[str] = None
+    content_type: str = "markdown"
+    total_marks: int = 25
+    is_official: bool = True
+    is_premium_only: bool = False
+    order_index: int = 1
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class QuestionDetailResponse(BaseModel):
+    """
+    Full detail representation of a single question, hydrated with inline LaTeX/Markdown
+    or a short-lived signed Cloud Storage URL.
+    """
+
+    id: str
+    title: str
+    description: Optional[str] = ""
+    subject_id: str
+    subject_code: Optional[str] = None
     subject_name: Optional[str] = None
+    lesson_id: Optional[str] = None
     lesson_title: Optional[str] = None
+    lesson_sinhala_title: Optional[str] = None
+    content_text: Optional[str] = ""
+    content_url: Optional[str] = None
+    content_type: str = "markdown"
+    type: QuestionType
+    difficulty: QuestionDifficulty
+    schedule: QuestionSchedule = QuestionSchedule.REGULAR
+    source: QuestionSource
+    source_details: Optional[str] = ""
+    allocated_marks: int = 25
+    is_premium: bool = False
+    is_published: bool = True
+    scheduled_date: Optional[date] = None
+    has_marking_scheme: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class QuestionWithSolutionResponse(BaseModel):
-    """Composite response returned upon creating a question and its marking scheme."""
+    """Composite response returned upon creating or updating a question and its marking scheme."""
 
     question: Dict[str, Any]
-    marking_scheme: Dict[str, Any]
+    marking_scheme: Optional[Dict[str, Any]] = None

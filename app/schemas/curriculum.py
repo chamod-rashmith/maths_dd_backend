@@ -45,6 +45,8 @@ class LessonResponse(BaseModel):
 
     id: str
     subject_id: str
+    subject_code: Optional[str] = None
+    subject_name: Optional[str] = None
     title: str
     sinhala_title: Optional[str] = None
     order_index: int

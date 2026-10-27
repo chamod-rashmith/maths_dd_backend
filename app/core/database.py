@@ -361,9 +361,11 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         CREATE TABLE IF NOT EXISTS public.questions (
             id VARCHAR(100) PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
+            description TEXT DEFAULT '',
             subject_id VARCHAR(100) NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
             lesson_id VARCHAR(100) REFERENCES public.syllabus_lessons(id) ON DELETE SET NULL,
-            content_text TEXT NOT NULL,
+            content_text TEXT NOT NULL DEFAULT '',
+            content_url TEXT,
             type VARCHAR(50) NOT NULL DEFAULT 'SHORT' CHECK (type IN ('SHORT', 'ESSAY')),
             difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM' CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
             schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR' CHECK (schedule IN ('REGULAR', 'DAILY', 'WEEKLY', 'MONTHLY')),
@@ -379,8 +381,10 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         """
     )
     for stmt in (
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(100);",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS content_text TEXT NOT NULL DEFAULT '';",
+        "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS content_url TEXT;",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'SHORT';",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS difficulty VARCHAR(50) NOT NULL DEFAULT 'MEDIUM';",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS schedule VARCHAR(50) NOT NULL DEFAULT 'REGULAR';",
@@ -392,6 +396,8 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS scheduled_date DATE;",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
         "ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();",
+        "CREATE INDEX IF NOT EXISTS idx_questions_subject_lesson ON public.questions(subject_id, lesson_id, is_published);",
+        "CREATE INDEX IF NOT EXISTS idx_questions_scheduled_date ON public.questions(scheduled_date) WHERE is_published = TRUE;",
     ):
         await _safe_exec(conn, stmt)
 
@@ -402,7 +408,8 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
             id UUID PRIMARY KEY,
             question_id VARCHAR(100) NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
             title VARCHAR(255) NOT NULL DEFAULT 'Official Marking Scheme',
-            content_text TEXT NOT NULL,
+            content_text TEXT NOT NULL DEFAULT '',
+            pdf_url TEXT,
             total_marks INTEGER NOT NULL DEFAULT 25,
             is_official BOOLEAN NOT NULL DEFAULT TRUE,
             is_premium_only BOOLEAN NOT NULL DEFAULT FALSE,
@@ -412,6 +419,11 @@ async def ensure_schema(conn: asyncpg.Connection) -> None:
         );
         """
     )
+    for stmt in (
+        "ALTER TABLE public.marking_schemes ADD COLUMN IF NOT EXISTS pdf_url TEXT;",
+        "CREATE INDEX IF NOT EXISTS idx_marking_schemes_question_id ON public.marking_schemes(question_id, order_index);",
+    ):
+        await _safe_exec(conn, stmt)
 
     # 5. Study Notes table & indexes
     await conn.execute(
