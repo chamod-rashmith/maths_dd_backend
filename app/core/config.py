@@ -1,5 +1,5 @@
 """
-Centralized application configuration & environment settings for Google Cloud Run.
+Centralized application configuration & environment settings for Google Cloud Run and Local Development.
 Resilient against empty-string environment variables.
 """
 
@@ -9,7 +9,13 @@ from typing import List, Optional
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure .env is resolved whether launched from workspace root or backend dir
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_env_path = os.path.join(_backend_dir, ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
+else:
+    load_dotenv()
 
 _DEFAULT_INSTANCE_CONNECTION_NAME = (
     "math-master-981fe:asia-south1:math-master-981fe-instance"
@@ -35,6 +41,30 @@ def _parse_cors_origins(raw: str) -> List[str]:
     if not raw or raw.strip() == "*":
         return ["*"]
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def resolve_cloudsql_socket_dir(socket_dir_setting: str, instance_connection_name: str) -> Optional[str]:
+    """
+    Resolves the Cloud SQL Unix domain socket directory on Google Cloud Run.
+    Returns the path if mounted, otherwise None.
+    """
+    socket_root = (socket_dir_setting or "/cloudsql").rstrip("/")
+    primary = f"{socket_root}/{instance_connection_name.strip()}"
+    if os.path.exists(primary):
+        return primary
+
+    if os.path.isdir(socket_root):
+        try:
+            entries = [
+                os.path.join(socket_root, e)
+                for e in os.listdir(socket_root)
+                if not e.startswith(".")
+            ]
+            if entries:
+                return entries[0]
+        except OSError:
+            pass
+    return None
 
 
 @dataclass(frozen=True)
@@ -92,7 +122,11 @@ class Settings:
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Constructs an asyncpg-compatible SQLAlchemy database URI."""
+        """
+        Constructs an asyncpg-compatible SQLAlchemy database URI.
+        - On Google Cloud Run: Uses Cloud SQL Unix domain socket (/cloudsql/<INSTANCE_CONNECTION_NAME>).
+        - On Local Development: Automatically falls back to TCP (127.0.0.1:5432).
+        """
         if self.DATABASE_URL:
             url = self.DATABASE_URL
             if url.startswith("postgres://"):
@@ -104,10 +138,18 @@ class Settings:
         encoded_password = quote_plus(self.DB_PASSWORD)
         user = quote_plus(self.DB_USER)
 
-        socket_dir = f"{self.DB_SOCKET_DIR.rstrip('/')}/{self.INSTANCE_CONNECTION_NAME.strip()}"
-        if os.path.exists(socket_dir):
-            return f"postgresql+asyncpg://{user}:{encoded_password}@/{self.DB_NAME}?host={socket_dir}"
+        # 1. Google Cloud Run Environment Detection
+        # Checks if Cloud SQL Unix socket is mounted or Cloud Run K_SERVICE variable is present
+        mounted_socket = resolve_cloudsql_socket_dir(self.DB_SOCKET_DIR, self.INSTANCE_CONNECTION_NAME)
+        if mounted_socket:
+            return f"postgresql+asyncpg://{user}:{encoded_password}@/{self.DB_NAME}?host={mounted_socket}"
 
+        if os.environ.get("K_SERVICE") or os.environ.get("K_REVISION"):
+            default_cloud_socket = f"{(self.DB_SOCKET_DIR or '/cloudsql').rstrip('/')}/{self.INSTANCE_CONNECTION_NAME.strip()}"
+            return f"postgresql+asyncpg://{user}:{encoded_password}@/{self.DB_NAME}?host={default_cloud_socket}"
+
+        # 2. Local Development Environment (Windows, macOS, Linux)
+        # Connects via standard TCP localhost
         host = self.DB_HOST.strip() if self.DB_HOST else "127.0.0.1"
         return f"postgresql+asyncpg://{user}:{encoded_password}@{host}:{self.DB_PORT}/{self.DB_NAME}"
 
