@@ -1,17 +1,22 @@
 """
-Concrete PostgreSQL Implementation of QuestionRepository.
+Concrete PostgreSQL Implementation of QuestionRepository using SQLAlchemy 2.0.
 Implements immutable scheduled_date daily lookups, lightweight catalog queries,
 and on-demand marking scheme retrieval.
 """
 
 import datetime
-import uuid
 from typing import Any, Dict, List, Optional
+import uuid
 from zoneinfo import ZoneInfo
-import asyncpg
+from sqlalchemy import and_, cast, case, Date, func, literal, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.question_repository import QuestionRepository
+from app.models.lesson import SyllabusLesson
+from app.models.marking_scheme import MarkingScheme
+from app.models.question import Question
+from app.models.subject import Subject
 
 _SL_TZ = ZoneInfo("Asia/Colombo")
 
@@ -27,11 +32,77 @@ def _resolve_colombo_date(target_date: Optional[str] = None) -> datetime.date:
     return datetime.datetime.now(_SL_TZ).date()
 
 
-class PostgresQuestionRepository(QuestionRepository):
-    """PostgreSQL implementation of `QuestionRepository` using asyncpg."""
+def _question_select_stmt():
+    """Builds the canonical SQLAlchemy select statement for questions with joined relations."""
+    content_type_case = case(
+        (
+            and_(Question.content_url.isnot(None), Question.content_url != ""),
+            case(
+                (
+                    or_(
+                        Question.content_url.ilike("%.png%"),
+                        Question.content_url.ilike("%.jpg%"),
+                        Question.content_url.ilike("%.jpeg%"),
+                        Question.content_url.ilike("%.webp%"),
+                    ),
+                    "image",
+                ),
+                else_="pdf",
+            ),
+        ),
+        else_="markdown",
+    ).label("content_type")
 
-    def __init__(self, conn: asyncpg.Connection) -> None:
-        self._conn = conn
+    has_ms_subquery = (
+        select(literal(1))
+        .where(
+            MarkingScheme.question_id == Question.id,
+            or_(
+                and_(MarkingScheme.content_text.isnot(None), MarkingScheme.content_text != ""),
+                and_(MarkingScheme.pdf_url.isnot(None), MarkingScheme.pdf_url != ""),
+            ),
+        )
+        .exists()
+        .label("has_marking_scheme")
+    )
+
+    return (
+        select(
+            Question.id,
+            Question.title,
+            func.coalesce(Question.description, "").label("description"),
+            Question.subject_id,
+            Question.lesson_id,
+            func.coalesce(Question.content_text, "").label("content_text"),
+            Question.content_url,
+            content_type_case,
+            Question.type,
+            Question.difficulty,
+            Question.schedule,
+            Question.source,
+            func.coalesce(Question.source_details, "").label("source_details"),
+            Question.allocated_marks,
+            Question.is_premium,
+            Question.is_published,
+            Question.scheduled_date,
+            has_ms_subquery,
+            Question.created_at,
+            Question.updated_at,
+            Subject.code.label("subject_code"),
+            Subject.name.label("subject_name"),
+            SyllabusLesson.title.label("lesson_title"),
+            SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
+        )
+        .outerjoin(Subject, Question.subject_id == Subject.id)
+        .outerjoin(SyllabusLesson, Question.lesson_id == SyllabusLesson.id)
+    )
+
+
+class PostgresQuestionRepository(QuestionRepository):
+    """PostgreSQL implementation of `QuestionRepository` using SQLAlchemy AsyncSession."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def create_question_with_solution(
         self,
@@ -56,131 +127,107 @@ class PostgresQuestionRepository(QuestionRepository):
         custom_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            async with self._conn.transaction():
-                q_id = (
-                    custom_id.strip()
-                    if (custom_id and custom_id.strip())
-                    else str(uuid.uuid4())
-                )
-                cleaned_lesson_id = (
-                    lesson_id.strip()
-                    if (lesson_id and lesson_id.strip())
-                    else None
-                )
+            q_id = custom_id.strip() if (custom_id and custom_id.strip()) else str(uuid.uuid4())
+            cleaned_lesson_id = lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
 
-                parsed_date: Optional[datetime.date] = None
-                if scheduled_date and str(scheduled_date).strip():
-                    try:
-                        parsed_date = datetime.date.fromisoformat(
-                            str(scheduled_date).strip()[:10]
-                        )
-                    except (ValueError, TypeError):
-                        parsed_date = None
+            parsed_date: Optional[datetime.date] = None
+            if scheduled_date and str(scheduled_date).strip():
+                try:
+                    parsed_date = datetime.date.fromisoformat(str(scheduled_date).strip()[:10])
+                except (ValueError, TypeError):
+                    parsed_date = None
 
-                # If a scheduled_date is provided, automatically mark schedule as DAILY if default REGULAR
-                effective_schedule = schedule
-                if parsed_date is not None and effective_schedule == "REGULAR":
-                    effective_schedule = "DAILY"
+            effective_schedule = schedule
+            if parsed_date is not None and effective_schedule == "REGULAR":
+                effective_schedule = "DAILY"
 
-                q_query = """
-                INSERT INTO questions (
-                    id, title, description, subject_id, lesson_id,
-                    content_text, content_url,
-                    type, difficulty, schedule, source, source_details,
-                    allocated_marks, is_premium, is_published, scheduled_date,
-                    created_at, updated_at
-                ) VALUES (
-                    $1, $2, $3, $4, $5,
-                    $6, $7,
-                    $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16,
-                    NOW(), NOW()
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    description = EXCLUDED.description,
-                    subject_id = EXCLUDED.subject_id,
-                    lesson_id = EXCLUDED.lesson_id,
-                    content_text = EXCLUDED.content_text,
-                    content_url = EXCLUDED.content_url,
-                    type = EXCLUDED.type,
-                    difficulty = EXCLUDED.difficulty,
-                    schedule = EXCLUDED.schedule,
-                    source = EXCLUDED.source,
-                    source_details = EXCLUDED.source_details,
-                    allocated_marks = EXCLUDED.allocated_marks,
-                    is_premium = EXCLUDED.is_premium,
-                    is_published = EXCLUDED.is_published,
-                    scheduled_date = EXCLUDED.scheduled_date,
-                    updated_at = NOW()
-                RETURNING id, title, description, subject_id, lesson_id, scheduled_date, created_at, updated_at;
-                """
-                q_row = await self._conn.fetchrow(
-                    q_query,
-                    q_id,
-                    title,
-                    description or "",
-                    subject_id,
-                    cleaned_lesson_id,
-                    content_text or "",
-                    content_url.strip() if (content_url and content_url.strip()) else None,
-                    question_type,
-                    difficulty,
-                    effective_schedule,
-                    source,
-                    source_details or "",
-                    allocated_marks,
-                    is_premium,
-                    is_published,
-                    parsed_date,
-                )
+            cleaned_content_url = content_url.strip() if (content_url and content_url.strip()) else None
 
-                # Upsert official marking scheme for this question
-                existing_sol_id = await self._conn.fetchval(
-                    "SELECT id FROM marking_schemes WHERE question_id = $1 ORDER BY order_index ASC LIMIT 1;",
-                    q_id,
+            # Upsert Question
+            q = (
+                await self._session.execute(
+                    select(Question).where(Question.id == q_id)
                 )
-                sol_id = existing_sol_id or uuid.uuid4()
-                cleaned_sol_pdf = (
-                    solution_pdf_url.strip()
-                    if (solution_pdf_url and solution_pdf_url.strip())
-                    else None
-                )
+            ).scalar_one_or_none()
 
-                sol_query = """
-                INSERT INTO marking_schemes (
-                    id, question_id, title, content_text, pdf_url, total_marks,
-                    is_official, is_premium_only, order_index, created_at, updated_at
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6,
-                    true, $7, 1, NOW(), NOW()
+            if q:
+                q.title = title
+                q.description = description or ""
+                q.subject_id = subject_id
+                q.lesson_id = cleaned_lesson_id
+                q.content_text = content_text or ""
+                q.content_url = cleaned_content_url
+                q.type = question_type
+                q.difficulty = difficulty
+                q.schedule = effective_schedule
+                q.source = source
+                q.source_details = source_details or ""
+                q.allocated_marks = allocated_marks
+                q.is_premium = is_premium
+                q.is_published = is_published
+                q.scheduled_date = parsed_date
+            else:
+                q = Question(
+                    id=q_id,
+                    title=title,
+                    description=description or "",
+                    subject_id=subject_id,
+                    lesson_id=cleaned_lesson_id,
+                    content_text=content_text or "",
+                    content_url=cleaned_content_url,
+                    type=question_type,
+                    difficulty=difficulty,
+                    schedule=effective_schedule,
+                    source=source,
+                    source_details=source_details or "",
+                    allocated_marks=allocated_marks,
+                    is_premium=is_premium,
+                    is_published=is_published,
+                    scheduled_date=parsed_date,
                 )
-                ON CONFLICT (id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    content_text = EXCLUDED.content_text,
-                    pdf_url = EXCLUDED.pdf_url,
-                    total_marks = EXCLUDED.total_marks,
-                    is_premium_only = EXCLUDED.is_premium_only,
-                    updated_at = NOW()
-                RETURNING id, question_id, title, total_marks;
-                """
-                sol_row = await self._conn.fetchrow(
-                    sol_query,
-                    sol_id,
-                    q_id,
-                    solution_title,
-                    solution_text or "",
-                    cleaned_sol_pdf,
-                    allocated_marks,
-                    is_premium,
-                )
+                self._session.add(q)
 
-                sol_dict = dict(sol_row)
-                sol_dict["id"] = str(sol_dict["id"])
-                return {
-                    "question": dict(q_row),
-                    "marking_scheme": sol_dict,
-                }
+            await self._session.flush()
+
+            # Upsert MarkingScheme
+            ms = (
+                await self._session.execute(
+                    select(MarkingScheme)
+                    .where(MarkingScheme.question_id == q_id)
+                    .order_by(MarkingScheme.order_index.asc())
+                )
+            ).scalars().first()
+
+            cleaned_sol_pdf = solution_pdf_url.strip() if (solution_pdf_url and solution_pdf_url.strip()) else None
+
+            if ms:
+                ms.title = solution_title
+                ms.content_text = solution_text or ""
+                ms.pdf_url = cleaned_sol_pdf
+                ms.total_marks = allocated_marks
+                ms.is_premium_only = is_premium
+            else:
+                ms = MarkingScheme(
+                    id=uuid.uuid4(),
+                    question_id=q_id,
+                    title=solution_title,
+                    content_text=solution_text or "",
+                    pdf_url=cleaned_sol_pdf,
+                    total_marks=allocated_marks,
+                    is_official=True,
+                    is_premium_only=is_premium,
+                    order_index=1,
+                )
+                self._session.add(ms)
+
+            await self._session.flush()
+            await self._session.refresh(q)
+            await self._session.refresh(ms)
+
+            return {
+                "question": q.to_dict(),
+                "marking_scheme": ms.to_dict(),
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -197,97 +244,65 @@ class PostgresQuestionRepository(QuestionRepository):
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
-        query = """
-            SELECT q.id, q.title, COALESCE(q.description, '') AS description,
-                   q.subject_id, q.lesson_id,
-                   CASE
-                       WHEN q.content_url IS NOT NULL AND q.content_url != '' THEN
-                           CASE
-                               WHEN LOWER(q.content_url) LIKE '%.png%'
-                                 OR LOWER(q.content_url) LIKE '%.jpg%'
-                                 OR LOWER(q.content_url) LIKE '%.jpeg%'
-                                 OR LOWER(q.content_url) LIKE '%.webp%' THEN 'image'
-                               ELSE 'pdf'
-                           END
-                       ELSE 'markdown'
-                   END AS content_type,
-                   q.type, q.difficulty, q.schedule, q.source,
-                   COALESCE(q.source_details, '') AS source_details,
-                   q.allocated_marks, q.is_premium, q.is_published, q.scheduled_date,
-                   EXISTS (
-                       SELECT 1 FROM marking_schemes ms
-                       WHERE ms.question_id = q.id
-                         AND (
-                           (ms.content_text IS NOT NULL AND ms.content_text != '')
-                           OR (ms.pdf_url IS NOT NULL AND ms.pdf_url != '')
-                         )
-                   ) AS has_marking_scheme,
-                   q.created_at, q.updated_at,
-                   s.code AS subject_code, s.name AS subject_name,
-                   l.title AS lesson_title, l.sinhala_title AS lesson_sinhala_title
-            FROM questions q
-            LEFT JOIN subjects s ON q.subject_id = s.id
-            LEFT JOIN syllabus_lessons l ON q.lesson_id = l.id
-            WHERE 1=1
-        """
-        params: List[Any] = []
-        param_idx = 1
-
-        if not include_unpublished:
-            query += """
-                AND q.is_published = TRUE
-                AND (q.scheduled_date IS NULL OR q.scheduled_date <= (NOW() AT TIME ZONE 'Asia/Colombo')::date)
-            """
-
-        if subject_id and subject_id.strip():
-            query += f""" AND (
-                q.subject_id = ${param_idx}
-                OR UPPER(s.code) = UPPER(${param_idx})
-                OR (s.code = 'PMAT' AND LOWER(${param_idx}) IN ('pure_maths', 'puremaths', 'pure', 'subj_pmat'))
-                OR (s.code = 'AMAT' AND LOWER(${param_idx}) IN ('applied_maths', 'appliedmaths', 'applied', 'subj_amat'))
-            )"""
-            params.append(subject_id.strip())
-            param_idx += 1
-
-        if lesson_id and lesson_id.strip():
-            query += f" AND q.lesson_id = ${param_idx}"
-            params.append(lesson_id.strip())
-            param_idx += 1
-
-        if question_type and question_type.strip():
-            query += f" AND UPPER(q.type) = UPPER(${param_idx})"
-            params.append(question_type.strip())
-            param_idx += 1
-
-        if difficulty and difficulty.strip():
-            query += f" AND UPPER(q.difficulty) = UPPER(${param_idx})"
-            params.append(difficulty.strip())
-            param_idx += 1
-
-        if schedule and schedule.strip():
-            query += f" AND UPPER(q.schedule) = UPPER(${param_idx})"
-            params.append(schedule.strip())
-            param_idx += 1
-
-        if source and source.strip():
-            query += f" AND UPPER(q.source) = UPPER(${param_idx})"
-            params.append(source.strip())
-            param_idx += 1
-
-        if is_premium is not None:
-            query += f" AND q.is_premium = ${param_idx}"
-            params.append(is_premium)
-            param_idx += 1
-
-        query += f"""
-            ORDER BY COALESCE(q.scheduled_date, q.created_at::date) DESC, q.created_at DESC
-            LIMIT ${param_idx} OFFSET ${param_idx + 1};
-        """
-        params.extend([limit, offset])
-
         try:
-            rows = await self._conn.fetch(query, *params)
-            return [dict(r) for r in rows]
+            today_colombo = datetime.datetime.now(_SL_TZ).date()
+            stmt = _question_select_stmt()
+
+            if not include_unpublished:
+                stmt = stmt.where(
+                    Question.is_published.is_(True),
+                    or_(
+                        Question.scheduled_date.is_(None),
+                        Question.scheduled_date <= today_colombo,
+                    ),
+                )
+
+            if subject_id and subject_id.strip():
+                sid = subject_id.strip()
+                stmt = stmt.where(
+                    or_(
+                        Question.subject_id == sid,
+                        func.upper(Subject.code) == sid.upper(),
+                        and_(
+                            Subject.code == "PMAT",
+                            sid.lower() in ("pure_maths", "puremaths", "pure", "subj_pmat"),
+                        ),
+                        and_(
+                            Subject.code == "AMAT",
+                            sid.lower() in ("applied_maths", "appliedmaths", "applied", "subj_amat"),
+                        ),
+                    )
+                )
+
+            if lesson_id and lesson_id.strip():
+                stmt = stmt.where(Question.lesson_id == lesson_id.strip())
+
+            if question_type and question_type.strip():
+                stmt = stmt.where(func.upper(Question.type) == question_type.strip().upper())
+
+            if difficulty and difficulty.strip():
+                stmt = stmt.where(func.upper(Question.difficulty) == difficulty.strip().upper())
+
+            if schedule and schedule.strip():
+                stmt = stmt.where(func.upper(Question.schedule) == schedule.strip().upper())
+
+            if source and source.strip():
+                stmt = stmt.where(func.upper(Question.source) == source.strip().upper())
+
+            if is_premium is not None:
+                stmt = stmt.where(Question.is_premium.is_(is_premium))
+
+            stmt = (
+                stmt.order_by(
+                    func.coalesce(Question.scheduled_date, cast(Question.created_at, Date)).desc(),
+                    Question.created_at.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+
+            result = await self._session.execute(stmt)
+            return [dict(row) for row in result.mappings().all()]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -296,44 +311,9 @@ class PostgresQuestionRepository(QuestionRepository):
 
     async def get_by_id(self, question_id: str) -> Optional[Dict[str, Any]]:
         try:
-            row = await self._conn.fetchrow(
-                """
-                SELECT q.id, q.title, COALESCE(q.description, '') AS description,
-                       q.subject_id, q.lesson_id,
-                       COALESCE(q.content_text, '') AS content_text,
-                       q.content_url,
-                       CASE
-                           WHEN q.content_url IS NOT NULL AND q.content_url != '' THEN
-                               CASE
-                                   WHEN LOWER(q.content_url) LIKE '%.png%'
-                                     OR LOWER(q.content_url) LIKE '%.jpg%'
-                                     OR LOWER(q.content_url) LIKE '%.jpeg%'
-                                     OR LOWER(q.content_url) LIKE '%.webp%' THEN 'image'
-                                   ELSE 'pdf'
-                               END
-                           ELSE 'markdown'
-                       END AS content_type,
-                       q.type, q.difficulty, q.schedule, q.source,
-                       COALESCE(q.source_details, '') AS source_details,
-                       q.allocated_marks, q.is_premium, q.is_published, q.scheduled_date,
-                       EXISTS (
-                           SELECT 1 FROM marking_schemes ms
-                           WHERE ms.question_id = q.id
-                             AND (
-                               (ms.content_text IS NOT NULL AND ms.content_text != '')
-                               OR (ms.pdf_url IS NOT NULL AND ms.pdf_url != '')
-                             )
-                       ) AS has_marking_scheme,
-                       q.created_at, q.updated_at,
-                       s.code AS subject_code, s.name AS subject_name,
-                       l.title AS lesson_title, l.sinhala_title AS lesson_sinhala_title
-                FROM questions q
-                LEFT JOIN subjects s ON q.subject_id = s.id
-                LEFT JOIN syllabus_lessons l ON q.lesson_id = l.id
-                WHERE q.id = $1;
-                """,
-                question_id.strip(),
-            )
+            stmt = _question_select_stmt().where(Question.id == question_id.strip())
+            result = await self._session.execute(stmt)
+            row = result.mappings().first()
             return dict(row) if row else None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
@@ -343,99 +323,42 @@ class PostgresQuestionRepository(QuestionRepository):
     ) -> Optional[Dict[str, Any]]:
         resolved_date = _resolve_colombo_date(target_date)
         try:
-            # 1. Primary O(1) lookup by exact scheduled_date match
-            row = await self._conn.fetchrow(
-                """
-                SELECT q.id, q.title, COALESCE(q.description, '') AS description,
-                       q.subject_id, q.lesson_id,
-                       COALESCE(q.content_text, '') AS content_text,
-                       q.content_url,
-                       CASE
-                           WHEN q.content_url IS NOT NULL AND q.content_url != '' THEN
-                               CASE
-                                   WHEN LOWER(q.content_url) LIKE '%.png%'
-                                     OR LOWER(q.content_url) LIKE '%.jpg%'
-                                     OR LOWER(q.content_url) LIKE '%.jpeg%'
-                                     OR LOWER(q.content_url) LIKE '%.webp%' THEN 'image'
-                                   ELSE 'pdf'
-                               END
-                           ELSE 'markdown'
-                       END AS content_type,
-                       q.type, q.difficulty,
-                       'DAILY' AS schedule,
-                       q.source,
-                       COALESCE(q.source_details, '') AS source_details,
-                       q.allocated_marks, q.is_premium, q.is_published, q.scheduled_date,
-                       EXISTS (
-                           SELECT 1 FROM marking_schemes ms
-                           WHERE ms.question_id = q.id
-                             AND (
-                               (ms.content_text IS NOT NULL AND ms.content_text != '')
-                               OR (ms.pdf_url IS NOT NULL AND ms.pdf_url != '')
-                             )
-                       ) AS has_marking_scheme,
-                       q.created_at, q.updated_at,
-                       s.code AS subject_code, s.name AS subject_name,
-                       l.title AS lesson_title, l.sinhala_title AS lesson_sinhala_title
-                FROM questions q
-                LEFT JOIN subjects s ON q.subject_id = s.id
-                LEFT JOIN syllabus_lessons l ON q.lesson_id = l.id
-                WHERE q.is_published = TRUE
-                  AND q.scheduled_date = $1
-                ORDER BY q.updated_at DESC
-                LIMIT 1;
-                """,
-                resolved_date,
+            # 1. Exact match on scheduled_date
+            stmt1 = (
+                _question_select_stmt()
+                .where(
+                    Question.is_published.is_(True),
+                    Question.scheduled_date == resolved_date,
+                )
+                .order_by(Question.updated_at.desc())
+                .limit(1)
             )
+            result1 = await self._session.execute(stmt1)
+            row = result1.mappings().first()
             if row:
-                return dict(row)
+                d = dict(row)
+                d["schedule"] = "DAILY"
+                return d
 
-            # 2. Fallback: Most recent scheduled question on or before resolved_date
-            fallback_row = await self._conn.fetchrow(
-                """
-                SELECT q.id, q.title, COALESCE(q.description, '') AS description,
-                       q.subject_id, q.lesson_id,
-                       COALESCE(q.content_text, '') AS content_text,
-                       q.content_url,
-                       CASE
-                           WHEN q.content_url IS NOT NULL AND q.content_url != '' THEN
-                               CASE
-                                   WHEN LOWER(q.content_url) LIKE '%.png%'
-                                     OR LOWER(q.content_url) LIKE '%.jpg%'
-                                     OR LOWER(q.content_url) LIKE '%.jpeg%'
-                                     OR LOWER(q.content_url) LIKE '%.webp%' THEN 'image'
-                                   ELSE 'pdf'
-                               END
-                           ELSE 'markdown'
-                       END AS content_type,
-                       q.type, q.difficulty,
-                       'DAILY' AS schedule,
-                       q.source,
-                       COALESCE(q.source_details, '') AS source_details,
-                       q.allocated_marks, q.is_premium, q.is_published, q.scheduled_date,
-                       EXISTS (
-                           SELECT 1 FROM marking_schemes ms
-                           WHERE ms.question_id = q.id
-                             AND (
-                               (ms.content_text IS NOT NULL AND ms.content_text != '')
-                               OR (ms.pdf_url IS NOT NULL AND ms.pdf_url != '')
-                             )
-                       ) AS has_marking_scheme,
-                       q.created_at, q.updated_at,
-                       s.code AS subject_code, s.name AS subject_name,
-                       l.title AS lesson_title, l.sinhala_title AS lesson_sinhala_title
-                FROM questions q
-                LEFT JOIN subjects s ON q.subject_id = s.id
-                LEFT JOIN syllabus_lessons l ON q.lesson_id = l.id
-                WHERE q.is_published = TRUE
-                  AND q.scheduled_date IS NOT NULL
-                  AND q.scheduled_date <= $1
-                ORDER BY q.scheduled_date DESC, q.updated_at DESC
-                LIMIT 1;
-                """,
-                resolved_date,
+            # 2. Fallback to latest scheduled question on or before resolved_date
+            stmt2 = (
+                _question_select_stmt()
+                .where(
+                    Question.is_published.is_(True),
+                    Question.scheduled_date.isnot(None),
+                    Question.scheduled_date <= resolved_date,
+                )
+                .order_by(Question.scheduled_date.desc(), Question.updated_at.desc())
+                .limit(1)
             )
-            return dict(fallback_row) if fallback_row else None
+            result2 = await self._session.execute(stmt2)
+            row2 = result2.mappings().first()
+            if row2:
+                d = dict(row2)
+                d["schedule"] = "DAILY"
+                return d
+
+            return None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -443,41 +366,56 @@ class PostgresQuestionRepository(QuestionRepository):
         self, question_id: str
     ) -> Optional[Dict[str, Any]]:
         try:
-            row = await self._conn.fetchrow(
-                """
-                SELECT id, question_id, title,
-                       COALESCE(content_text, '') AS content_text,
-                       pdf_url,
-                       CASE
-                           WHEN pdf_url IS NOT NULL AND pdf_url != '' THEN 'pdf'
-                           ELSE 'markdown'
-                       END AS content_type,
-                       total_marks, is_official, is_premium_only, order_index,
-                       created_at, updated_at
-                FROM marking_schemes
-                WHERE question_id = $1
-                ORDER BY order_index ASC
-                LIMIT 1;
-                """,
-                question_id.strip(),
+            stmt = (
+                select(
+                    MarkingScheme.id,
+                    MarkingScheme.question_id,
+                    MarkingScheme.title,
+                    func.coalesce(MarkingScheme.content_text, "").label("content_text"),
+                    MarkingScheme.pdf_url,
+                    case(
+                        (
+                            and_(MarkingScheme.pdf_url.isnot(None), MarkingScheme.pdf_url != ""),
+                            "pdf",
+                        ),
+                        else_="markdown",
+                    ).label("content_type"),
+                    MarkingScheme.total_marks,
+                    MarkingScheme.is_official,
+                    MarkingScheme.is_premium_only,
+                    MarkingScheme.order_index,
+                    MarkingScheme.created_at,
+                    MarkingScheme.updated_at,
+                )
+                .where(MarkingScheme.question_id == question_id.strip())
+                .order_by(MarkingScheme.order_index.asc())
+                .limit(1)
             )
+            result = await self._session.execute(stmt)
+            row = result.mappings().first()
             if not row:
                 return None
-            result = dict(row)
-            result["id"] = str(result["id"])
-            return result
+            res = dict(row)
+            res["id"] = str(res["id"])
+            return res
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
     async def delete_question(self, question_id: str) -> Dict[str, Any]:
         try:
-            row = await self._conn.fetchrow(
-                "DELETE FROM questions WHERE id = $1 RETURNING id;",
-                question_id.strip(),
-            )
+            q = (
+                await self._session.execute(
+                    select(Question).where(Question.id == question_id.strip())
+                )
+            ).scalar_one_or_none()
+
+            if q:
+                await self._session.delete(q)
+                await self._session.flush()
+
             return {
                 "status": "success",
-                "deleted_id": row["id"] if row else question_id,
+                "deleted_id": question_id.strip(),
             }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

@@ -6,7 +6,12 @@ Safe against existing unique constraints (email, subject code) and foreign keys.
 
 import logging
 from typing import Dict
-import asyncpg
+import datetime
+import uuid
+from zoneinfo import ZoneInfo
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import Subject, SyllabusLesson, Question, MarkingScheme, StudyNote, User
 
 logger = logging.getLogger("maths_dd.seed")
 
@@ -336,96 +341,97 @@ $$ T - mg\cos\theta = \frac{mv^2}{l} \implies T = mg(4 + 3\cos\theta) $$
 ]
 
 
-async def seed_database(conn: asyncpg.Connection) -> None:
+async def seed_database(session: AsyncSession) -> None:
     """
     Seeds initial reference data if tables are empty or updates existing seeds idempotently.
-    Resolves unique keys (users.email, subjects.code) prior to upsert to prevent constraint errors.
+    Uses modern SQLAlchemy ORM models.
     """
-    # 1. Seed Default Admin User (handle conflict on either uid or email)
-    existing_admin_uid = await conn.fetchval(
-        "SELECT uid FROM users WHERE uid = $1 OR LOWER(email) = LOWER($2) LIMIT 1;",
-        DEFAULT_ADMIN_UID,
-        DEFAULT_ADMIN_EMAIL,
-    )
-    if existing_admin_uid:
-        await conn.execute(
-            """
-            UPDATE users
-            SET role = 'ADMIN', is_premium = TRUE, updated_at = NOW()
-            WHERE uid = $1;
-            """,
-            existing_admin_uid,
+    # 1. Seed Default Admin User
+    admin = (
+        await session.execute(
+            select(User).where(
+                (User.uid == DEFAULT_ADMIN_UID) | (func.lower(User.email) == DEFAULT_ADMIN_EMAIL.lower())
+            )
         )
-    else:
-        await conn.execute(
-            """
-            INSERT INTO users (uid, email, name, role, is_premium)
-            VALUES ($1, $2, $3, 'ADMIN', TRUE)
-            ON CONFLICT (uid) DO NOTHING;
-            """,
-            DEFAULT_ADMIN_UID,
-            DEFAULT_ADMIN_EMAIL,
-            DEFAULT_ADMIN_NAME,
-        )
+    ).scalar_one_or_none()
 
-    # 2. Seed Subjects (resolve by id or code to avoid unique constraint violations on subjects.code)
+    if admin:
+        admin.role = "ADMIN"
+        admin.is_premium = True
+    else:
+        session.add(
+            User(
+                uid=DEFAULT_ADMIN_UID,
+                email=DEFAULT_ADMIN_EMAIL,
+                name=DEFAULT_ADMIN_NAME,
+                role="ADMIN",
+                is_premium=True,
+            )
+        )
+    await session.flush()
+
+    # 2. Seed Subjects
     subject_id_map: Dict[str, str] = {}
     for s in SUBJECTS_SEED:
-        existing_subj_id = await conn.fetchval(
-            "SELECT id FROM subjects WHERE id = $1 OR UPPER(code) = UPPER($2) LIMIT 1;",
-            s["id"],
-            s["code"],
-        )
-        target_subj_id = existing_subj_id or s["id"]
-        subject_id_map[s["id"]] = target_subj_id
+        existing_subj = (
+            await session.execute(
+                select(Subject).where(
+                    (Subject.id == s["id"]) | (func.upper(Subject.code) == s["code"].upper())
+                )
+            )
+        ).scalar_one_or_none()
 
-        await conn.execute(
-            """
-            INSERT INTO subjects (id, name, sinhala_name, code, order_index, description)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (id) DO UPDATE
-            SET name = EXCLUDED.name,
-                sinhala_name = EXCLUDED.sinhala_name,
-                code = EXCLUDED.code,
-                order_index = EXCLUDED.order_index,
-                description = EXCLUDED.description,
-                updated_at = NOW();
-            """,
-            target_subj_id,
-            s["name"],
-            s["sinhala_name"],
-            s["code"],
-            s["order_index"],
-            s["description"],
-        )
+        if existing_subj:
+            existing_subj.name = s["name"]
+            existing_subj.sinhala_name = s["sinhala_name"]
+            existing_subj.code = s["code"]
+            existing_subj.order_index = s["order_index"]
+            existing_subj.description = s["description"]
+            subject_id_map[s["id"]] = existing_subj.id
+        else:
+            session.add(
+                Subject(
+                    id=s["id"],
+                    name=s["name"],
+                    sinhala_name=s["sinhala_name"],
+                    code=s["code"],
+                    order_index=s["order_index"],
+                    description=s["description"],
+                )
+            )
+            subject_id_map[s["id"]] = s["id"]
+    await session.flush()
 
-    # 3. Seed Lessons (using resolved subject_id)
+    # 3. Seed Lessons
     lesson_id_map: Dict[str, str] = {}
     for l in LESSONS_SEED:
         resolved_subj_id = subject_id_map.get(l["subject_id"], l["subject_id"])
         lesson_id_map[l["id"]] = l["id"]
 
-        await conn.execute(
-            """
-            INSERT INTO syllabus_lessons (id, subject_id, title, sinhala_title, order_index, description)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (id) DO UPDATE
-            SET subject_id = EXCLUDED.subject_id,
-                title = EXCLUDED.title,
-                sinhala_title = EXCLUDED.sinhala_title,
-                order_index = EXCLUDED.order_index,
-                description = EXCLUDED.description,
-                updated_at = NOW();
-            """,
-            l["id"],
-            resolved_subj_id,
-            l["title"],
-            l["sinhala_title"],
-            l["order_index"],
-            l["description"],
-        )
+        existing_lesson = (
+            await session.execute(select(SyllabusLesson).where(SyllabusLesson.id == l["id"]))
+        ).scalar_one_or_none()
 
-    # 4. Seed Study Notes (using resolved subject_id and lesson_id)
+        if existing_lesson:
+            existing_lesson.subject_id = resolved_subj_id
+            existing_lesson.title = l["title"]
+            existing_lesson.sinhala_title = l["sinhala_title"]
+            existing_lesson.order_index = l["order_index"]
+            existing_lesson.description = l["description"]
+        else:
+            session.add(
+                SyllabusLesson(
+                    id=l["id"],
+                    subject_id=resolved_subj_id,
+                    title=l["title"],
+                    sinhala_title=l["sinhala_title"],
+                    order_index=l["order_index"],
+                    description=l["description"],
+                )
+            )
+    await session.flush()
+
+    # 4. Seed Study Notes
     for n in STUDY_NOTES_SEED:
         resolved_subj_id = subject_id_map.get(n["subject_id"], n["subject_id"])
         resolved_lesson_id = (
@@ -434,40 +440,39 @@ async def seed_database(conn: asyncpg.Connection) -> None:
             else None
         )
 
-        await conn.execute(
-            """
-            INSERT INTO study_notes (id, title, description, subject_id, lesson_id, content_text, pdf_url, is_premium, order_index, author)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (id) DO UPDATE
-            SET title = EXCLUDED.title,
-                description = EXCLUDED.description,
-                subject_id = EXCLUDED.subject_id,
-                lesson_id = EXCLUDED.lesson_id,
-                content_text = EXCLUDED.content_text,
-                pdf_url = EXCLUDED.pdf_url,
-                is_premium = EXCLUDED.is_premium,
-                order_index = EXCLUDED.order_index,
-                author = EXCLUDED.author,
-                updated_at = NOW();
-            """,
-            n["id"],
-            n["title"],
-            n["description"],
-            resolved_subj_id,
-            resolved_lesson_id,
-            n["content_text"],
-            n["pdf_url"],
-            n["is_premium"],
-            n["order_index"],
-            n["author"],
-        )
+        existing_note = (
+            await session.execute(select(StudyNote).where(StudyNote.id == n["id"]))
+        ).scalar_one_or_none()
 
-    # 5. Seed Questions and Official Marking Schemes
-    import uuid
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
+        if existing_note:
+            existing_note.title = n["title"]
+            existing_note.description = n.get("description")
+            existing_note.subject_id = resolved_subj_id
+            existing_note.lesson_id = resolved_lesson_id
+            existing_note.content_text = n.get("content_text", "")
+            existing_note.pdf_url = n.get("pdf_url")
+            existing_note.is_premium = n["is_premium"]
+            existing_note.order_index = n["order_index"]
+            existing_note.author = n.get("author")
+        else:
+            session.add(
+                StudyNote(
+                    id=n["id"],
+                    title=n["title"],
+                    description=n.get("description"),
+                    subject_id=resolved_subj_id,
+                    lesson_id=resolved_lesson_id,
+                    content_text=n.get("content_text", ""),
+                    pdf_url=n.get("pdf_url"),
+                    is_premium=n["is_premium"],
+                    order_index=n["order_index"],
+                    author=n.get("author"),
+                )
+            )
+    await session.flush()
 
-    today_colombo = datetime.now(ZoneInfo("Asia/Colombo")).date()
+    # 5. Seed Questions & Marking Schemes
+    today_colombo = datetime.datetime.now(ZoneInfo("Asia/Colombo")).date()
 
     for q in QUESTIONS_SEED:
         resolved_subj_id = subject_id_map.get(q["subject_id"], q["subject_id"])
@@ -478,74 +483,70 @@ async def seed_database(conn: asyncpg.Connection) -> None:
         )
         sched_date = today_colombo if q.get("use_today_scheduled_date") else None
 
-        await conn.execute(
-            """
-            INSERT INTO questions (
-                id, title, description, subject_id, lesson_id,
-                content_text, type, difficulty, schedule, source, source_details,
-                allocated_marks, is_premium, is_published, scheduled_date,
-                created_at, updated_at
-            ) VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10, $11,
-                $12, $13, $14, $15,
-                NOW(), NOW()
+        existing_q = (
+            await session.execute(select(Question).where(Question.id == q["id"]))
+        ).scalar_one_or_none()
+
+        if existing_q:
+            existing_q.title = q["title"]
+            existing_q.description = q.get("description", "")
+            existing_q.subject_id = resolved_subj_id
+            existing_q.lesson_id = resolved_lesson_id
+            existing_q.content_text = q.get("content_text", "")
+            existing_q.type = q["type"]
+            existing_q.difficulty = q["difficulty"]
+            existing_q.schedule = q["schedule"]
+            existing_q.source = q["source"]
+            existing_q.source_details = q.get("source_details", "")
+            existing_q.allocated_marks = q["allocated_marks"]
+            existing_q.is_premium = q["is_premium"]
+            existing_q.is_published = q["is_published"]
+            if sched_date:
+                existing_q.scheduled_date = sched_date
+        else:
+            session.add(
+                Question(
+                    id=q["id"],
+                    title=q["title"],
+                    description=q.get("description", ""),
+                    subject_id=resolved_subj_id,
+                    lesson_id=resolved_lesson_id,
+                    content_text=q.get("content_text", ""),
+                    type=q["type"],
+                    difficulty=q["difficulty"],
+                    schedule=q["schedule"],
+                    source=q["source"],
+                    source_details=q.get("source_details", ""),
+                    allocated_marks=q["allocated_marks"],
+                    is_premium=q["is_premium"],
+                    is_published=q["is_published"],
+                    scheduled_date=sched_date,
+                )
             )
-            ON CONFLICT (id) DO UPDATE SET
-                title = EXCLUDED.title,
-                description = EXCLUDED.description,
-                subject_id = EXCLUDED.subject_id,
-                lesson_id = EXCLUDED.lesson_id,
-                content_text = EXCLUDED.content_text,
-                type = EXCLUDED.type,
-                difficulty = EXCLUDED.difficulty,
-                schedule = EXCLUDED.schedule,
-                source = EXCLUDED.source,
-                source_details = EXCLUDED.source_details,
-                allocated_marks = EXCLUDED.allocated_marks,
-                is_premium = EXCLUDED.is_premium,
-                is_published = EXCLUDED.is_published,
-                scheduled_date = COALESCE(questions.scheduled_date, EXCLUDED.scheduled_date),
-                updated_at = NOW();
-            """,
-            q["id"],
-            q["title"],
-            q["description"],
-            resolved_subj_id,
-            resolved_lesson_id,
-            q["content_text"],
-            q["type"],
-            q["difficulty"],
-            q["schedule"],
-            q["source"],
-            q["source_details"],
-            q["allocated_marks"],
-            q["is_premium"],
-            q["is_published"],
-            sched_date,
-        )
+        await session.flush()
 
         sol_uuid = uuid.UUID(q["solution_id"])
-        await conn.execute(
-            """
-            INSERT INTO marking_schemes (
-                id, question_id, title, content_text, total_marks,
-                is_official, is_premium_only, order_index, created_at, updated_at
-            ) VALUES (
-                $1, $2, 'Official Marking Scheme', $3, $4,
-                true, $5, 1, NOW(), NOW()
-            )
-            ON CONFLICT (id) DO UPDATE SET
-                content_text = EXCLUDED.content_text,
-                total_marks = EXCLUDED.total_marks,
-                is_premium_only = EXCLUDED.is_premium_only,
-                updated_at = NOW();
-            """,
-            sol_uuid,
-            q["id"],
-            q["solution_text"],
-            q["allocated_marks"],
-            q["is_premium"],
-        )
+        existing_ms = (
+            await session.execute(select(MarkingScheme).where(MarkingScheme.id == sol_uuid))
+        ).scalar_one_or_none()
 
-    logger.info("Database seeding completed successfully.")
+        if existing_ms:
+            existing_ms.content_text = q["solution_text"]
+            existing_ms.total_marks = q["allocated_marks"]
+            existing_ms.is_premium_only = q["is_premium"]
+        else:
+            session.add(
+                MarkingScheme(
+                    id=sol_uuid,
+                    question_id=q["id"],
+                    title="Official Marking Scheme",
+                    content_text=q["solution_text"],
+                    total_marks=q["allocated_marks"],
+                    is_official=True,
+                    is_premium_only=q["is_premium"],
+                    order_index=1,
+                )
+            )
+
+    await session.commit()
+    logger.info("Database seeding completed successfully via SQLAlchemy.")

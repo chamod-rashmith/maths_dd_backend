@@ -1,24 +1,29 @@
 """
-Concrete PostgreSQL Implementation of UserRepository.
+Concrete PostgreSQL Implementation of UserRepository using SQLAlchemy 2.0.
 """
 
 from typing import Any, Dict, Optional
-import asyncpg
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
+from app.models.user import User
 
 
 class PostgresUserRepository(UserRepository):
-    """PostgreSQL implementation of `UserRepository` using asyncpg."""
+    """PostgreSQL implementation of `UserRepository` using SQLAlchemy AsyncSession."""
 
-    def __init__(self, conn: asyncpg.Connection) -> None:
-        self._conn = conn
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def get_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         try:
-            row = await self._conn.fetchrow("SELECT * FROM users WHERE uid = $1;", uid)
-            return dict(row) if row else None
+            result = await self._session.execute(
+                select(User).where(User.uid == uid)
+            )
+            user = result.scalar_one_or_none()
+            return user.to_dict() if user else None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -36,58 +41,55 @@ class PostgresUserRepository(UserRepository):
         attempt: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            # If email was pre-seeded under a placeholder uid, bind it to the real Firebase UID
-            await self._conn.execute(
-                """
-                UPDATE users
-                SET uid = $1, updated_at = NOW()
-                WHERE LOWER(email) = LOWER($2) AND uid != $1
-                  AND NOT EXISTS (SELECT 1 FROM users WHERE uid = $1);
-                """,
-                uid,
-                email,
+            # 1. Search for existing user by uid
+            result = await self._session.execute(
+                select(User).where(User.uid == uid)
             )
+            user = result.scalar_one_or_none()
 
-            query = """
-            INSERT INTO users (
-                uid, email, name, avatar_url, telephone_no,
-                school_name, district, stream, grade, attempt,
-                created_at, updated_at
-            ) VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10,
-                NOW(), NOW()
-            )
-            ON CONFLICT (uid) DO UPDATE SET
-                email = EXCLUDED.email,
-                name = CASE
-                    WHEN EXCLUDED.name IS NOT NULL AND EXCLUDED.name != ''
-                    THEN EXCLUDED.name
-                    ELSE users.name
-                END,
-                avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
-                telephone_no = COALESCE(EXCLUDED.telephone_no, users.telephone_no),
-                school_name = COALESCE(EXCLUDED.school_name, users.school_name),
-                district = COALESCE(EXCLUDED.district, users.district),
-                stream = COALESCE(EXCLUDED.stream, users.stream),
-                grade = COALESCE(EXCLUDED.grade, users.grade),
-                attempt = COALESCE(EXCLUDED.attempt, users.attempt),
-                updated_at = NOW()
-            RETURNING *;
-            """
-            row = await self._conn.fetchrow(
-                query,
-                uid,
-                email,
-                name,
-                avatar_url,
-                telephone_no,
-                school_name,
-                district,
-                stream,
-                grade,
-                attempt,
-            )
-            return dict(row)
+            # 2. If not found by uid, check if existing record has matching email
+            if not user:
+                result_email = await self._session.execute(
+                    select(User).where(func.lower(User.email) == email.lower())
+                )
+                user = result_email.scalar_one_or_none()
+                if user:
+                    user.uid = uid
+
+            if user:
+                if name and name.strip():
+                    user.name = name
+                if avatar_url is not None:
+                    user.avatar_url = avatar_url
+                if telephone_no is not None:
+                    user.telephone_no = telephone_no
+                if school_name is not None:
+                    user.school_name = school_name
+                if district is not None:
+                    user.district = district
+                if stream is not None:
+                    user.stream = stream
+                if grade is not None:
+                    user.grade = grade
+                if attempt is not None:
+                    user.attempt = attempt
+            else:
+                user = User(
+                    uid=uid,
+                    email=email,
+                    name=name,
+                    avatar_url=avatar_url,
+                    telephone_no=telephone_no,
+                    school_name=school_name,
+                    district=district,
+                    stream=stream,
+                    grade=grade,
+                    attempt=attempt,
+                )
+                self._session.add(user)
+
+            await self._session.flush()
+            await self._session.refresh(user)
+            return user.to_dict()
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

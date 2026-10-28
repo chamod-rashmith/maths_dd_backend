@@ -1,31 +1,36 @@
 """
-Concrete PostgreSQL Implementation of CurriculumRepository.
+Concrete PostgreSQL Implementation of CurriculumRepository using SQLAlchemy 2.0.
 """
 
+import datetime
+from typing import Any, Dict, List, Optional
 import uuid
-from typing import List, Dict, Any, Optional
-import asyncpg
+from zoneinfo import ZoneInfo
+from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.curriculum_repository import CurriculumRepository
+from app.models.lesson import SyllabusLesson
+from app.models.question import Question
+from app.models.subject import Subject
+
+_SL_TZ = ZoneInfo("Asia/Colombo")
 
 
 class PostgresCurriculumRepository(CurriculumRepository):
-    """PostgreSQL implementation of `CurriculumRepository` using asyncpg."""
+    """PostgreSQL implementation of `CurriculumRepository` using SQLAlchemy AsyncSession."""
 
-    def __init__(self, conn: asyncpg.Connection) -> None:
-        self._conn = conn
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def get_subjects(self) -> List[Dict[str, Any]]:
         try:
-            rows = await self._conn.fetch(
-                """
-                SELECT id, name, sinhala_name, code, order_index, description, created_at, updated_at
-                FROM subjects
-                ORDER BY order_index ASC;
-                """
+            result = await self._session.execute(
+                select(Subject).order_by(Subject.order_index.asc())
             )
-            return [dict(r) for r in rows]
+            subjects = result.scalars().all()
+            return [s.to_dict() for s in subjects]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -40,53 +45,66 @@ class PostgresCurriculumRepository(CurriculumRepository):
     ) -> Dict[str, Any]:
         cleaned_code = code.strip().upper()
         try:
-            existing_id = await self._conn.fetchval(
-                "SELECT id FROM subjects WHERE id = $1 OR UPPER(code) = UPPER($2) LIMIT 1;",
-                subject_id.strip() if (subject_id and subject_id.strip()) else "",
-                cleaned_code,
-            )
-            resolved_id = (
-                existing_id
-                or (
+            subj: Optional[Subject] = None
+            if subject_id and subject_id.strip():
+                subj = (
+                    await self._session.execute(
+                        select(Subject).where(Subject.id == subject_id.strip())
+                    )
+                ).scalar_one_or_none()
+
+            if not subj:
+                subj = (
+                    await self._session.execute(
+                        select(Subject).where(func.upper(Subject.code) == cleaned_code)
+                    )
+                ).scalar_one_or_none()
+
+            if subj:
+                subj.name = name
+                subj.sinhala_name = sinhala_name
+                subj.code = cleaned_code
+                subj.order_index = order_index
+                subj.description = description
+            else:
+                resolved_id = (
                     subject_id.strip()
                     if (subject_id and subject_id.strip())
                     else str(uuid.uuid4())
                 )
-            )
+                subj = Subject(
+                    id=resolved_id,
+                    name=name,
+                    sinhala_name=sinhala_name,
+                    code=cleaned_code,
+                    order_index=order_index,
+                    description=description,
+                )
+                self._session.add(subj)
 
-            query = """
-            INSERT INTO subjects (id, name, sinhala_name, code, order_index, description, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                sinhala_name = EXCLUDED.sinhala_name,
-                code = EXCLUDED.code,
-                order_index = EXCLUDED.order_index,
-                description = EXCLUDED.description,
-                updated_at = NOW()
-            RETURNING *;
-            """
-            row = await self._conn.fetchrow(
-                query,
-                resolved_id,
-                name,
-                sinhala_name,
-                cleaned_code,
-                order_index,
-                description,
-            )
-            return dict(row)
+            await self._session.flush()
+            await self._session.refresh(subj)
+            return subj.to_dict()
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
     async def delete_subject(self, subject_id: str) -> Dict[str, Any]:
         try:
-            row = await self._conn.fetchrow(
-                "DELETE FROM subjects WHERE id = $1 RETURNING id;", subject_id
-            )
+            subj = (
+                await self._session.execute(
+                    select(Subject).where(Subject.id == subject_id)
+                )
+            ).scalar_one_or_none()
+
+            deleted_id = subject_id
+            if subj:
+                deleted_id = subj.id
+                await self._session.delete(subj)
+                await self._session.flush()
+
             return {
                 "status": "success",
-                "deleted_id": row["id"] if row else subject_id,
+                "deleted_id": deleted_id,
             }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
@@ -97,41 +115,72 @@ class PostgresCurriculumRepository(CurriculumRepository):
         subject_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         try:
-            query = """
-                SELECT l.id, l.subject_id, l.title, l.sinhala_title, l.order_index, l.description,
-                       COUNT(q.id)::int AS question_count,
-                       COUNT(q.id) FILTER (WHERE q.is_premium = TRUE)::int AS premium_count,
-                       l.created_at, l.updated_at,
-                       s.code AS subject_code, s.name AS subject_name
-                FROM syllabus_lessons l
-                JOIN subjects s ON l.subject_id = s.id
-                LEFT JOIN questions q
-                  ON q.lesson_id = l.id
-                 AND q.is_published = TRUE
-                 AND (q.scheduled_date IS NULL OR q.scheduled_date <= (NOW() AT TIME ZONE 'Asia/Colombo')::date)
-                WHERE 1=1
-            """
-            params: List[Any] = []
-            param_idx = 1
+            today_colombo = datetime.datetime.now(_SL_TZ).date()
+
+            q_count = func.count(Question.id).label("question_count")
+            prem_count = func.count(
+                case((Question.is_premium.is_(True), Question.id), else_=None)
+            ).label("premium_count")
+
+            stmt = (
+                select(
+                    SyllabusLesson.id,
+                    SyllabusLesson.subject_id,
+                    SyllabusLesson.title,
+                    SyllabusLesson.sinhala_title,
+                    SyllabusLesson.order_index,
+                    SyllabusLesson.description,
+                    q_count,
+                    prem_count,
+                    SyllabusLesson.created_at,
+                    SyllabusLesson.updated_at,
+                    Subject.code.label("subject_code"),
+                    Subject.name.label("subject_name"),
+                )
+                .join(Subject, SyllabusLesson.subject_id == Subject.id)
+                .outerjoin(
+                    Question,
+                    and_(
+                        Question.lesson_id == SyllabusLesson.id,
+                        Question.is_published.is_(True),
+                        or_(
+                            Question.scheduled_date.is_(None),
+                            Question.scheduled_date <= today_colombo,
+                        ),
+                    ),
+                )
+            )
 
             raw_filter = (subject_code or subject_id or "").strip()
             if raw_filter:
-                query += f""" AND (
-                    l.subject_id = ${param_idx}
-                    OR UPPER(s.code) = UPPER(${param_idx})
-                    OR (s.code = 'PMAT' AND LOWER(${param_idx}) IN ('pure_maths', 'puremaths', 'pure', 'subj_pmat'))
-                    OR (s.code = 'AMAT' AND LOWER(${param_idx}) IN ('applied_maths', 'appliedmaths', 'applied', 'subj_amat'))
-                )"""
-                params.append(raw_filter)
-                param_idx += 1
+                stmt = stmt.where(
+                    or_(
+                        SyllabusLesson.subject_id == raw_filter,
+                        func.upper(Subject.code) == raw_filter.upper(),
+                        and_(
+                            Subject.code == "PMAT",
+                            func.lower(raw_filter).in_(
+                                ["pure_maths", "puremaths", "pure", "subj_pmat"]
+                            ),
+                        ),
+                        and_(
+                            Subject.code == "AMAT",
+                            func.lower(raw_filter).in_(
+                                ["applied_maths", "appliedmaths", "applied", "subj_amat"]
+                            ),
+                        ),
+                    )
+                )
 
-            query += """
-                GROUP BY l.id, s.order_index, s.code, s.name
-                ORDER BY s.order_index ASC, l.order_index ASC;
-            """
+            stmt = stmt.group_by(
+                SyllabusLesson.id,
+                Subject.order_index,
+                Subject.code,
+                Subject.name,
+            ).order_by(Subject.order_index.asc(), SyllabusLesson.order_index.asc())
 
-            rows = await self._conn.fetch(query, *params)
-            return [dict(r) for r in rows]
+            result = await self._session.execute(stmt)
+            return [dict(row) for row in result.mappings().all()]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -144,45 +193,62 @@ class PostgresCurriculumRepository(CurriculumRepository):
         order_index: int,
         description: str = "",
     ) -> Dict[str, Any]:
-        resolved_id = (
-            lesson_id.strip()
-            if (lesson_id and lesson_id.strip())
-            else str(uuid.uuid4())
-        )
-        query = """
-        INSERT INTO syllabus_lessons (id, subject_id, title, sinhala_title, order_index, description, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-        ON CONFLICT (id) DO UPDATE SET
-            subject_id = EXCLUDED.subject_id,
-            title = EXCLUDED.title,
-            sinhala_title = EXCLUDED.sinhala_title,
-            order_index = EXCLUDED.order_index,
-            description = EXCLUDED.description,
-            updated_at = NOW()
-        RETURNING *;
-        """
         try:
-            row = await self._conn.fetchrow(
-                query,
-                resolved_id,
-                subject_id,
-                title,
-                sinhala_title,
-                order_index,
-                description,
-            )
-            return dict(row)
+            lesson: Optional[SyllabusLesson] = None
+            if lesson_id and lesson_id.strip():
+                lesson = (
+                    await self._session.execute(
+                        select(SyllabusLesson).where(
+                            SyllabusLesson.id == lesson_id.strip()
+                        )
+                    )
+                ).scalar_one_or_none()
+
+            if lesson:
+                lesson.subject_id = subject_id
+                lesson.title = title
+                lesson.sinhala_title = sinhala_title
+                lesson.order_index = order_index
+                lesson.description = description
+            else:
+                resolved_id = (
+                    lesson_id.strip()
+                    if (lesson_id and lesson_id.strip())
+                    else str(uuid.uuid4())
+                )
+                lesson = SyllabusLesson(
+                    id=resolved_id,
+                    subject_id=subject_id,
+                    title=title,
+                    sinhala_title=sinhala_title,
+                    order_index=order_index,
+                    description=description,
+                )
+                self._session.add(lesson)
+
+            await self._session.flush()
+            await self._session.refresh(lesson)
+            return lesson.to_dict()
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
     async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
         try:
-            row = await self._conn.fetchrow(
-                "DELETE FROM syllabus_lessons WHERE id = $1 RETURNING id;", lesson_id
-            )
+            lesson = (
+                await self._session.execute(
+                    select(SyllabusLesson).where(SyllabusLesson.id == lesson_id)
+                )
+            ).scalar_one_or_none()
+
+            deleted_id = lesson_id
+            if lesson:
+                deleted_id = lesson.id
+                await self._session.delete(lesson)
+                await self._session.flush()
+
             return {
                 "status": "success",
-                "deleted_id": row["id"] if row else lesson_id,
+                "deleted_id": deleted_id,
             }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

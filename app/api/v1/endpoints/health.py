@@ -9,12 +9,11 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import (
-    ensure_schema,
-    get_db_connection,
-    init_db_pool,
+    async_session_factory,
+    check_db_health,
+    init_db,
     list_public_tables,
 )
-from app.core.seed import seed_database
 
 logger = logging.getLogger("maths_dd.health")
 
@@ -35,21 +34,12 @@ def health_check() -> Dict[str, str]:
 async def test_database() -> Any:
     """
     Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL)
-    and ensuring the production database schema and seed data are initialized.
+    and ensuring the production database schema and seed data are initialized via SQLAlchemy.
     """
     try:
-        pool = await init_db_pool()
-        if pool is not None:
-            async with pool.acquire() as conn:
-                await ensure_schema(conn)
-                await seed_database(conn)
-                tables = await list_public_tables(conn)
-        else:
-            conn = await get_db_connection()
-            try:
-                tables = await list_public_tables(conn)
-            finally:
-                await conn.close()
+        await init_db()
+        async with async_session_factory() as session:
+            tables = await list_public_tables(session)
 
         return {
             "status": "success",
