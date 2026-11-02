@@ -1,10 +1,11 @@
 """
 SQLAlchemy 2.0 ORM model for Questions.
+Includes soft-delete support (`is_deleted`) to preserve student historical attempts.
 """
 
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -41,6 +42,7 @@ class Question(Base):
     allocated_marks: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     scheduled_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -65,10 +67,10 @@ class Question(Base):
     )
 
     __table_args__ = (
-        Index("idx_questions_subject_lesson", "subject_id", "lesson_id", "is_published"),
+        Index("idx_questions_subject_lesson", "subject_id", "lesson_id", "is_published", "is_deleted"),
         Index("idx_questions_scheduled_date", "scheduled_date"),
+        Index("idx_questions_is_deleted", "is_deleted"),
     )
 
-    
     def __repr__(self) -> str:
         return f"<Question(id='{self.id}', title='{self.title}', subject_id='{self.subject_id}')>"

@@ -92,6 +92,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(question.id, "q_100")
         self.assertEqual(question.title, "Integrate x^2")
         self.assertFalse(question.is_premium)
+        self.assertFalse(question.is_deleted)
         self.assertEqual(question.allocated_marks, 25)
         self.assertIn("Question", repr(question))
 
@@ -150,6 +151,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(note.id, "note_001")
         self.assertEqual(note.title, "Calculus Summary")
         self.assertTrue(note.is_premium)
+        self.assertFalse(note.is_deleted)
         self.assertEqual(note.author, "Maths DD Editorial")
         self.assertIn("StudyNote", repr(note))
 

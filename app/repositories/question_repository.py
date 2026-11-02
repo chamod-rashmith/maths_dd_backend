@@ -93,6 +93,7 @@ def _question_select_stmt():
         )
         .outerjoin(Subject, Question.subject_id == Subject.id)
         .outerjoin(SyllabusLesson, Question.lesson_id == SyllabusLesson.id)
+        .where(Question.is_deleted.is_(False))
     )
 
 
@@ -163,6 +164,7 @@ class PostgresQuestionRepository(QuestionRepository):
                 q.allocated_marks = allocated_marks
                 q.is_premium = is_premium
                 q.is_published = is_published
+                q.is_deleted = False
                 q.scheduled_date = parsed_date
             else:
                 q = Question(
@@ -421,12 +423,15 @@ class PostgresQuestionRepository(QuestionRepository):
         try:
             q = (
                 await self._session.execute(
-                    select(Question).where(Question.id == question_id.strip())
+                    select(Question).where(
+                        Question.id == question_id.strip(),
+                        Question.is_deleted.is_(False),
+                    )
                 )
             ).scalar_one_or_none()
 
             if q:
-                await self._session.delete(q)
+                q.is_deleted = True
                 await self._session.flush()
 
             return {

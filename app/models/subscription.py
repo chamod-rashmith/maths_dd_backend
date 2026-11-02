@@ -130,6 +130,11 @@ class UserSubscription(Base):
             "status",
             "expires_at",
         ),
+        Index(
+            "idx_active_subs_partial",
+            "user_id",
+            postgresql_where=text("status IN ('ACTIVE', 'GRACE_PERIOD')"),
+        ),
     )
 
     def is_currently_active(self) -> bool:

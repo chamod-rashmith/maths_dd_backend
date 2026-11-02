@@ -170,6 +170,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     and_(
                         Question.lesson_id == SyllabusLesson.id,
                         Question.is_published.is_(True),
+                        Question.is_deleted.is_(False),
                         or_(
                             Question.scheduled_date.is_(None),
                             Question.scheduled_date <= today_colombo,

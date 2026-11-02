@@ -106,3 +106,52 @@ def generate_signed_download_url(
 
     bucket_name = settings.STORAGE_BUCKET_NAME.replace("gs://", "").strip()
     return f"https://storage.googleapis.com/{bucket_name}/{cleaned_path}?X-Goog-Expires={expiration_minutes * 60}&signed=true"
+
+
+def generate_signed_upload_url(
+    storage_path: str, content_type: str = "image/jpeg", expiration_minutes: int = 15
+) -> str:
+    """
+    Generates a secure, short-lived v4 signed URL allowing client to PUT an upload directly into GCS.
+    Bypasses backend server memory & bandwidth overhead.
+    """
+    if not storage_path or not storage_path.strip():
+        return ""
+
+    cleaned_path = storage_path.strip().lstrip("/")
+    if cleaned_path.startswith("gs://"):
+        parts = cleaned_path.replace("gs://", "").split("/", 1)
+        cleaned_path = parts[1] if len(parts) > 1 else parts[0]
+
+    client = get_storage_client()
+    if client:
+        try:
+            bucket_name = settings.STORAGE_BUCKET_NAME.replace("gs://", "").strip()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(cleaned_path)
+
+            creds = client._credentials
+            sign_kwargs = {
+                "version": "v4",
+                "expiration": datetime.timedelta(minutes=expiration_minutes),
+                "method": "PUT",
+                "content_type": content_type,
+            }
+
+            if not hasattr(creds, "sign_bytes"):
+                auth_req = google_auth_requests.Request()
+                if not creds.valid or not creds.token:
+                    creds.refresh(auth_req)
+                sa_email = getattr(creds, "service_account_email", None)
+                if sa_email and creds.token:
+                    sign_kwargs["service_account_email"] = sa_email
+                    sign_kwargs["access_token"] = creds.token
+
+            return blob.generate_signed_url(**sign_kwargs)
+        except Exception as exc:
+            logger.warning(
+                "Failed to generate GCS signed upload URL for '%s': %s", cleaned_path, exc
+            )
+
+    bucket_name = settings.STORAGE_BUCKET_NAME.replace("gs://", "").strip()
+    return f"https://storage.googleapis.com/{bucket_name}/{cleaned_path}?X-Goog-Expires={expiration_minutes * 60}&signed=true&method=PUT"

@@ -88,6 +88,18 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sub.amount_lkr, 2500.0)
         self.assertTrue(mock_session.add.called)
 
+    async def test_expire_stale_subscriptions(self) -> None:
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.rowcount = 3
+        mock_session.execute.return_value = mock_result
+        repo = SubscriptionRepository(mock_session)
+
+        count = await repo.expire_stale_subscriptions()
+        self.assertEqual(count, 3)
+        self.assertTrue(mock_session.execute.called)
+        self.assertTrue(mock_session.flush.called)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)
                 .outerjoin(SyllabusLesson, StudyNote.lesson_id == SyllabusLesson.id)
+                .where(StudyNote.is_deleted.is_(False))
             )
 
             if subject_id and subject_id.strip():
@@ -117,7 +118,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)
                 .outerjoin(SyllabusLesson, StudyNote.lesson_id == SyllabusLesson.id)
-                .where(StudyNote.id == note_id)
+                .where(StudyNote.id == note_id, StudyNote.is_deleted.is_(False))
             )
             result = await self._session.execute(stmt)
             row = result.mappings().first()
@@ -166,6 +167,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 note.content_text = final_content
                 note.pdf_url = final_pdf
                 note.is_premium = is_premium
+                note.is_deleted = False
                 note.order_index = order_index
                 note.author = author or ""
             else:
@@ -207,12 +209,12 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         try:
             note = (
                 await self._session.execute(
-                    select(StudyNote).where(StudyNote.id == note_id)
+                    select(StudyNote).where(StudyNote.id == note_id, StudyNote.is_deleted.is_(False))
                 )
             ).scalar_one_or_none()
 
             if note:
-                await self._session.delete(note)
+                note.is_deleted = True
                 await self._session.flush()
 
             return {"status": "success", "deleted_id": note_id}

@@ -4,11 +4,12 @@ Handles:
 1. Active entitlement lookups for users.
 2. Direct Bank Slip upload & Admin approval/rejection workflows.
 3. RevenueCat Webhook idempotency and state synchronization.
+4. Maintenance routine for expiring stale subscriptions.
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -218,3 +219,22 @@ class SubscriptionRepository:
             await self._session.flush()
         except Exception as exc:
             raise DatabaseOperationError(f"Error recording webhook event: {exc}") from exc
+
+    async def expire_stale_subscriptions(self) -> int:
+        """Maintenance worker: marks active subscriptions whose expires_at < now as EXPIRED."""
+        try:
+            now = datetime.now(timezone.utc)
+            stmt = (
+                update(UserSubscription)
+                .where(
+                    UserSubscription.status == "ACTIVE",
+                    UserSubscription.expires_at.is_not(None),
+                    UserSubscription.expires_at < now,
+                )
+                .values(status="EXPIRED", updated_at=now)
+            )
+            result = await self._session.execute(stmt)
+            await self._session.flush()
+            return result.rowcount or 0
+        except Exception as exc:
+            raise DatabaseOperationError(f"Error expiring stale subscriptions: {exc}") from exc
