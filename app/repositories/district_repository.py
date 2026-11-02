@@ -1,0 +1,78 @@
+"""
+District Repository with Persistent Redis / In-Memory Caching (0 TTL).
+Provides high-performance, zero-DB-overhead lookup for Sri Lankan Administrative Districts.
+"""
+
+import logging
+from typing import Any, Dict, List, Optional
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.cache import districts_cache
+from app.domain.exceptions import DatabaseOperationError
+from app.models.district import District
+
+logger = logging.getLogger("maths_dd.district_repo")
+
+DISTRICTS_CACHE_KEY = "districts:all"
+
+
+class DistrictRepository:
+    """Repository for querying Sri Lankan Administrative Districts with persistent Redis caching."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_all(self) -> List[Dict[str, Any]]:
+        """
+        Returns all 25 Sri Lankan districts ordered by display_order.
+        Serves from Upstash Serverless Redis / In-Memory cache without TTL if available.
+        """
+        # 1. Attempt persistent cache lookup
+        cached = districts_cache.get(DISTRICTS_CACHE_KEY)
+        if cached is not None and isinstance(cached, list):
+            logger.debug("Serving %d districts directly from cache.", len(cached))
+            return cached
+
+        # 2. Cache miss -> query PostgreSQL database
+        try:
+            stmt = select(District).order_by(District.display_order.asc(), District.name_en.asc())
+            result = await self._session.execute(stmt)
+            districts = result.scalars().all()
+
+            data = [
+                {
+                    "id": d.id,
+                    "name_en": d.name_en,
+                    "name_si": d.name_si,
+                    "name_ta": d.name_ta,
+                    "province": d.province,
+                    "display_order": d.display_order,
+                }
+                for d in districts
+            ]
+
+            # 3. Store in Redis / In-Memory cache with ttl_seconds=0 (no expiration)
+            if data:
+                districts_cache.set(DISTRICTS_CACHE_KEY, data, ttl_seconds=0)
+                logger.info("Cached %d districts indefinitely in Redis/Memory.", len(data))
+
+            return data
+        except Exception as exc:
+            logger.error("Failed to fetch districts from database: %s", exc)
+            raise DatabaseOperationError(str(exc)) from exc
+
+    async def get_by_id(self, district_id: str) -> Optional[Dict[str, Any]]:
+        """Finds a single district by its ID slug (e.g. 'COLOMBO')."""
+        all_districts = await self.get_all()
+        target = district_id.strip().upper()
+        for d in all_districts:
+            if d.get("id") == target:
+                return d
+        return None
+
+    @staticmethod
+    def invalidate_cache() -> None:
+        """Evicts districts cache across Redis and In-Memory."""
+        districts_cache.invalidate_prefix("districts:")
+        logger.info("Districts cache successfully invalidated.")

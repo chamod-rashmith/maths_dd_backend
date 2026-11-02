@@ -5,7 +5,7 @@ PostgreSQL UserRepository implementation using modern SQLAlchemy 2.0.
 from typing import Any, Dict, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
@@ -46,6 +46,7 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "role": user.role,
         "avatar_url": user.avatar_url,
         "school_name": user.school_name,
+        "district_id": user.district_id,
         "district": user.district,
         "stream": user.stream,
         "grade": user.grade,
@@ -69,7 +70,11 @@ class PostgresUserRepository(UserRepository):
         try:
             result = await self._session.execute(
                 select(User)
-                .options(selectinload(User.stats), selectinload(User.subscriptions))
+                .options(
+                    selectinload(User.stats),
+                    selectinload(User.subscriptions),
+                    joinedload(User.district),
+                )
                 .where(User.uid == uid)
             )
             user = result.scalar_one_or_none()
@@ -85,16 +90,25 @@ class PostgresUserRepository(UserRepository):
         avatar_url: Optional[str] = None,
         telephone_no: Optional[str] = None,
         school_name: Optional[str] = None,
+        district_id: Optional[str] = None,
         district: Optional[str] = None,
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
+            effective_district_id = district_id if district_id is not None else district
+            if effective_district_id:
+                effective_district_id = effective_district_id.strip().upper()
+
             # 1. Search for existing user by uid
             result = await self._session.execute(
                 select(User)
-                .options(selectinload(User.stats), selectinload(User.subscriptions))
+                .options(
+                    selectinload(User.stats),
+                    selectinload(User.subscriptions),
+                    joinedload(User.district),
+                )
                 .where(User.uid == uid)
             )
             user = result.scalar_one_or_none()
@@ -103,7 +117,11 @@ class PostgresUserRepository(UserRepository):
             if not user:
                 result_email = await self._session.execute(
                     select(User)
-                    .options(selectinload(User.stats), selectinload(User.subscriptions))
+                    .options(
+                        selectinload(User.stats),
+                        selectinload(User.subscriptions),
+                        joinedload(User.district),
+                    )
                     .where(func.lower(User.email) == email.lower())
                 )
                 user = result_email.scalar_one_or_none()
@@ -119,14 +137,14 @@ class PostgresUserRepository(UserRepository):
                     user.telephone_no = telephone_no
                 if school_name is not None:
                     user.school_name = school_name
-                if district is not None:
-                    user.district = district
+                if effective_district_id is not None:
+                    user.district_id = effective_district_id
                 if stream is not None:
-                    user.stream = stream
+                    user.stream = str(stream)
                 if grade is not None:
-                    user.grade = grade
+                    user.grade = str(grade)
                 if attempt is not None:
-                    user.attempt = attempt
+                    user.attempt = str(attempt)
             else:
                 user = User(
                     uid=uid,
@@ -135,10 +153,10 @@ class PostgresUserRepository(UserRepository):
                     avatar_url=avatar_url,
                     telephone_no=telephone_no,
                     school_name=school_name,
-                    district=district,
-                    stream=stream,
-                    grade=grade,
-                    attempt=attempt,
+                    district_id=effective_district_id,
+                    stream=str(stream) if stream else None,
+                    grade=str(grade) if grade else None,
+                    attempt=str(attempt) if attempt else None,
                 )
                 self._session.add(user)
                 # Initialize clean user_stats record
@@ -147,6 +165,7 @@ class PostgresUserRepository(UserRepository):
 
             await self._session.flush()
             await self._session.refresh(user)
+
             # Ensure stats & subscriptions are loaded
             if not user.stats:
                 stmt_s = select(UserStats).where(UserStats.user_id == user.uid)

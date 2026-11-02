@@ -33,7 +33,11 @@ class InMemoryTTLCache:
 
     def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl
-        self._store[key] = (time.monotonic() + ttl, value)
+        if ttl == 0:
+            expires_at = float("inf")
+        else:
+            expires_at = time.monotonic() + ttl
+        self._store[key] = (expires_at, value)
 
     def invalidate_prefix(self, prefix: str) -> None:
         keys_to_remove = [k for k in self._store if k.startswith(prefix)]
@@ -89,7 +93,7 @@ class HybridCache:
         return self._memory_fallback.get(key)
 
     def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
-        """Stores item with TTL in Upstash Redis and In-Memory fallback."""
+        """Stores item with TTL in Upstash Redis and In-Memory fallback. Pass ttl_seconds=0 for persistent storage (no TTL)."""
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl
 
         # Always update memory fallback for ultra-low latency & resilience
@@ -98,7 +102,10 @@ class HybridCache:
         if self._upstash_client:
             try:
                 serialized = json.dumps(value, default=str) if not isinstance(value, (str, int, float, bool)) else value
-                self._upstash_client.set(key, serialized, ex=ttl)
+                if ttl == 0:
+                    self._upstash_client.set(key, serialized)
+                else:
+                    self._upstash_client.set(key, serialized, ex=ttl)
             except Exception as exc:
                 logger.warning("Upstash SET error for key '%s': %s", key, exc)
 
@@ -129,3 +136,6 @@ curriculum_cache = HybridCache(default_ttl_seconds=3600)
 
 # Global study notes catalog & detail cache
 study_notes_cache = HybridCache(default_ttl_seconds=3600)
+
+# Global districts reference data cache (default persistent / no TTL)
+districts_cache = HybridCache(default_ttl_seconds=0)

@@ -13,6 +13,7 @@ from app.models import (
     Question,
     MarkingScheme,
     StudyNote,
+    District,
     User,
     UserStats,
     UserSubscription,
@@ -161,17 +162,26 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertTrue(dto.is_premium)
 
     def test_user_and_user_stats_model_serialization(self) -> None:
+        district = District(
+            id="COLOMBO",
+            name_en="Colombo",
+            name_si="කොළඹ",
+            name_ta="கொழும்பு",
+            province="WESTERN",
+            display_order=1,
+        )
         user = User(
             uid="usr_007",
             email="student@mathsdd.lk",
             name="Kasun Perera",
             role="USER",
             school_name="Ananda College",
-            district="Colombo",
+            district_id="COLOMBO",
             stream="PHYSICAL_SCIENCE",
             grade="GRADE_13",
             attempt="FIRST",
         )
+        user.district = district
         stats = UserStats(
             user_id="usr_007",
             xp=150,
@@ -187,11 +197,15 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(user.email, "student@mathsdd.lk")
         self.assertEqual(user.role, "USER")
         self.assertEqual(user.school_name, "Ananda College")
-        self.assertEqual(user.district, "Colombo")
+        self.assertEqual(user.district_id, "COLOMBO")
+        self.assertEqual(user.district.name_en, "Colombo")
+        self.assertEqual(user.district.name_si, "කොළඹ")
+        self.assertEqual(user.district.province, "WESTERN")
         self.assertFalse(user.is_premium)
         self.assertIsNone(user.active_subscription)
         self.assertIn("User", repr(user))
         self.assertIn("UserStats", repr(stats))
+        self.assertIn("District", repr(district))
 
         dto = UserProfileResponse(
             uid=user.uid,
@@ -199,7 +213,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
             name=user.name,
             role=user.role,
             school_name=user.school_name,
-            district=user.district,
+            district_id=user.district_id,
             stream=user.stream,
             grade=user.grade,
             attempt=user.attempt,
@@ -211,6 +225,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
         )
         self.assertEqual(dto.uid, "usr_007")
         self.assertEqual(dto.email, "student@mathsdd.lk")
+        self.assertEqual(dto.district_id, "COLOMBO")
         self.assertEqual(dto.xp, 150)
         self.assertEqual(dto.streak_count, 5)
         self.assertEqual(dto.questions_solved, 20)
