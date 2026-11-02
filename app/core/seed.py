@@ -11,7 +11,7 @@ import uuid
 from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Subject, SyllabusLesson, Question, MarkingScheme, StudyNote, User
+from app.models import Subject, SyllabusLesson, Question, MarkingScheme, StudyNote, User, UserStats
 
 logger = logging.getLogger("maths_dd.seed")
 
@@ -355,9 +355,11 @@ async def seed_database(session: AsyncSession) -> None:
         )
     ).scalar_one_or_none()
 
+    admin_uid = DEFAULT_ADMIN_UID
     if admin:
         admin.role = "ADMIN"
         admin.is_premium = True
+        admin_uid = admin.uid
     else:
         session.add(
             User(
@@ -368,6 +370,16 @@ async def seed_database(session: AsyncSession) -> None:
                 is_premium=True,
             )
         )
+    await session.flush()
+
+    # Seed UserStats for Admin if not present
+    admin_stats = (
+        await session.execute(
+            select(UserStats).where(UserStats.user_id == admin_uid)
+        )
+    ).scalar_one_or_none()
+    if not admin_stats:
+        session.add(UserStats(user_id=admin_uid))
     await session.flush()
 
     # 2. Seed Subjects

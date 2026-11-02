@@ -1,5 +1,6 @@
 """
 PostgreSQL implementation of ProgressRepository using SQLAlchemy 2.0 ORM.
+Decoupled telemetry: updates isolated UserStats table instead of locking Users.
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -12,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.domain.repositories.progress_repository import ProgressRepository
 from app.models.progress import UserDailyActivity, UserQuestionAttempt
 from app.models.question import Question
-from app.models.user import User
+from app.models.user_stats import UserStats
 from app.schemas.progress import (
     CompletedQuestionRecordSchema,
     DailyActivityBucketSchema,
@@ -231,19 +232,30 @@ class PostgresProgressRepository(ProgressRepository):
 
         await self.session.commit()
 
-        # Update user profile aggregates
+        # Update isolated UserStats (zero locks on users table)
         summary = await self.get_user_progress_summary(user_id)
-        stmt_user = select(User).where(User.uid == user_id)
-        user_res = await self.session.execute(stmt_user)
-        user = user_res.scalar_one_or_none()
-        if user:
-            user.total_solved_count = summary.total_questions_solved
-            user.total_study_time_seconds = summary.total_time_spent_seconds
-            user.current_streak_days = summary.current_streak_days
-            user.longest_streak_days = summary.longest_streak_days
-            user.last_active_date = today
-            await self.session.commit()
+        stmt_stats = select(UserStats).where(UserStats.user_id == user_id)
+        stats_res = await self.session.execute(stmt_stats)
+        stats = stats_res.scalar_one_or_none()
 
+        if stats:
+            stats.total_solved_count = summary.total_questions_solved
+            stats.total_study_time_seconds = summary.total_time_spent_seconds
+            stats.current_streak_days = summary.current_streak_days
+            stats.longest_streak_days = summary.longest_streak_days
+            stats.last_active_date = today
+        else:
+            stats = UserStats(
+                user_id=user_id,
+                total_solved_count=summary.total_questions_solved,
+                total_study_time_seconds=summary.total_time_spent_seconds,
+                current_streak_days=summary.current_streak_days,
+                longest_streak_days=summary.longest_streak_days,
+                last_active_date=today,
+            )
+            self.session.add(stats)
+
+        await self.session.commit()
         return summary
 
     async def unmark_question_completed(
@@ -278,15 +290,17 @@ class PostgresProgressRepository(ProgressRepository):
                     )
             await self.session.commit()
 
+        # Update isolated UserStats
         summary = await self.get_user_progress_summary(user_id)
-        stmt_user = select(User).where(User.uid == user_id)
-        user_res = await self.session.execute(stmt_user)
-        user = user_res.scalar_one_or_none()
-        if user:
-            user.total_solved_count = summary.total_questions_solved
-            user.total_study_time_seconds = summary.total_time_spent_seconds
-            user.current_streak_days = summary.current_streak_days
-            user.longest_streak_days = summary.longest_streak_days
+        stmt_stats = select(UserStats).where(UserStats.user_id == user_id)
+        stats_res = await self.session.execute(stmt_stats)
+        stats = stats_res.scalar_one_or_none()
+
+        if stats:
+            stats.total_solved_count = summary.total_questions_solved
+            stats.total_study_time_seconds = summary.total_time_spent_seconds
+            stats.current_streak_days = summary.current_streak_days
+            stats.longest_streak_days = summary.longest_streak_days
             await self.session.commit()
 
         return summary

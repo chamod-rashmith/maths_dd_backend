@@ -1,13 +1,17 @@
 """
-SQLAlchemy 2.0 ORM model for Users.
+SQLAlchemy 2.0 ORM model for Users (Identity & Auth Profile).
+Gamification and high-frequency study telemetry are isolated in `UserStats`.
 """
 
 from datetime import date, datetime, timezone
-from typing import Any, Dict, Optional
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, Text, text
-from sqlalchemy.orm import Mapped, mapped_column
+from typing import TYPE_CHECKING, Optional
+from sqlalchemy import Boolean, Date, DateTime, String, Text, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user_stats import UserStats
 
 
 class User(Base):
@@ -24,17 +28,8 @@ class User(Base):
     stream: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     grade: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     attempt: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    xp: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    streak_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    accuracy_rate: Mapped[float] = mapped_column(Float, default=0.0, server_default=text("0.0"), nullable=False)
-    questions_solved: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     premium_expiry: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    current_streak_days: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    longest_streak_days: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    total_solved_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    total_study_time_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
-    last_active_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -49,6 +44,13 @@ class User(Base):
         nullable=False,
     )
 
-    
+    stats: Mapped[Optional["UserStats"]] = relationship(
+        "UserStats",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="joined",
+    )
+
     def __repr__(self) -> str:
         return f"<User(uid='{self.uid}', email='{self.email}', name='{self.name}')>"

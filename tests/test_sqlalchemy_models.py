@@ -7,7 +7,7 @@ import datetime
 import unittest
 import uuid
 from app.core.database import Base
-from app.models import MarkingScheme, Question, StudyNote, Subject, SyllabusLesson, User
+from app.models import MarkingScheme, Question, StudyNote, Subject, SyllabusLesson, User, UserStats
 from app.schemas.curriculum import LessonResponse, SubjectResponse
 from app.schemas.question import MarkingSchemeResponse, QuestionDetailResponse
 from app.schemas.study_note import StudyNoteDetailResponse
@@ -26,6 +26,7 @@ class TestSQLAlchemyModels(unittest.TestCase):
             "marking_schemes",
             "study_notes",
             "users",
+            "user_stats",
             "user_question_attempts",
             "user_daily_activities",
         }
@@ -167,7 +168,7 @@ class TestSQLAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.title, "Calculus Summary")
         self.assertTrue(dto.is_premium)
 
-    def test_user_model_serialization(self) -> None:
+    def test_user_and_user_stats_model_serialization(self) -> None:
         user = User(
             uid="usr_007",
             email="student@mathsdd.lk",
@@ -178,24 +179,48 @@ class TestSQLAlchemyModels(unittest.TestCase):
             stream="PHYSICAL_SCIENCE",
             grade="GRADE_13",
             attempt="FIRST",
-            xp=150,
-            streak_count=5,
             is_premium=False,
         )
+        stats = UserStats(
+            user_id="usr_007",
+            xp=150,
+            current_streak_days=5,
+            longest_streak_days=10,
+            total_solved_count=20,
+            total_study_time_seconds=600,
+            accuracy_rate=95.0,
+        )
+        user.stats = stats
+
         self.assertEqual(user.uid, "usr_007")
         self.assertEqual(user.email, "student@mathsdd.lk")
         self.assertEqual(user.role, "USER")
         self.assertEqual(user.school_name, "Ananda College")
         self.assertEqual(user.district, "Colombo")
-        self.assertEqual(user.xp, 150)
-        self.assertEqual(user.streak_count, 5)
         self.assertIn("User", repr(user))
+        self.assertIn("UserStats", repr(stats))
 
-        dto = UserProfileResponse.model_validate(user, from_attributes=True)
+        dto = UserProfileResponse(
+            uid=user.uid,
+            email=user.email,
+            name=user.name,
+            role=user.role,
+            school_name=user.school_name,
+            district=user.district,
+            stream=user.stream,
+            grade=user.grade,
+            attempt=user.attempt,
+            xp=stats.xp,
+            streak_count=stats.current_streak_days,
+            accuracy_rate=stats.accuracy_rate,
+            questions_solved=stats.total_solved_count,
+            is_premium=user.is_premium,
+        )
         self.assertEqual(dto.uid, "usr_007")
         self.assertEqual(dto.email, "student@mathsdd.lk")
         self.assertEqual(dto.xp, 150)
         self.assertEqual(dto.streak_count, 5)
+        self.assertEqual(dto.questions_solved, 20)
 
 
 if __name__ == "__main__":

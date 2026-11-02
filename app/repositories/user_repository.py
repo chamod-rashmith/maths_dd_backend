@@ -5,14 +5,22 @@ Concrete PostgreSQL Implementation of UserRepository using SQLAlchemy 2.0.
 from typing import Any, Dict, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
 from app.models.user import User
+from app.models.user_stats import UserStats
 
 
 def _serialize_user(user: User) -> Dict[str, Any]:
-    """Pure DTO serialization omitting internal database timestamps."""
+    """Pure DTO serialization omitting internal database timestamps, joining stats."""
+    stats = user.stats
+    xp = stats.xp if stats else 0
+    streak_count = stats.current_streak_days if stats else 0
+    accuracy_rate = stats.accuracy_rate if stats else 0.0
+    questions_solved = stats.total_solved_count if stats else 0
+
     return {
         "uid": user.uid,
         "email": user.email,
@@ -25,10 +33,10 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "stream": user.stream,
         "grade": user.grade,
         "attempt": user.attempt,
-        "xp": user.xp,
-        "streak_count": user.current_streak_days if user.current_streak_days > 0 else user.streak_count,
-        "accuracy_rate": user.accuracy_rate,
-        "questions_solved": user.total_solved_count if user.total_solved_count > 0 else user.questions_solved,
+        "xp": xp,
+        "streak_count": streak_count,
+        "accuracy_rate": accuracy_rate,
+        "questions_solved": questions_solved,
         "is_premium": user.is_premium,
         "premium_expiry": user.premium_expiry,
     }
@@ -43,7 +51,9 @@ class PostgresUserRepository(UserRepository):
     async def get_by_uid(self, uid: str) -> Optional[Dict[str, Any]]:
         try:
             result = await self._session.execute(
-                select(User).where(User.uid == uid)
+                select(User)
+                .options(selectinload(User.stats))
+                .where(User.uid == uid)
             )
             user = result.scalar_one_or_none()
             return _serialize_user(user) if user else None
@@ -66,14 +76,18 @@ class PostgresUserRepository(UserRepository):
         try:
             # 1. Search for existing user by uid
             result = await self._session.execute(
-                select(User).where(User.uid == uid)
+                select(User)
+                .options(selectinload(User.stats))
+                .where(User.uid == uid)
             )
             user = result.scalar_one_or_none()
 
             # 2. If not found by uid, check if existing record has matching email
             if not user:
                 result_email = await self._session.execute(
-                    select(User).where(func.lower(User.email) == email.lower())
+                    select(User)
+                    .options(selectinload(User.stats))
+                    .where(func.lower(User.email) == email.lower())
                 )
                 user = result_email.scalar_one_or_none()
                 if user:
@@ -110,9 +124,18 @@ class PostgresUserRepository(UserRepository):
                     attempt=attempt,
                 )
                 self._session.add(user)
+                # Initialize clean user_stats record
+                initial_stats = UserStats(user_id=uid)
+                self._session.add(initial_stats)
 
             await self._session.flush()
             await self._session.refresh(user)
+            # Ensure stats are loaded
+            if not user.stats:
+                stmt_s = select(UserStats).where(UserStats.user_id == user.uid)
+                s_res = await self._session.execute(stmt_s)
+                user.stats = s_res.scalar_one_or_none()
+
             return _serialize_user(user)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
