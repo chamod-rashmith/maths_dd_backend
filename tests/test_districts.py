@@ -1,9 +1,9 @@
 """
 Unit tests for Sri Lankan Administrative Districts repository, caching, and API endpoint.
-Verifies persistent Redis/memory caching, zero-DB-overhead lookup, and data schema.
+Verifies integer PK (1-25), code slug, persistent Redis/memory caching, zero-DB-overhead lookup, and data schema.
 """
 
-from typing import Any, List
+from typing import List
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
@@ -20,7 +20,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         districts_cache.clear()
         self.mock_districts: List[District] = [
             District(
-                id="COLOMBO",
+                id=1,
+                code="COLOMBO",
                 name_en="Colombo",
                 name_si="කොළඹ",
                 name_ta="கொழும்பு",
@@ -28,7 +29,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
                 display_order=1,
             ),
             District(
-                id="KANDY",
+                id=4,
+                code="KANDY",
                 name_en="Kandy",
                 name_si="මහනුවර",
                 name_ta="கண்டி",
@@ -36,7 +38,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
                 display_order=4,
             ),
             District(
-                id="GALLE",
+                id=7,
+                code="GALLE",
                 name_en="Galle",
                 name_si="ගාල්ල",
                 name_ta="காலி",
@@ -61,7 +64,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         # 1. First call: Cache miss -> executes database query
         districts = await repo.get_all()
         self.assertEqual(len(districts), 3)
-        self.assertEqual(districts[0]["id"], "COLOMBO")
+        self.assertEqual(districts[0]["id"], 1)
+        self.assertEqual(districts[0]["code"], "COLOMBO")
         self.assertEqual(districts[0]["name_si"], "කොළඹ")
         self.assertEqual(districts[0]["province"], "WESTERN")
         self.assertEqual(mock_session.execute.call_count, 1)
@@ -78,7 +82,7 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(cached_districts), 3)
         self.assertEqual(mock_session.execute.call_count, 1)  # Still 1!
 
-    async def test_repository_get_by_id(self) -> None:
+    async def test_repository_get_by_id_and_code(self) -> None:
         mock_session = AsyncMock()
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -88,16 +92,21 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
 
         repo = DistrictRepository(mock_session)
 
-        colombo = await repo.get_by_id("colombo")
-        self.assertIsNotNone(colombo)
-        self.assertEqual(colombo["name_en"], "Colombo")
-        self.assertEqual(colombo["name_ta"], "கொழும்பு")
+        colombo_by_id = await repo.get_by_id(1)
+        self.assertIsNotNone(colombo_by_id)
+        self.assertEqual(colombo_by_id["code"], "COLOMBO")
+        self.assertEqual(colombo_by_id["name_en"], "Colombo")
 
-        invalid = await repo.get_by_id("ATLANTIS")
+        colombo_by_code = await repo.get_by_code("colombo")
+        self.assertIsNotNone(colombo_by_code)
+        self.assertEqual(colombo_by_code["id"], 1)
+        self.assertEqual(colombo_by_code["name_ta"], "கொழும்பு")
+
+        invalid = await repo.get_by_code("ATLANTIS")
         self.assertIsNone(invalid)
 
     async def test_repository_cache_invalidation(self) -> None:
-        districts_cache.set(DISTRICTS_CACHE_KEY, [{"id": "COLOMBO"}], ttl_seconds=0)
+        districts_cache.set(DISTRICTS_CACHE_KEY, [{"id": 1, "code": "COLOMBO"}], ttl_seconds=0)
         self.assertIsNotNone(districts_cache.get(DISTRICTS_CACHE_KEY))
 
         DistrictRepository.invalidate_cache()
@@ -109,7 +118,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
             DISTRICTS_CACHE_KEY,
             [
                 {
-                    "id": "COLOMBO",
+                    "id": 1,
+                    "code": "COLOMBO",
                     "name_en": "Colombo",
                     "name_si": "කොළඹ",
                     "name_ta": "கொழும்பு",
@@ -117,7 +127,8 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
                     "display_order": 1,
                 },
                 {
-                    "id": "GAMPAHA",
+                    "id": 2,
+                    "code": "GAMPAHA",
                     "name_en": "Gampaha",
                     "name_si": "ගම්පහ",
                     "name_ta": "கம்பஹா",
@@ -133,12 +144,14 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data), 2)
-        self.assertEqual(data[0]["id"], "COLOMBO")
+        self.assertEqual(data[0]["id"], 1)
+        self.assertEqual(data[0]["code"], "COLOMBO")
         self.assertEqual(data[0]["name_en"], "Colombo")
         self.assertEqual(data[0]["name_si"], "කොළඹ")
         self.assertEqual(data[0]["name_ta"], "கொழும்பு")
         self.assertEqual(data[0]["province"], "WESTERN")
-        self.assertEqual(data[1]["id"], "GAMPAHA")
+        self.assertEqual(data[1]["id"], 2)
+        self.assertEqual(data[1]["code"], "GAMPAHA")
 
         # Validate with Pydantic
         dtos = [DistrictResponse.model_validate(item) for item in data]

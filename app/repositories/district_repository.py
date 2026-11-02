@@ -1,10 +1,11 @@
 """
 District Repository with Persistent Redis / In-Memory Caching (0 TTL).
 Provides high-performance, zero-DB-overhead lookup for Sri Lankan Administrative Districts.
+Supports querying by Integer ID (1-25) and Unique String Code (e.g. 'COLOMBO').
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,13 +37,14 @@ class DistrictRepository:
 
         # 2. Cache miss -> query PostgreSQL database
         try:
-            stmt = select(District).order_by(District.display_order.asc(), District.name_en.asc())
+            stmt = select(District).order_by(District.display_order.asc(), District.id.asc())
             result = await self._session.execute(stmt)
             districts = result.scalars().all()
 
             data = [
                 {
                     "id": d.id,
+                    "code": d.code,
                     "name_en": d.name_en,
                     "name_si": d.name_si,
                     "name_ta": d.name_ta,
@@ -62,13 +64,34 @@ class DistrictRepository:
             logger.error("Failed to fetch districts from database: %s", exc)
             raise DatabaseOperationError(str(exc)) from exc
 
-    async def get_by_id(self, district_id: str) -> Optional[Dict[str, Any]]:
-        """Finds a single district by its ID slug (e.g. 'COLOMBO')."""
+    async def get_by_id(self, district_id: int) -> Optional[Dict[str, Any]]:
+        """Finds a single district by its integer ID (1-25)."""
         all_districts = await self.get_all()
-        target = district_id.strip().upper()
         for d in all_districts:
-            if d.get("id") == target:
+            if d.get("id") == district_id:
                 return d
+        return None
+
+    async def get_by_code(self, code: str) -> Optional[Dict[str, Any]]:
+        """Finds a single district by its string code (e.g. 'COLOMBO')."""
+        all_districts = await self.get_all()
+        target = code.strip().upper()
+        for d in all_districts:
+            if d.get("code") == target:
+                return d
+        return None
+
+    async def resolve_district_id(self, identifier: Union[int, str]) -> Optional[int]:
+        """Resolves an integer ID or string code into a valid district integer ID."""
+        if isinstance(identifier, int):
+            d = await self.get_by_id(identifier)
+            return d["id"] if d else None
+        if isinstance(identifier, str):
+            if identifier.strip().isdigit():
+                d = await self.get_by_id(int(identifier.strip()))
+                return d["id"] if d else None
+            d = await self.get_by_code(identifier)
+            return d["id"] if d else None
         return None
 
     @staticmethod

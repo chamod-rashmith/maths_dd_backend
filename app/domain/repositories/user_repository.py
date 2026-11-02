@@ -3,7 +3,7 @@ Abstract Repository Contract for User Profile persistence.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 
 class UserRepository(ABC):
@@ -23,8 +23,8 @@ class UserRepository(ABC):
         avatar_url: Optional[str] = None,
         telephone_no: Optional[str] = None,
         school_name: Optional[str] = None,
-        district_id: Optional[str] = None,
-        district: Optional[str] = None,
+        district_id: Optional[Union[int, str]] = None,
+        district: Optional[Union[int, str]] = None,
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,

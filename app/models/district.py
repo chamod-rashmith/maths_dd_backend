@@ -1,6 +1,7 @@
 """
 SQLAlchemy 2.0 ORM model for Sri Lankan Administrative Districts.
 Static reference lookup data for student regional profiling, provincial leaderboards, and Z-Score rankings.
+Features integer surrogate primary key (1-25) and unique code slug (e.g. 'COLOMBO').
 """
 
 from typing import TYPE_CHECKING, List
@@ -18,7 +19,8 @@ class District(Base):
 
     __tablename__ = "districts"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     name_en: Mapped[str] = mapped_column(String(100), nullable=False)
     name_si: Mapped[str] = mapped_column(String(100), nullable=False)
     name_ta: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -31,4 +33,4 @@ class District(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<District(id='{self.id}', name_en='{self.name_en}', province='{self.province}')>"
+        return f"<District(id={self.id}, code='{self.code}', name_en='{self.name_en}', province='{self.province}')>"

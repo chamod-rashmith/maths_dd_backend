@@ -5,7 +5,7 @@ Gamification is isolated in `UserStats`, Subscriptions in `UserSubscription`, an
 
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
-from sqlalchemy import DateTime, ForeignKey, String, Text, text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,8 +26,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="USER", server_default=text("'USER'"), nullable=False)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     school_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    district_id: Mapped[Optional[str]] = mapped_column(
-        String(32),
+    district_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
         ForeignKey("districts.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

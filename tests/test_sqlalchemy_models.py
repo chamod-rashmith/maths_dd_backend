@@ -163,7 +163,8 @@ class TestSqlAlchemyModels(unittest.TestCase):
 
     def test_user_and_user_stats_model_serialization(self) -> None:
         district = District(
-            id="COLOMBO",
+            id=1,
+            code="COLOMBO",
             name_en="Colombo",
             name_si="කොළඹ",
             name_ta="கொழும்பு",
@@ -176,7 +177,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
             name="Kasun Perera",
             role="USER",
             school_name="Ananda College",
-            district_id="COLOMBO",
+            district_id=1,
             stream="PHYSICAL_SCIENCE",
             grade="GRADE_13",
             attempt="FIRST",
@@ -197,7 +198,8 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(user.email, "student@mathsdd.lk")
         self.assertEqual(user.role, "USER")
         self.assertEqual(user.school_name, "Ananda College")
-        self.assertEqual(user.district_id, "COLOMBO")
+        self.assertEqual(user.district_id, 1)
+        self.assertEqual(user.district.code, "COLOMBO")
         self.assertEqual(user.district.name_en, "Colombo")
         self.assertEqual(user.district.name_si, "කොළඹ")
         self.assertEqual(user.district.province, "WESTERN")
@@ -225,7 +227,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
         )
         self.assertEqual(dto.uid, "usr_007")
         self.assertEqual(dto.email, "student@mathsdd.lk")
-        self.assertEqual(dto.district_id, "COLOMBO")
+        self.assertEqual(dto.district_id, 1)
         self.assertEqual(dto.xp, 150)
         self.assertEqual(dto.streak_count, 5)
         self.assertEqual(dto.questions_solved, 20)

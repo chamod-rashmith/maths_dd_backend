@@ -2,13 +2,14 @@
 PostgreSQL UserRepository implementation using modern SQLAlchemy 2.0.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
+from app.models.district import District
 from app.models.user import User
 from app.models.user_stats import UserStats
 
@@ -90,16 +91,27 @@ class PostgresUserRepository(UserRepository):
         avatar_url: Optional[str] = None,
         telephone_no: Optional[str] = None,
         school_name: Optional[str] = None,
-        district_id: Optional[str] = None,
-        district: Optional[str] = None,
+        district_id: Optional[Union[int, str]] = None,
+        district: Optional[Union[int, str]] = None,
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            effective_district_id = district_id if district_id is not None else district
-            if effective_district_id:
-                effective_district_id = effective_district_id.strip().upper()
+            # Resolve district_id to Integer if provided as slug string (e.g. "COLOMBO")
+            resolved_district_id: Optional[int] = None
+            raw_district = district_id if district_id is not None else district
+            if raw_district is not None:
+                if isinstance(raw_district, int):
+                    resolved_district_id = raw_district
+                elif isinstance(raw_district, str):
+                    s = raw_district.strip()
+                    if s.isdigit():
+                        resolved_district_id = int(s)
+                    else:
+                        d_stmt = select(District.id).where(func.upper(District.code) == s.upper())
+                        d_res = await self._session.execute(d_stmt)
+                        resolved_district_id = d_res.scalar_one_or_none()
 
             # 1. Search for existing user by uid
             result = await self._session.execute(
@@ -137,8 +149,8 @@ class PostgresUserRepository(UserRepository):
                     user.telephone_no = telephone_no
                 if school_name is not None:
                     user.school_name = school_name
-                if effective_district_id is not None:
-                    user.district_id = effective_district_id
+                if raw_district is not None:
+                    user.district_id = resolved_district_id
                 if stream is not None:
                     user.stream = str(stream)
                 if grade is not None:
@@ -153,7 +165,7 @@ class PostgresUserRepository(UserRepository):
                     avatar_url=avatar_url,
                     telephone_no=telephone_no,
                     school_name=school_name,
-                    district_id=effective_district_id,
+                    district_id=resolved_district_id,
                     stream=str(stream) if stream else None,
                     grade=str(grade) if grade else None,
                     attempt=str(attempt) if attempt else None,
