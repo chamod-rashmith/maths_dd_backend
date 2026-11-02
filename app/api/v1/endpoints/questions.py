@@ -7,7 +7,13 @@ single-question detail hydration, and on-demand marking scheme retrieval.
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, status
 
-from app.api.deps import get_question_service, require_admin_or_editor
+from app.api.deps import (
+    get_question_service,
+    get_user_repository,
+    require_admin_or_editor,
+)
+from app.core.security import get_optional_current_user
+from app.domain.repositories.user_repository import UserRepository
 from app.schemas.question import (
     MarkingSchemeResponse,
     QuestionCreate,
@@ -102,10 +108,33 @@ async def get_question_by_id(
 @router.get("/{question_id}/solution", response_model=MarkingSchemeResponse)
 async def get_question_solution(
     question_id: str,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Dict[str, Any]:
-    """Fetches the official marking scheme and step-by-step solution for a question on-demand."""
-    return await service.get_marking_scheme(question_id)
+    """
+    Fetches the official marking scheme and step-by-step solution for a question on-demand.
+    Enforces subscription paywall access if the marking scheme is marked premium-only.
+    """
+    is_premium = False
+    if current_user:
+        role = str(current_user.get("role", "")).upper()
+        if role in ("ADMIN", "EDITOR"):
+            is_premium = True
+        else:
+            uid = current_user.get("uid")
+            if uid:
+                db_user = await user_repo.get_by_uid(uid)
+                if db_user:
+                    is_premium = bool(db_user.get("is_premium", False)) or str(
+                        db_user.get("role", "")
+                    ).upper() in ("ADMIN", "EDITOR")
+
+    return await service.get_marking_scheme(
+        question_id=question_id,
+        current_user=current_user,
+        is_premium=is_premium,
+    )
 
 
 @router.post(

@@ -144,6 +144,11 @@ class PostgresProgressRepository(ProgressRepository):
             daily_activity
         )
 
+        # 4. Fetch User XP
+        stmt_xp = select(UserStats.xp).where(UserStats.user_id == user_id)
+        res_xp = await self.session.execute(stmt_xp)
+        user_xp = res_xp.scalar_one_or_none() or 0
+
         return UserProgressSummaryResponse(
             completed_questions=completed_questions,
             daily_activity=daily_activity,
@@ -154,6 +159,7 @@ class PostgresProgressRepository(ProgressRepository):
             current_streak_days=current_streak,
             longest_streak_days=longest_streak,
             last_active_date_key=last_active_key,
+            xp=user_xp,
         )
 
     async def mark_question_completed(
@@ -170,6 +176,18 @@ class PostgresProgressRepository(ProgressRepository):
         )
         result = await self.session.execute(stmt)
         attempt = result.scalar_one_or_none()
+        is_new_solve = attempt is None
+
+        # Determine question type to calculate earned XP
+        q_stmt = select(Question.type).where(Question.id == request.question_id)
+        q_res = await self.session.execute(q_stmt)
+        q_row = q_res.first()
+        q_type = str(q_row[0]).upper() if (q_row and q_row[0]) else "SHORT"
+
+        base_xp = 25 if q_type == "ESSAY" else 10
+        earned_xp = base_xp if is_new_solve else 5
+        if request.is_daily_question and is_new_solve:
+            earned_xp += 50
 
         time_delta = request.time_spent_seconds
 
@@ -244,6 +262,7 @@ class PostgresProgressRepository(ProgressRepository):
             stats.current_streak_days = summary.current_streak_days
             stats.longest_streak_days = summary.longest_streak_days
             stats.last_active_date = today
+            stats.xp = (stats.xp or 0) + earned_xp
         else:
             stats = UserStats(
                 user_id=user_id,
@@ -252,10 +271,12 @@ class PostgresProgressRepository(ProgressRepository):
                 current_streak_days=summary.current_streak_days,
                 longest_streak_days=summary.longest_streak_days,
                 last_active_date=today,
+                xp=earned_xp,
             )
             self.session.add(stats)
 
         await self.session.commit()
+        summary.xp = stats.xp
         return summary
 
     async def unmark_question_completed(
@@ -301,7 +322,9 @@ class PostgresProgressRepository(ProgressRepository):
             stats.total_study_time_seconds = summary.total_time_spent_seconds
             stats.current_streak_days = summary.current_streak_days
             stats.longest_streak_days = summary.longest_streak_days
+            stats.xp = max(0, (stats.xp or 0) - 10)
             await self.session.commit()
+            summary.xp = stats.xp
 
         return summary
 

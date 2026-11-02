@@ -48,8 +48,9 @@ class UserService:
             avatar_url=avatar_url,
             telephone_no=payload.telephone_no,
             school_name=payload.school_name,
-            district=payload.district,
-            stream=payload.stream,
-            grade=payload.grade,
-            attempt=payload.attempt,
+            district_id=payload.district_id,
+            district=payload.district_code or payload.district,
+            stream=payload.stream.value if payload.stream else None,
+            grade=payload.grade.value if payload.grade else None,
+            attempt=payload.attempt.value if payload.attempt else None,
         )

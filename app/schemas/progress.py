@@ -65,6 +65,7 @@ class UserProgressSummaryResponse(BaseProgressSchema):
     current_streak_days: int = 0
     longest_streak_days: int = 0
     last_active_date_key: Optional[str] = None
+    xp: int = 0
 
 
 class MarkQuestionCompletedRequest(BaseProgressSchema):

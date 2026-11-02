@@ -99,3 +99,20 @@ async def get_current_user(
             detail="Could not validate credentials.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def get_optional_current_user(
+    authorization: Optional[str] = Header(
+        None, description="Optional Bearer <Firebase_ID_Token>"
+    )
+) -> Optional[Dict[str, Any]]:
+    """
+    FastAPI dependency that returns decoded user token if Authorization header is provided,
+    or None if absent.
+    """
+    if not authorization:
+        return None
+    try:
+        return await get_current_user(authorization=authorization)
+    except HTTPException:
+        return None

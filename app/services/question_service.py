@@ -8,7 +8,11 @@ from typing import Any, Dict, List, Optional
 
 from app.core.cache import curriculum_cache
 from app.core.storage import generate_signed_download_url
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import (
+    AuthenticationError,
+    EntityNotFoundError,
+    PermissionDeniedError,
+)
 from app.domain.repositories.question_repository import QuestionRepository
 from app.schemas.question import QuestionCreate
 
@@ -77,12 +81,28 @@ class QuestionService:
             return None
         return self._hydrate_question_signed_url(question)
 
-    async def get_marking_scheme(self, question_id: str) -> Dict[str, Any]:
+    async def get_marking_scheme(
+        self,
+        question_id: str,
+        current_user: Optional[Dict[str, Any]] = None,
+        is_premium: bool = False,
+    ) -> Dict[str, Any]:
         scheme = await self._repo.get_marking_scheme(question_id)
         if not scheme:
             raise EntityNotFoundError(
                 f"Marking scheme for question '{question_id}' not found."
             )
+
+        if scheme.get("is_premium_only"):
+            if not current_user:
+                raise AuthenticationError(
+                    "Authentication is required to access this premium solution."
+                )
+            if not is_premium:
+                raise PermissionDeniedError(
+                    "A premium subscription is required to view this marking scheme."
+                )
+
         result = dict(scheme)
         raw_pdf = result.get("pdf_url")
         if raw_pdf and str(raw_pdf).strip():
