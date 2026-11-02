@@ -45,6 +45,19 @@ class SubscriptionRepository:
         sub = await self.get_active_subscription(user_id)
         return sub is not None
 
+    async def get_user_subscriptions(self, user_id: str) -> List[UserSubscription]:
+        """Fetch all subscription history records for a user ordered newest first."""
+        try:
+            stmt = (
+                select(UserSubscription)
+                .where(UserSubscription.user_id == user_id)
+                .order_by(desc(UserSubscription.created_at))
+            )
+            result = await self._session.execute(stmt)
+            return list(result.scalars().all())
+        except Exception as exc:
+            raise DatabaseOperationError(f"Error fetching user subscriptions: {exc}") from exc
+
     async def create_bank_slip_subscription(
         self,
         user_id: str,
@@ -154,29 +167,88 @@ class SubscriptionRepository:
         expires_at: Optional[datetime],
         is_auto_renew: bool = True,
     ) -> UserSubscription:
-        """Synchronize an incoming RevenueCat webhook event idempotently."""
+        """
+        Synchronize an incoming RevenueCat webhook event with industry-standard state mapping.
+
+        Event Handling Rules (from RevenueCat Handbook):
+        - INITIAL_PURCHASE / RENEWAL / UNCANCELLATION:
+          Grants or extends active entitlement. Status becomes ACTIVE.
+        - CANCELLATION:
+          Intent signal indicating auto-renew was disabled. Does NOT revoke access immediately.
+          Access remains ACTIVE until expires_at, while auto_renew is set to False.
+        - EXPIRATION:
+          Access actually ended. Status becomes EXPIRED.
+        - BILLING_ISSUE:
+          Temporary payment failure (user may be in store grace period). Status is GRACE_PERIOD.
+        - PRODUCT_CHANGE:
+          Plan upgraded or downgraded.
+        """
         try:
-            # Map event_type to subscription status
+            now = datetime.now(timezone.utc)
+
+            # Determine subscription status based on RevenueCat event type and expiry
             status = "ACTIVE"
-            if event_type == "CANCELLATION":
-                status = "CANCELLED"
+            auto_renew = is_auto_renew
+            cancelled_at = None
+
+            if event_type in ("INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION"):
+                status = "ACTIVE"
+                auto_renew = True
+            elif event_type == "CANCELLATION":
+                auto_renew = False
+                cancelled_at = now
+                # User retains paid access until expires_at!
+                if expires_at and expires_at > now:
+                    status = "ACTIVE"
+                else:
+                    status = "CANCELLED"
             elif event_type == "EXPIRATION":
                 status = "EXPIRED"
+                auto_renew = False
             elif event_type == "BILLING_ISSUE":
                 status = "GRACE_PERIOD"
+            elif event_type == "PRODUCT_CHANGE":
+                if expires_at and expires_at > now:
+                    status = "ACTIVE"
+                else:
+                    status = "EXPIRED"
 
-            # Check if this original_transaction_id already exists
-            stmt = select(UserSubscription).where(
-                UserSubscription.original_transaction_id == original_transaction_id
-            )
-            result = await self._session.execute(stmt)
-            existing_sub = result.scalar_one_or_none()
+            # Check if an existing subscription matches original_transaction_id
+            existing_sub = None
+            if original_transaction_id:
+                stmt = select(UserSubscription).where(
+                    UserSubscription.original_transaction_id == original_transaction_id
+                )
+                result = await self._session.execute(stmt)
+                existing_sub = result.scalar_one_or_none()
+
+            # Fallback check by app_user_id and plan_id if original_transaction_id not yet linked
+            if not existing_sub:
+                stmt_user = (
+                    select(UserSubscription)
+                    .where(
+                        UserSubscription.user_id == app_user_id,
+                        UserSubscription.plan_id == product_id,
+                    )
+                    .order_by(desc(UserSubscription.created_at))
+                    .limit(1)
+                )
+                res_user = await self._session.execute(stmt_user)
+                existing_sub = res_user.scalar_one_or_none()
 
             if existing_sub:
                 existing_sub.status = status
+                existing_sub.plan_id = product_id
+                existing_sub.store_entitlement_id = entitlement_id
+                existing_sub.provider = store
                 existing_sub.latest_transaction_id = transaction_id
+                if original_transaction_id:
+                    existing_sub.original_transaction_id = original_transaction_id
+                existing_sub.starts_at = starts_at
                 existing_sub.expires_at = expires_at
-                existing_sub.is_auto_renew = is_auto_renew
+                existing_sub.is_auto_renew = auto_renew
+                if cancelled_at:
+                    existing_sub.cancelled_at = cancelled_at
                 await self._session.flush()
                 return existing_sub
 
@@ -190,7 +262,8 @@ class SubscriptionRepository:
                 latest_transaction_id=transaction_id,
                 starts_at=starts_at,
                 expires_at=expires_at,
-                is_auto_renew=is_auto_renew,
+                is_auto_renew=auto_renew,
+                cancelled_at=cancelled_at,
             )
             self._session.add(sub)
             await self._session.flush()

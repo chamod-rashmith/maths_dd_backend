@@ -118,6 +118,11 @@ class Settings:
     UPSTASH_REDIS_REST_URL: str = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip()
     UPSTASH_REDIS_REST_TOKEN: str = os.environ.get(
         "UPSTASH_REDIS_REST_TOKEN", ""
+    ).strip()
+
+    # RevenueCat Webhooks Authorization
+    REVENUECAT_WEBHOOK_AUTH_TOKEN: str = os.environ.get(
+        "REVENUECAT_WEBHOOK_AUTH_TOKEN", ""
     ).strip()
 
     @property
