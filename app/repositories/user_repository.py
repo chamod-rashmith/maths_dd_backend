@@ -11,6 +11,29 @@ from app.domain.repositories.user_repository import UserRepository
 from app.models.user import User
 
 
+def _serialize_user(user: User) -> Dict[str, Any]:
+    """Pure DTO serialization omitting internal database timestamps."""
+    return {
+        "uid": user.uid,
+        "email": user.email,
+        "name": user.name,
+        "telephone_no": user.telephone_no,
+        "role": user.role,
+        "avatar_url": user.avatar_url,
+        "school_name": user.school_name,
+        "district": user.district,
+        "stream": user.stream,
+        "grade": user.grade,
+        "attempt": user.attempt,
+        "xp": user.xp,
+        "streak_count": user.current_streak_days if user.current_streak_days > 0 else user.streak_count,
+        "accuracy_rate": user.accuracy_rate,
+        "questions_solved": user.total_solved_count if user.total_solved_count > 0 else user.questions_solved,
+        "is_premium": user.is_premium,
+        "premium_expiry": user.premium_expiry,
+    }
+
+
 class PostgresUserRepository(UserRepository):
     """PostgreSQL implementation of `UserRepository` using SQLAlchemy AsyncSession."""
 
@@ -23,7 +46,7 @@ class PostgresUserRepository(UserRepository):
                 select(User).where(User.uid == uid)
             )
             user = result.scalar_one_or_none()
-            return user.to_dict() if user else None
+            return _serialize_user(user) if user else None
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -90,6 +113,6 @@ class PostgresUserRepository(UserRepository):
 
             await self._session.flush()
             await self._session.refresh(user)
-            return user.to_dict()
+            return _serialize_user(user)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc

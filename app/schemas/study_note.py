@@ -2,11 +2,11 @@
 Pydantic DTO schemas for Study Notes.
 Enforces lightweight Summary for listings and mutually exclusive Content for detail view.
 Supports cloud storage paths with on-demand short-lived signed URLs.
+Omits internal database timestamps for security and minimal bandwidth payload.
 """
 
-from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.exceptions import ValidationDomainError
 
@@ -48,8 +48,10 @@ class StudyNoteCreateOrUpdate(BaseModel):
 class StudyNoteSummaryResponse(BaseModel):
     """
     Lightweight summary for Study Notes Catalog / List view.
-    Excludes heavy content_text and pdf_url payloads for maximum bandwidth and UI performance.
+    Excludes heavy content_text and pdf_url payloads and internal timestamps.
     """
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     title: str
@@ -60,8 +62,6 @@ class StudyNoteSummaryResponse(BaseModel):
     is_premium: bool = False
     order_index: int = 0
     author: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
     subject_name: Optional[str] = None
     subject_sinhala_name: Optional[str] = None
     lesson_title: Optional[str] = None
@@ -75,6 +75,8 @@ class StudyNoteDetailResponse(BaseModel):
     Guarantees ONLY signed pdf_url OR content_text (never both).
     """
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     description: Optional[str] = None
@@ -86,8 +88,6 @@ class StudyNoteDetailResponse(BaseModel):
     is_premium: bool = False
     order_index: int = 0
     author: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
     subject_name: Optional[str] = None
     subject_sinhala_name: Optional[str] = None
     lesson_title: Optional[str] = None

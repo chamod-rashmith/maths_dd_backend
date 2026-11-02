@@ -1,6 +1,6 @@
 """
 Concrete PostgreSQL Implementation of StudyNoteRepository using SQLAlchemy 2.0.
-Optimized to exclude heavy content_text during catalog listings.
+Optimized to exclude heavy content_text during catalog listings and omit internal audit timestamps.
 """
 
 from typing import Any, Dict, List, Optional
@@ -46,8 +46,6 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.is_premium,
                     StudyNote.order_index,
                     StudyNote.author,
-                    StudyNote.created_at,
-                    StudyNote.updated_at,
                     Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
                     SyllabusLesson.title.label("lesson_title"),
@@ -112,8 +110,6 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.is_premium,
                     StudyNote.order_index,
                     StudyNote.author,
-                    StudyNote.created_at,
-                    StudyNote.updated_at,
                     Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
                     SyllabusLesson.title.label("lesson_title"),
@@ -188,8 +184,22 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 self._session.add(note)
 
             await self._session.flush()
-            await self._session.refresh(note)
-            return note.to_dict()
+            created_or_updated = await self.get_by_id(resolved_id)
+            if created_or_updated:
+                return created_or_updated
+
+            return {
+                "id": resolved_id,
+                "title": title,
+                "description": description or "",
+                "subject_id": subject_id,
+                "lesson_id": cleaned_lesson_id,
+                "content_text": final_content,
+                "pdf_url": final_pdf,
+                "is_premium": is_premium,
+                "order_index": order_index,
+                "author": author or "",
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 

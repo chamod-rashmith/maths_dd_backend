@@ -14,5 +14,4 @@ env/
 .mypy_cache
 .ruff_cache
 tests/
-README.md
-admin_dashboard.py
+README.md

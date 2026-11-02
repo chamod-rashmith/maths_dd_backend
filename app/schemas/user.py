@@ -1,11 +1,11 @@
 """
 Pydantic DTO schemas for User Profile operations.
-Enforces type-safe UserRole enum.
+Enforces type-safe UserRole enum and strict client payload hygiene.
 """
 
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import UserRole
 
@@ -38,7 +38,9 @@ class UserProfileSyncRequest(BaseModel):
 
 
 class UserProfileResponse(BaseModel):
-    """Response model representing a student's user profile and telemetry stats."""
+    """Clean lightweight response model representing a student's profile and telemetry stats."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     uid: str
     email: str
@@ -51,11 +53,9 @@ class UserProfileResponse(BaseModel):
     stream: Optional[str] = None
     grade: Optional[str] = None
     attempt: Optional[str] = None
-    xp: int = 0
-    streak_count: int = 0
-    accuracy_rate: float = 0.0
-    questions_solved: int = 0
+    xp: Optional[int] = 0
+    streak_count: Optional[int] = 0
+    accuracy_rate: Optional[float] = 0.0
+    questions_solved: Optional[int] = 0
     is_premium: bool = False
     premium_expiry: Optional[date] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None

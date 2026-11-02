@@ -1,7 +1,7 @@
 """
 Concrete PostgreSQL Implementation of QuestionRepository using SQLAlchemy 2.0.
 Implements immutable scheduled_date daily lookups, lightweight catalog queries,
-and on-demand marking scheme retrieval.
+and on-demand marking scheme retrieval without leaking internal timestamps.
 """
 
 import datetime
@@ -86,8 +86,6 @@ def _question_select_stmt():
             Question.is_published,
             Question.scheduled_date,
             has_ms_subquery,
-            Question.created_at,
-            Question.updated_at,
             Subject.code.label("subject_code"),
             Subject.name.label("subject_name"),
             SyllabusLesson.title.label("lesson_title"),
@@ -221,12 +219,32 @@ class PostgresQuestionRepository(QuestionRepository):
                 self._session.add(ms)
 
             await self._session.flush()
-            await self._session.refresh(q)
-            await self._session.refresh(ms)
+
+            created_question = await self.get_by_id(q_id)
+            created_solution = await self.get_marking_scheme(q_id)
 
             return {
-                "question": q.to_dict(),
-                "marking_scheme": ms.to_dict(),
+                "question": created_question or {
+                    "id": q_id,
+                    "title": title,
+                    "description": description or "",
+                    "subject_id": subject_id,
+                    "lesson_id": cleaned_lesson_id,
+                    "content_text": content_text or "",
+                    "content_url": cleaned_content_url,
+                    "content_type": "pdf" if (cleaned_content_url and cleaned_content_url.endswith(".pdf")) else "markdown",
+                    "type": question_type,
+                    "difficulty": difficulty,
+                    "schedule": effective_schedule,
+                    "source": source,
+                    "source_details": source_details or "",
+                    "allocated_marks": allocated_marks,
+                    "is_premium": is_premium,
+                    "is_published": is_published,
+                    "scheduled_date": parsed_date,
+                    "has_marking_scheme": True,
+                },
+                "marking_scheme": created_solution,
             }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
@@ -384,8 +402,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     MarkingScheme.is_official,
                     MarkingScheme.is_premium_only,
                     MarkingScheme.order_index,
-                    MarkingScheme.created_at,
-                    MarkingScheme.updated_at,
                 )
                 .where(MarkingScheme.question_id == question_id.strip())
                 .order_by(MarkingScheme.order_index.asc())

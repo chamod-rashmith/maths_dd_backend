@@ -18,6 +18,30 @@ from app.models.subject import Subject
 _SL_TZ = ZoneInfo("Asia/Colombo")
 
 
+def _serialize_subject(subj: Subject) -> Dict[str, Any]:
+    return {
+        "id": subj.id,
+        "name": subj.name,
+        "sinhala_name": subj.sinhala_name,
+        "code": subj.code,
+        "order_index": subj.order_index,
+        "description": subj.description,
+    }
+
+
+def _serialize_lesson(lesson: SyllabusLesson) -> Dict[str, Any]:
+    return {
+        "id": lesson.id,
+        "subject_id": lesson.subject_id,
+        "title": lesson.title,
+        "sinhala_title": lesson.sinhala_title,
+        "order_index": lesson.order_index,
+        "description": lesson.description,
+        "question_count": lesson.question_count,
+        "premium_count": lesson.premium_count,
+    }
+
+
 class PostgresCurriculumRepository(CurriculumRepository):
     """PostgreSQL implementation of `CurriculumRepository` using SQLAlchemy AsyncSession."""
 
@@ -26,11 +50,16 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
     async def get_subjects(self) -> List[Dict[str, Any]]:
         try:
-            result = await self._session.execute(
-                select(Subject).order_by(Subject.order_index.asc())
-            )
-            subjects = result.scalars().all()
-            return [s.to_dict() for s in subjects]
+            stmt = select(
+                Subject.id,
+                Subject.name,
+                Subject.sinhala_name,
+                Subject.code,
+                Subject.order_index,
+                Subject.description,
+            ).order_by(Subject.order_index.asc())
+            result = await self._session.execute(stmt)
+            return [dict(row) for row in result.mappings().all()]
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -84,7 +113,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
             await self._session.flush()
             await self._session.refresh(subj)
-            return subj.to_dict()
+            return _serialize_subject(subj)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
@@ -132,8 +161,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     SyllabusLesson.description,
                     q_count,
                     prem_count,
-                    SyllabusLesson.created_at,
-                    SyllabusLesson.updated_at,
                     Subject.code.label("subject_code"),
                     Subject.name.label("subject_name"),
                 )
@@ -228,7 +255,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
 
             await self._session.flush()
             await self._session.refresh(lesson)
-            return lesson.to_dict()
+            return _serialize_lesson(lesson)
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 

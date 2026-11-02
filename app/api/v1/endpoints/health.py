@@ -11,7 +11,6 @@ from app.core.config import settings
 from app.core.database import (
     async_session_factory,
     check_db_health,
-    init_db,
     list_public_tables,
 )
 
@@ -33,18 +32,20 @@ def health_check() -> Dict[str, str]:
 @router.get("/db-test")
 async def test_database() -> Any:
     """
-    Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL)
-    and ensuring the production database schema and seed data are initialized via SQLAlchemy.
+    Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL).
+    Executes a fast ping and reports table availability without running dangerous DDL operations.
     """
     try:
-        await init_db()
+        is_healthy = await check_db_health()
+        if not is_healthy:
+            raise RuntimeError("Database health ping returned non-healthy status.")
+
         async with async_session_factory() as session:
             tables = await list_public_tables(session)
 
         return {
             "status": "success",
             "database": "connected",
-            "schema_initialized": True,
             "tables_count": len(tables),
             "tables": tables,
         }
@@ -55,6 +56,6 @@ async def test_database() -> Any:
             content={
                 "status": "error",
                 "database": "unavailable",
-                "detail": str(exc),
+                "detail": "Database connection verification failed.",
             },
         )

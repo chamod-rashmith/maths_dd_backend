@@ -2,11 +2,12 @@
 Pydantic DTO schemas for Questions and Marking Schemes.
 Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source,
 lightweight Summary responses for catalog listings, and on-demand Detail/Solution schemas.
+Omits internal database timestamps for security and minimal bandwidth payload.
 """
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
     QuestionDifficulty,
@@ -44,8 +45,10 @@ class QuestionCreate(BaseModel):
 class QuestionSummaryResponse(BaseModel):
     """
     Lightweight summary representation of a question in catalog/lesson list views.
-    Omits heavy problem content_text and solution payloads for fast network responses.
+    Omits heavy problem content_text, solution payloads, and internal timestamps.
     """
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     title: str
@@ -67,12 +70,12 @@ class QuestionSummaryResponse(BaseModel):
     is_published: bool = True
     scheduled_date: Optional[date] = None
     has_marking_scheme: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 
 class MarkingSchemeResponse(BaseModel):
     """Detailed representation of a question's official marking scheme / worked solution."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     question_id: str
@@ -84,8 +87,6 @@ class MarkingSchemeResponse(BaseModel):
     is_official: bool = True
     is_premium_only: bool = False
     order_index: int = 1
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 
 class QuestionDetailResponse(BaseModel):
@@ -93,6 +94,8 @@ class QuestionDetailResponse(BaseModel):
     Full detail representation of a single question, hydrated with inline LaTeX/Markdown
     or a short-lived signed Cloud Storage URL.
     """
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     title: str
@@ -116,8 +119,6 @@ class QuestionDetailResponse(BaseModel):
     is_published: bool = True
     scheduled_date: Optional[date] = None
     has_marking_scheme: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 
 class QuestionWithSolutionResponse(BaseModel):
