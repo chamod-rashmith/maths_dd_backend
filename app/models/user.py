@@ -49,34 +49,6 @@ class User(Base):
         nullable=False,
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes User entity into a dictionary contract."""
-        return {
-            "uid": self.uid,
-            "email": self.email,
-            "name": self.name,
-            "telephone_no": self.telephone_no,
-            "role": self.role,
-            "avatar_url": self.avatar_url,
-            "school_name": self.school_name,
-            "district": self.district,
-            "stream": self.stream,
-            "grade": self.grade,
-            "attempt": self.attempt,
-            "xp": self.xp,
-            "streak_count": self.streak_count,
-            "accuracy_rate": self.accuracy_rate,
-            "questions_solved": self.questions_solved,
-            "is_premium": self.is_premium,
-            "premium_expiry": self.premium_expiry,
-            "current_streak_days": self.current_streak_days,
-            "longest_streak_days": self.longest_streak_days,
-            "total_solved_count": self.total_solved_count,
-            "total_study_time_seconds": self.total_study_time_seconds,
-            "last_active_date": self.last_active_date,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
+    
     def __repr__(self) -> str:
         return f"<User(uid='{self.uid}', email='{self.email}', name='{self.name}')>"

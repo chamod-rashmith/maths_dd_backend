@@ -54,18 +54,7 @@ class Subject(Base):
         cascade="all, delete-orphan",
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes Subject entity into a dictionary contract."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "sinhala_name": self.sinhala_name,
-            "code": self.code,
-            "order_index": self.order_index,
-            "description": self.description,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
+    
 
     def __repr__(self) -> str:
         return f"<Subject(id='{self.id}', code='{self.code}', name='{self.name}')>"

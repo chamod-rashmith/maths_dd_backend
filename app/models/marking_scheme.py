@@ -58,21 +58,7 @@ class MarkingScheme(Base):
         Index("idx_marking_schemes_question_id", "question_id", "order_index"),
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes MarkingScheme entity into a dictionary contract."""
-        return {
-            "id": str(self.id),
-            "question_id": self.question_id,
-            "title": self.title,
-            "content_text": self.content_text,
-            "pdf_url": self.pdf_url,
-            "total_marks": self.total_marks,
-            "is_official": self.is_official,
-            "is_premium_only": self.is_premium_only,
-            "order_index": self.order_index,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
+    
 
     def __repr__(self) -> str:
         return f"<MarkingScheme(id='{self.id}', question_id='{self.question_id}', title='{self.title}')>"

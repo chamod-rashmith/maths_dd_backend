@@ -69,28 +69,6 @@ class Question(Base):
         Index("idx_questions_scheduled_date", "scheduled_date"),
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes Question entity into a dictionary contract."""
-        return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description or "",
-            "subject_id": self.subject_id,
-            "lesson_id": self.lesson_id,
-            "content_text": self.content_text,
-            "content_url": self.content_url,
-            "type": self.type,
-            "difficulty": self.difficulty,
-            "schedule": self.schedule,
-            "source": self.source,
-            "source_details": self.source_details or "",
-            "allocated_marks": self.allocated_marks,
-            "is_premium": self.is_premium,
-            "is_published": self.is_published,
-            "scheduled_date": self.scheduled_date,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
+    
     def __repr__(self) -> str:
         return f"<Question(id='{self.id}', title='{self.title}', subject_id='{self.subject_id}')>"

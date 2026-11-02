@@ -11,14 +11,17 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.domain.exceptions import PermissionDeniedError
 from app.domain.repositories.curriculum_repository import CurriculumRepository
+from app.domain.repositories.progress_repository import ProgressRepository
 from app.domain.repositories.question_repository import QuestionRepository
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.domain.repositories.user_repository import UserRepository
 from app.repositories.curriculum_repository import PostgresCurriculumRepository
+from app.repositories.progress_repository import PostgresProgressRepository
 from app.repositories.question_repository import PostgresQuestionRepository
 from app.repositories.study_note_repository import PostgresStudyNoteRepository
 from app.repositories.user_repository import PostgresUserRepository
 from app.services.curriculum_service import CurriculumService
+from app.services.progress_service import ProgressService
 from app.services.question_service import QuestionService
 from app.services.study_note_service import StudyNoteService
 from app.services.user_service import UserService
@@ -58,8 +61,15 @@ def get_study_note_repository(
     return PostgresStudyNoteRepository(session)
 
 
+def get_progress_repository(
+    session: AsyncSession = Depends(get_db),
+) -> ProgressRepository:
+    """Provides a `ProgressRepository` instance bound to the active SQLAlchemy session."""
+    return PostgresProgressRepository(session)
+
+
 # -----------------------------------------------------------------------------
-# 2. Application Service / Use Case Providers
+# 2. Application Service Providers
 # -----------------------------------------------------------------------------
 
 def get_user_service(
@@ -88,6 +98,13 @@ def get_study_note_service(
 ) -> StudyNoteService:
     """Provides a `StudyNoteService` orchestrated with `StudyNoteRepository`."""
     return StudyNoteService(repo)
+
+
+def get_progress_service(
+    repo: ProgressRepository = Depends(get_progress_repository),
+) -> ProgressService:
+    """Provides a `ProgressService` orchestrated with `ProgressRepository`."""
+    return ProgressService(repo)
 
 
 # -----------------------------------------------------------------------------

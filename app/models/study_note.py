@@ -56,22 +56,6 @@ class StudyNote(Base):
         Index("idx_study_notes_subject_lesson", "subject_id", "lesson_id", "order_index"),
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes StudyNote entity into a dictionary contract."""
-        return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description,
-            "subject_id": self.subject_id,
-            "lesson_id": self.lesson_id,
-            "content_text": self.content_text,
-            "pdf_url": self.pdf_url,
-            "is_premium": self.is_premium,
-            "order_index": self.order_index,
-            "author": self.author,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
+    
     def __repr__(self) -> str:
         return f"<StudyNote(id='{self.id}', title='{self.title}', subject_id='{self.subject_id}')>"

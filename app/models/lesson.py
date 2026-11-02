@@ -53,20 +53,6 @@ class SyllabusLesson(Base):
         back_populates="lesson",
     )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serializes SyllabusLesson entity into a dictionary contract."""
-        return {
-            "id": self.id,
-            "subject_id": self.subject_id,
-            "title": self.title,
-            "sinhala_title": self.sinhala_title,
-            "order_index": self.order_index,
-            "description": self.description,
-            "question_count": self.question_count,
-            "premium_count": self.premium_count,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
+    
     def __repr__(self) -> str:
         return f"<SyllabusLesson(id='{self.id}', title='{self.title}', subject_id='{self.subject_id}')>"

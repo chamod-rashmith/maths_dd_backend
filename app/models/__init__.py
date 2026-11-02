@@ -9,6 +9,7 @@ from app.models.question import Question
 from app.models.marking_scheme import MarkingScheme
 from app.models.study_note import StudyNote
 from app.models.user import User
+from app.models.progress import UserQuestionAttempt, UserDailyActivity
 
 __all__ = [
     "Subject",
@@ -17,4 +18,6 @@ __all__ = [
     "MarkingScheme",
     "StudyNote",
     "User",
+    "UserQuestionAttempt",
+    "UserDailyActivity",
 ]
