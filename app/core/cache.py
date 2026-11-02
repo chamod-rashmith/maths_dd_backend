@@ -61,6 +61,11 @@ class HybridCache:
         self._init_upstash()
 
     def _init_upstash(self) -> None:
+        import os
+        if os.environ.get("TESTING") == "1":
+            self._upstash_client = None
+            return
+
         if settings.UPSTASH_REDIS_REST_URL and settings.UPSTASH_REDIS_REST_TOKEN:
             try:
                 from upstash_redis import Redis

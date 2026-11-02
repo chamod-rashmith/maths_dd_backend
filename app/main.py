@@ -3,6 +3,7 @@ Maths DD - FastAPI Application Factory, Lifespan & Global Exception Handlers.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI
@@ -23,9 +24,12 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Manages application startup and shutdown lifecycle resources on Cloud Run."""
-    await init_db_pool()
-    yield
-    await close_db_pool()
+    if os.environ.get("TESTING") != "1":
+        await init_db_pool()
+        yield
+        await close_db_pool()
+    else:
+        yield
 
 
 def create_app() -> FastAPI:

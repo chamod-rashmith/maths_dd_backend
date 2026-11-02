@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 from app.core.cache import districts_cache
+from app.core.database import get_db
 from app.main import app
 from app.models.district import District
 from app.repositories.district_repository import DISTRICTS_CACHE_KEY, DistrictRepository
@@ -17,6 +18,7 @@ from app.schemas.district import DistrictResponse
 
 class TestDistricts(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        app.dependency_overrides.clear()
         districts_cache.clear()
         self.mock_districts: List[District] = [
             District(
@@ -49,6 +51,7 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         ]
 
     def tearDown(self) -> None:
+        app.dependency_overrides.clear()
         districts_cache.clear()
 
     async def test_repository_get_all_caches_persistently_with_zero_ttl(self) -> None:
@@ -138,6 +141,11 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
             ],
             ttl_seconds=0,
         )
+
+        async def override_get_db():
+            yield AsyncMock()
+
+        app.dependency_overrides[get_db] = override_get_db
 
         client = TestClient(app)
         response = client.get("/api/v1/districts")

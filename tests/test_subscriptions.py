@@ -233,6 +233,28 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_dup.status_code, 200)
         self.assertEqual(response_dup.json()["status"], "already_processed")
 
+    def test_admin_endpoints_block_standard_users(self) -> None:
+        from app.api.deps import get_user_repository
+        standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+        mock_user_repo = AsyncMock()
+        mock_user_repo.get_by_uid.return_value = {"uid": "usr_student", "role": "USER"}
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+
+        client = TestClient(app)
+        # Attempt to access admin pending list as a normal student -> 403 Forbidden
+        response = client.get("/api/v1/subscriptions/admin/pending")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Insufficient privileges", response.json()["detail"])
+
+        # Attempt to approve subscription as a normal student -> 403 Forbidden
+        response_approve = client.post(
+            "/api/v1/subscriptions/admin/sub_123/approve",
+            json={"duration_days": 30},
+        )
+        self.assertEqual(response_approve.status_code, 403)
+        self.assertIn("Insufficient privileges", response_approve.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
