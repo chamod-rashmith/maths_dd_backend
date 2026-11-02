@@ -3,11 +3,11 @@ Pydantic DTO schemas for User Profile operations.
 Enforces type-safe UserRole enum and strict client payload hygiene.
 """
 
-from datetime import date
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import UserRole
+from app.schemas.subscription import UserSubscriptionResponse
 
 
 class UserProfileSyncRequest(BaseModel):
@@ -58,4 +58,4 @@ class UserProfileResponse(BaseModel):
     accuracy_rate: Optional[float] = 0.0
     questions_solved: Optional[int] = 0
     is_premium: bool = False
-    premium_expiry: Optional[date] = None
+    active_subscription: Optional[UserSubscriptionResponse] = None

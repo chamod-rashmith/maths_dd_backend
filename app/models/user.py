@@ -1,17 +1,18 @@
 """
 SQLAlchemy 2.0 ORM model for Users (Identity & Auth Profile).
-Gamification and high-frequency study telemetry are isolated in `UserStats`.
+Gamification is isolated in `UserStats` and Subscriptions in `UserSubscription`.
 """
 
-from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Optional
-from sqlalchemy import Boolean, Date, DateTime, String, Text, text
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, List, Optional
+from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.user_stats import UserStats
+    from app.models.subscription import UserSubscription
 
 
 class User(Base):
@@ -28,8 +29,6 @@ class User(Base):
     stream: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     grade: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     attempt: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    is_premium: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
-    premium_expiry: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -51,6 +50,34 @@ class User(Base):
         uselist=False,
         lazy="joined",
     )
+
+    subscriptions: Mapped[List["UserSubscription"]] = relationship(
+        "UserSubscription",
+        foreign_keys="UserSubscription.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="desc(UserSubscription.created_at)",
+        lazy="selectin",
+    )
+
+    @property
+    def is_premium(self) -> bool:
+        """Dynamically evaluate if user has active premium access."""
+        if self.role == "ADMIN":
+            return True
+        if not self.subscriptions:
+            return False
+        return any(sub.is_currently_active() for sub in self.subscriptions)
+
+    @property
+    def active_subscription(self) -> Optional["UserSubscription"]:
+        """Returns the most recent active subscription if available."""
+        if not self.subscriptions:
+            return None
+        for sub in self.subscriptions:
+            if sub.is_currently_active():
+                return sub
+        return None
 
     def __repr__(self) -> str:
         return f"<User(uid='{self.uid}', email='{self.email}', name='{self.name}')>"

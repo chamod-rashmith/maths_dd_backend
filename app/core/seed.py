@@ -11,7 +11,7 @@ import uuid
 from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Subject, SyllabusLesson, Question, MarkingScheme, StudyNote, User, UserStats
+from app.models import Subject, SyllabusLesson, Question, MarkingScheme, StudyNote, User, UserStats, UserSubscription
 
 logger = logging.getLogger("maths_dd.seed")
 
@@ -358,7 +358,6 @@ async def seed_database(session: AsyncSession) -> None:
     admin_uid = DEFAULT_ADMIN_UID
     if admin:
         admin.role = "ADMIN"
-        admin.is_premium = True
         admin_uid = admin.uid
     else:
         session.add(
@@ -367,7 +366,6 @@ async def seed_database(session: AsyncSession) -> None:
                 email=DEFAULT_ADMIN_EMAIL,
                 name=DEFAULT_ADMIN_NAME,
                 role="ADMIN",
-                is_premium=True,
             )
         )
     await session.flush()
@@ -380,6 +378,30 @@ async def seed_database(session: AsyncSession) -> None:
     ).scalar_one_or_none()
     if not admin_stats:
         session.add(UserStats(user_id=admin_uid))
+    await session.flush()
+
+    # Seed Lifetime UserSubscription for Admin if not present
+    admin_sub = (
+        await session.execute(
+            select(UserSubscription).where(
+                UserSubscription.user_id == admin_uid,
+                UserSubscription.status == "ACTIVE",
+            )
+        )
+    ).scalar_one_or_none()
+    if not admin_sub:
+        session.add(
+            UserSubscription(
+                user_id=admin_uid,
+                plan_id="LIFETIME",
+                status="ACTIVE",
+                provider="MANUAL_ADMIN",
+                admin_notes="Default seeded Master Admin entitlement",
+                starts_at=datetime.datetime.now(ZoneInfo("UTC")),
+                expires_at=None,
+                is_auto_renew=False,
+            )
+        )
     await session.flush()
 
     # 2. Seed Subjects

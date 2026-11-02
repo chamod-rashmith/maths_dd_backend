@@ -10,6 +10,7 @@ from app.models.marking_scheme import MarkingScheme
 from app.models.study_note import StudyNote
 from app.models.user import User
 from app.models.user_stats import UserStats
+from app.models.subscription import UserSubscription, ProcessedWebhookEvent
 from app.models.progress import UserQuestionAttempt, UserDailyActivity
 
 __all__ = [
@@ -20,6 +21,8 @@ __all__ = [
     "StudyNote",
     "User",
     "UserStats",
+    "UserSubscription",
+    "ProcessedWebhookEvent",
     "UserQuestionAttempt",
     "UserDailyActivity",
 ]

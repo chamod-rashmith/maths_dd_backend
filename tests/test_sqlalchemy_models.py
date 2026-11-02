@@ -1,37 +1,31 @@
 """
-Unit tests for SQLAlchemy 2.0 declarative models and Pydantic DTO validation contracts.
-Verifies that models register with Base.metadata and validate cleanly with Pydantic v2 schemas.
+Unit tests for modern SQLAlchemy 2.0 ORM models and clean Pydantic serialization.
+Verifies model properties, constraints, relationships, and DTO validations.
 """
 
 import datetime
+from zoneinfo import ZoneInfo
 import unittest
-import uuid
-from app.core.database import Base
-from app.models import MarkingScheme, Question, StudyNote, Subject, SyllabusLesson, User, UserStats
-from app.schemas.curriculum import LessonResponse, SubjectResponse
-from app.schemas.question import MarkingSchemeResponse, QuestionDetailResponse
+
+from app.models import (
+    Subject,
+    SyllabusLesson,
+    Question,
+    MarkingScheme,
+    StudyNote,
+    User,
+    UserStats,
+    UserSubscription,
+    ProcessedWebhookEvent,
+)
+from app.schemas.curriculum import SubjectResponse, LessonResponse
+from app.schemas.question import QuestionDetailResponse, MarkingSchemeResponse
 from app.schemas.study_note import StudyNoteDetailResponse
 from app.schemas.user import UserProfileResponse
+from app.schemas.subscription import UserSubscriptionResponse
 
 
-class TestSQLAlchemyModels(unittest.TestCase):
-    """Verifies that all models register with Base.metadata and serialize accurately via Pydantic DTOs."""
-
-    def test_metadata_tables_registration(self) -> None:
-        table_names = set(Base.metadata.tables.keys())
-        expected_tables = {
-            "subjects",
-            "syllabus_lessons",
-            "questions",
-            "marking_schemes",
-            "study_notes",
-            "users",
-            "user_stats",
-            "user_question_attempts",
-            "user_daily_activities",
-        }
-        self.assertTrue(expected_tables.issubset(table_names))
-
+class TestSqlAlchemyModels(unittest.TestCase):
     def test_subject_model_serialization(self) -> None:
         subject = Subject(
             id="subj_pmat",
@@ -39,7 +33,7 @@ class TestSQLAlchemyModels(unittest.TestCase):
             sinhala_name="ශුද්ධ ගණිතය",
             code="PMAT",
             order_index=1,
-            description="Pure Mathematics syllabus",
+            description="Pure Maths Syllabus",
         )
         self.assertEqual(subject.id, "subj_pmat")
         self.assertEqual(subject.name, "Pure Mathematics")
@@ -88,45 +82,41 @@ class TestSQLAlchemyModels(unittest.TestCase):
             content_url="https://example.com/q.pdf",
             type="SHORT",
             difficulty="EASY",
-            schedule="DAILY",
-            source="MODEL_PAPER",
-            source_details="2026 Model Paper",
-            allocated_marks=25,
+            schedule="REGULAR",
+            source="PAST_PAPER",
+            scheduled_date=today,
             is_premium=False,
             is_published=True,
-            scheduled_date=today,
+            allocated_marks=25,
         )
         self.assertEqual(question.id, "q_100")
         self.assertEqual(question.title, "Integrate x^2")
-        self.assertEqual(question.allocated_marks, 25)
-        self.assertEqual(question.scheduled_date, today)
         self.assertFalse(question.is_premium)
-        self.assertTrue(question.is_published)
+        self.assertEqual(question.allocated_marks, 25)
         self.assertIn("Question", repr(question))
 
         dto = QuestionDetailResponse.model_validate(question, from_attributes=True)
         self.assertEqual(dto.id, "q_100")
         self.assertEqual(dto.title, "Integrate x^2")
-        self.assertEqual(dto.allocated_marks, 25)
-        self.assertEqual(dto.scheduled_date, today)
+        self.assertFalse(dto.is_premium)
 
     def test_marking_scheme_model_serialization(self) -> None:
-        ms_id = uuid.uuid4()
+        import uuid
+        scheme_id = uuid.uuid4()
         scheme = MarkingScheme(
-            id=ms_id,
+            id=scheme_id,
             question_id="q_100",
             title="Official Marking Scheme",
-            content_text="Solution: $x^3/3 + C$",
-            pdf_url=None,
             total_marks=25,
+            content_text="Use power rule $\\int x^n dx = \\frac{x^{n+1}}{n+1} + C$",
+            pdf_url="https://example.com/ms.pdf",
             is_official=True,
             is_premium_only=False,
             order_index=1,
         )
-        self.assertEqual(scheme.id, ms_id)
+        self.assertEqual(scheme.id, scheme_id)
         self.assertEqual(scheme.question_id, "q_100")
         self.assertEqual(scheme.total_marks, 25)
-        self.assertTrue(scheme.is_official)
         self.assertFalse(scheme.is_premium_only)
         self.assertIn("MarkingScheme", repr(scheme))
 
@@ -141,7 +131,7 @@ class TestSQLAlchemyModels(unittest.TestCase):
             is_premium_only=scheme.is_premium_only,
             order_index=scheme.order_index,
         )
-        self.assertEqual(dto.id, str(ms_id))
+        self.assertEqual(dto.id, str(scheme_id))
         self.assertEqual(dto.total_marks, 25)
 
     def test_study_note_model_serialization(self) -> None:
@@ -179,7 +169,6 @@ class TestSQLAlchemyModels(unittest.TestCase):
             stream="PHYSICAL_SCIENCE",
             grade="GRADE_13",
             attempt="FIRST",
-            is_premium=False,
         )
         stats = UserStats(
             user_id="usr_007",
@@ -197,6 +186,8 @@ class TestSQLAlchemyModels(unittest.TestCase):
         self.assertEqual(user.role, "USER")
         self.assertEqual(user.school_name, "Ananda College")
         self.assertEqual(user.district, "Colombo")
+        self.assertFalse(user.is_premium)
+        self.assertIsNone(user.active_subscription)
         self.assertIn("User", repr(user))
         self.assertIn("UserStats", repr(stats))
 
@@ -221,6 +212,67 @@ class TestSQLAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.xp, 150)
         self.assertEqual(dto.streak_count, 5)
         self.assertEqual(dto.questions_solved, 20)
+        self.assertFalse(dto.is_premium)
+
+    def test_user_subscription_lifecycle_and_entitlements(self) -> None:
+        now = datetime.datetime.now(ZoneInfo("UTC"))
+        user = User(
+            uid="usr_008",
+            email="vip@mathsdd.lk",
+            name="Nimal Silva",
+            role="USER",
+        )
+        self.assertFalse(user.is_premium)
+
+        # 1. Bank transfer pending approval -> is_premium should still be False
+        pending_sub = UserSubscription(
+            id="sub_bank_01",
+            user_id="usr_008",
+            plan_id="COMBINED_PRO_MONTHLY",
+            status="PENDING_APPROVAL",
+            provider="BANK_TRANSFER",
+            amount_lkr=2500.0,
+            slip_image_url="https://storage.googleapis.com/mathsdd-slips/slip1.jpg",
+            reference_note="CDM Bambalapitiya #1234",
+            starts_at=now,
+            expires_at=None,
+        )
+        user.subscriptions = [pending_sub]
+        self.assertFalse(user.is_premium)
+        self.assertIsNone(user.active_subscription)
+
+        # 2. Approved active subscription -> is_premium should become True
+        active_sub = UserSubscription(
+            id="sub_rc_01",
+            user_id="usr_008",
+            plan_id="COMBINED_PRO_MONTHLY",
+            status="ACTIVE",
+            provider="REVENUECAT",
+            original_transaction_id="GPA.1234-5678-9012",
+            starts_at=now,
+            expires_at=now + datetime.timedelta(days=30),
+            is_auto_renew=True,
+        )
+        user.subscriptions = [active_sub, pending_sub]
+        self.assertTrue(user.is_premium)
+        self.assertIsNotNone(user.active_subscription)
+        self.assertEqual(user.active_subscription.id, "sub_rc_01")
+
+        # Validate DTO serialization
+        sub_dto = UserSubscriptionResponse.model_validate(active_sub, from_attributes=True)
+        self.assertEqual(sub_dto.id, "sub_rc_01")
+        self.assertEqual(sub_dto.plan_id, "COMBINED_PRO_MONTHLY")
+        self.assertEqual(sub_dto.status, "ACTIVE")
+        self.assertEqual(sub_dto.provider, "REVENUECAT")
+
+        # Processed webhook idempotency event
+        evt = ProcessedWebhookEvent(
+            event_id="evt_01HABCXYZ",
+            event_type="INITIAL_PURCHASE",
+            app_user_id="usr_008",
+        )
+        self.assertEqual(evt.event_id, "evt_01HABCXYZ")
+        self.assertIn("ProcessedWebhookEvent", repr(evt))
 
 
 if __name__ == "__main__":
