@@ -398,7 +398,7 @@ async def seed_database(session: AsyncSession) -> None:
             existing_d.display_order = d["display_order"]
         else:
             session.add(District(**d))
-    await session.flush()
+    await session.commit()
 
     # 1. Seed Default Admin User
     admin = (
@@ -421,7 +421,6 @@ async def seed_database(session: AsyncSession) -> None:
                 name=DEFAULT_ADMIN_NAME,
                 role="ADMIN",
                 district_id=1,
-                district="Colombo",
             )
         )
     await session.flush()

@@ -41,6 +41,15 @@ class DistrictRepository:
             result = await self._session.execute(stmt)
             districts = result.scalars().all()
 
+            if not districts:
+                logger.info("Districts table is empty. Auto-seeding 25 Sri Lankan districts...")
+                from app.core.seed import DISTRICTS_SEED
+                for d in DISTRICTS_SEED:
+                    self._session.add(District(**d))
+                await self._session.commit()
+                result = await self._session.execute(stmt)
+                districts = result.scalars().all()
+
             data = [
                 {
                     "id": d.id,
