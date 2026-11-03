@@ -204,5 +204,106 @@ class TestQuestionsFeature(unittest.TestCase):
         self.assertEqual(data["question"]["id"], "q_new_01")
 
 
+class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
+    """Verifies Date-Based Redis/Memory hybrid caching, on-the-fly signing, and invalidation."""
+
+    def setUp(self) -> None:
+        from app.core.cache import questions_cache
+
+        questions_cache.clear()
+        self.mock_repo = AsyncMock()
+        self.service = QuestionService(self.mock_repo)
+
+    def tearDown(self) -> None:
+        from app.core.cache import questions_cache
+
+        questions_cache.clear()
+
+    async def test_get_daily_question_caches_and_avoids_duplicate_db_query(self) -> None:
+        raw_db_row = {
+            "id": "q_daily_cached",
+            "title": "Cached Daily Challenge",
+            "subject_id": "sub_pmat",
+            "content_text": "Solve $x^2 = 4$",
+            "content_url": None,
+            "type": "SHORT",
+            "difficulty": "EASY",
+            "schedule": "DAILY",
+            "source": "PAST_PAPER",
+            "allocated_marks": 10,
+            "is_premium": False,
+            "scheduled_date": "2026-11-03",
+        }
+        self.mock_repo.get_daily_question.return_value = raw_db_row
+
+        # First request (Cache MISS -> Database query)
+        q1 = await self.service.get_daily_question(target_date="2026-11-03")
+        self.assertIsNotNone(q1)
+        self.assertEqual(q1["id"], "q_daily_cached")
+        self.assertEqual(self.mock_repo.get_daily_question.call_count, 1)
+
+        # Second request (Cache HIT -> Served directly from cache, NO database query)
+        q2 = await self.service.get_daily_question(target_date="2026-11-03")
+        self.assertIsNotNone(q2)
+        self.assertEqual(q2["id"], "q_daily_cached")
+        self.assertEqual(self.mock_repo.get_daily_question.call_count, 1)
+
+    async def test_cached_question_hydrates_signed_url_without_mutating_raw_cache(self) -> None:
+        raw_db_row = {
+            "id": "q_image_daily",
+            "title": "Geometry Challenge",
+            "subject_id": "sub_pmat",
+            "content_text": "Find angle ABC",
+            "content_url": "questions/diagram_01.png",
+            "type": "STRUCTURED",
+            "difficulty": "MEDIUM",
+            "schedule": "DAILY",
+            "source": "MODEL_PAPER",
+            "allocated_marks": 25,
+            "is_premium": False,
+            "scheduled_date": "2026-11-03",
+        }
+        self.mock_repo.get_daily_question.return_value = raw_db_row
+
+        result = await self.service.get_daily_question(target_date="2026-11-03")
+        self.assertIsNotNone(result)
+        # Hydrated result has signed URL
+        self.assertTrue(result["content_url"].startswith("http"))
+
+        # Cached raw item in questions_cache preserves the raw storage path
+        from app.core.cache import questions_cache
+        cached_entry = questions_cache.get("daily_question:2026-11-03")
+        self.assertIsNotNone(cached_entry)
+        self.assertEqual(cached_entry["content_url"], "questions/diagram_01.png")
+
+    async def test_create_and_delete_question_invalidates_daily_cache(self) -> None:
+        from app.core.cache import questions_cache
+        from app.schemas.question import QuestionCreate
+
+        # Pre-seed cache
+        questions_cache.set("daily_question:2026-11-03", {"id": "stale_daily"})
+        self.assertIsNotNone(questions_cache.get("daily_question:2026-11-03"))
+
+        # Create question -> should invalidate
+        self.mock_repo.create_question_with_solution.return_value = {"id": "new_q"}
+        payload = QuestionCreate(
+            title="New Question",
+            subject_id="sub_pmat",
+            content_text="Solve",
+            solution_text="Solution",
+        )
+        await self.service.create_question(payload)
+        self.assertIsNone(questions_cache.get("daily_question:2026-11-03"))
+
+        # Pre-seed again
+        questions_cache.set("daily_question:2026-11-03", {"id": "stale_daily_2"})
+        self.assertIsNotNone(questions_cache.get("daily_question:2026-11-03"))
+
+        # Delete question -> should invalidate
+        self.mock_repo.delete_question.return_value = {"deleted": True}
+        await self.service.delete_question("some_id")
+        self.assertIsNone(questions_cache.get("daily_question:2026-11-03"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,12 +1,14 @@
 """
 Application Service for Questions and Marking Schemes.
-Orchestrates catalog filtering, scheduled_date daily challenge resolution,
-on-demand marking scheme retrieval, signed URL generation, and curriculum cache invalidation.
+Orchestrates catalog filtering, scheduled_date daily challenge resolution with hybrid Redis caching,
+on-demand marking scheme retrieval, signed URL generation, and curriculum/question cache invalidation.
 """
 
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
-from app.core.cache import curriculum_cache
+from app.core.cache import curriculum_cache, questions_cache
 from app.core.storage import generate_signed_download_url
 from app.domain.exceptions import (
     AuthenticationError,
@@ -15,6 +17,18 @@ from app.domain.exceptions import (
 )
 from app.domain.repositories.question_repository import QuestionRepository
 from app.schemas.question import QuestionCreate
+
+_COLOMBO_TZ = ZoneInfo("Asia/Colombo")
+
+
+def _resolve_colombo_date_str(target_date: Optional[str] = None) -> str:
+    """Returns YYYY-MM-DD string for target_date or current date in Asia/Colombo."""
+    if target_date and str(target_date).strip():
+        try:
+            return date.fromisoformat(str(target_date).strip()[:10]).isoformat()
+        except (ValueError, TypeError):
+            pass
+    return datetime.now(_COLOMBO_TZ).date().isoformat()
 
 
 class QuestionService:
@@ -76,9 +90,24 @@ class QuestionService:
     async def get_daily_question(
         self, target_date: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
+        resolved_date_str = _resolve_colombo_date_str(target_date)
+        cache_key = f"daily_question:{resolved_date_str}"
+
+        # 1. Check Redis / In-Memory hybrid cache
+        cached = questions_cache.get(cache_key)
+        if cached is not None:
+            # Re-hydrate signed download URL dynamically on-the-fly so it never expires in cache
+            return self._hydrate_question_signed_url(cached)
+
+        # 2. Cache miss -> query Cloud SQL repository
         question = await self._repo.get_daily_question(target_date=target_date)
         if not question:
             return None
+
+        # 3. Store raw question in cache (without pre-signed URL) with 24-hour TTL
+        questions_cache.set(cache_key, question, ttl_seconds=86400)
+
+        # 4. Hydrate signed URL dynamically for client response
         return self._hydrate_question_signed_url(question)
 
     async def get_marking_scheme(
@@ -139,9 +168,12 @@ class QuestionService:
         )
         # Invalidate curriculum lesson cache so question_count / premium_count refresh immediately
         curriculum_cache.invalidate_prefix("curriculum:")
+        # Invalidate daily question cache so newly scheduled challenges appear immediately
+        questions_cache.invalidate_prefix("daily_question")
         return result
 
     async def delete_question(self, question_id: str) -> Dict[str, Any]:
         result = await self._repo.delete_question(question_id)
         curriculum_cache.invalidate_prefix("curriculum:")
+        questions_cache.invalidate_prefix("daily_question")
         return result

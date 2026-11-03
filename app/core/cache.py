@@ -144,3 +144,7 @@ study_notes_cache = HybridCache(default_ttl_seconds=3600)
 
 # Global districts reference data cache (default persistent / no TTL)
 districts_cache = HybridCache(default_ttl_seconds=0)
+
+# Global questions cache (daily question challenge; default 24h TTL)
+questions_cache = HybridCache(default_ttl_seconds=86400)
+
