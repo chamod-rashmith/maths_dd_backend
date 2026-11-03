@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend application source
-COPY . .
+COPY --chown=appuser:appgroup . .
 
 # Drop privileges to non-root user
 USER appuser
