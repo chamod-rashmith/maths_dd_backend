@@ -1,16 +1,14 @@
-"""Add day_number to questions table for dynamic daily challenge series.
+"""Add day_number and is_deleted to questions table for dynamic daily challenge series.
 
 Revision ID: 0002_add_day_number
 Revises: 0001_initial_schema_v1
 Create Date: 2026-11-03 12:08:00.000000
 
-This migration adds an optional indexed integer column `day_number` to the `questions` table.
-It enables organizing daily challenge questions into sequential series (e.g. Day 1, Day 2, Day 50)
-regardless of calendar date skips, allowing students to browse and practice challenges chronologically.
+This migration ensures the `is_deleted` soft-delete flag and `day_number` integer columns
+are present on the `questions` table with performance indexes.
 """
 
 from typing import Sequence, Union
-
 from alembic import op
 import sqlalchemy as sa
 
@@ -23,32 +21,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Add day_number column and corresponding search indexes to questions table."""
+    """Add is_deleted and day_number columns and corresponding search indexes to questions table."""
+    # Ensure is_deleted column exists with default false
+    op.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false")
+
     # Add day_number column to questions
-    op.add_column(
-        "questions",
-        sa.Column("day_number", sa.Integer(), nullable=True),
-    )
+    op.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS day_number INTEGER")
 
-    # Index for fast single-column lookup by day number
-    op.create_index(
-        op.f("ix_questions_day_number"),
-        "questions",
-        ["day_number"],
-        unique=False,
-    )
-
-    # Composite index for filtering and sorting daily challenge series
-    op.create_index(
-        "idx_questions_day_scheduled",
-        "questions",
-        ["day_number", "scheduled_date", "is_published", "is_deleted"],
-        unique=False,
-    )
+    # Indexes
+    op.execute("CREATE INDEX IF NOT EXISTS ix_questions_day_number ON questions (day_number)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_questions_is_deleted ON questions (is_deleted)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_questions_day_scheduled ON questions (day_number, scheduled_date, is_published, is_deleted)")
 
 
 def downgrade() -> None:
-    """Revert day_number column and its indexes."""
-    op.drop_index("idx_questions_day_scheduled", table_name="questions")
-    op.drop_index(op.f("ix_questions_day_number"), table_name="questions")
-    op.drop_column("questions", "day_number")
+    """Revert day_number and is_deleted columns and their indexes."""
+    op.execute("DROP INDEX IF EXISTS idx_questions_day_scheduled")
+    op.execute("DROP INDEX IF EXISTS ix_questions_day_number")
+    op.execute("ALTER TABLE questions DROP COLUMN IF EXISTS day_number")
