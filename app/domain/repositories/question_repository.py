@@ -1,5 +1,7 @@
 """
 Abstract Repository Contract for Questions and Marking Schemes.
+Defines domain operations for single questions, dynamic multi-question daily packs,
+and sequential daily challenge series.
 """
 
 from abc import ABC, abstractmethod
@@ -30,6 +32,7 @@ class QuestionRepository(ABC):
         is_premium: bool = False,
         is_published: bool = True,
         scheduled_date: Optional[str] = None,
+        day_number: Optional[int] = None,
         custom_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Atomically creates or updates a question along with its official marking scheme."""
@@ -46,6 +49,7 @@ class QuestionRepository(ABC):
         source: Optional[str] = None,
         is_premium: Optional[bool] = None,
         include_unpublished: bool = False,
+        day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
@@ -66,7 +70,28 @@ class QuestionRepository(ABC):
     async def get_daily_question(
         self, target_date: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """Fetches the daily challenge question scheduled for the target calendar date."""
+        """Fetches the primary daily challenge question scheduled for the target calendar date (backward-compatible)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_daily_pack(
+        self,
+        target_date: Optional[str] = None,
+        day_number: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetches the complete multi-question daily challenge pack for target calendar date or day number.
+        Auto-sorts questions by Combined Maths canonical hierarchy (Pure Short -> Pure Essay -> Applied Short -> Applied Essay).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_daily_series(
+        self,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Lists available daily challenge series summaries grouped by day number (Day 1, Day 2...)."""
         raise NotImplementedError
 
     @abstractmethod

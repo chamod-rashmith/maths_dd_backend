@@ -1,7 +1,8 @@
 """
 Application Service for Questions and Marking Schemes.
-Orchestrates catalog filtering, scheduled_date daily challenge resolution with hybrid Redis caching,
-on-demand marking scheme retrieval, signed URL generation, and curriculum/question cache invalidation.
+Orchestrates catalog filtering, dynamic multi-question daily pack resolution with hybrid Redis caching,
+sequential daily challenge series cataloging, on-demand marking scheme retrieval,
+dynamic signed URL generation, and cache invalidation.
 """
 
 from datetime import date, datetime
@@ -32,7 +33,7 @@ def _resolve_colombo_date_str(target_date: Optional[str] = None) -> str:
 
 
 class QuestionService:
-    """Orchestrates question creation, catalog retrieval, daily challenge lookup, and on-demand solutions."""
+    """Orchestrates question creation, catalog retrieval, daily challenge packs, and on-demand solutions."""
 
     def __init__(self, repo: QuestionRepository) -> None:
         self._repo = repo
@@ -60,6 +61,7 @@ class QuestionService:
         source: Optional[str] = None,
         is_premium: Optional[bool] = None,
         include_unpublished: bool = False,
+        day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
@@ -72,6 +74,7 @@ class QuestionService:
             source=source,
             is_premium=is_premium,
             include_unpublished=include_unpublished,
+            day_number=day_number,
             limit=limit,
             offset=offset,
         )
@@ -90,6 +93,7 @@ class QuestionService:
     async def get_daily_question(
         self, target_date: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
+        """Fetches the primary daily question for backward compatibility with older client builds."""
         resolved_date_str = _resolve_colombo_date_str(target_date)
         cache_key = f"daily_question:{resolved_date_str}"
 
@@ -109,6 +113,63 @@ class QuestionService:
 
         # 4. Hydrate signed URL dynamically for client response
         return self._hydrate_question_signed_url(question)
+
+    async def get_daily_pack(
+        self,
+        target_date: Optional[str] = None,
+        day_number: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves the complete dynamic multi-question daily challenge pack for a target date or day number.
+        Uses date-based or day-based hybrid Redis caching with on-the-fly pre-signed download URL hydration.
+        """
+        if day_number is not None and day_number > 0:
+            cache_key = f"daily_pack:day_{day_number}"
+        else:
+            resolved_date_str = _resolve_colombo_date_str(target_date)
+            cache_key = f"daily_pack:date_{resolved_date_str}"
+
+        # 1. Check Redis / In-Memory hybrid cache
+        cached = questions_cache.get(cache_key)
+        if cached is not None:
+            result = dict(cached)
+            result["questions"] = [
+                self._hydrate_question_signed_url(q) for q in result.get("questions", [])
+            ]
+            return result
+
+        # 2. Cache miss -> query Cloud SQL repository
+        pack = await self._repo.get_daily_pack(target_date=target_date, day_number=day_number)
+        if not pack:
+            return None
+
+        # 3. Store raw pack in cache (without pre-signed URLs) with 24-hour TTL
+        questions_cache.set(cache_key, pack, ttl_seconds=86400)
+
+        # 4. Hydrate signed URLs dynamically for client response
+        result = dict(pack)
+        result["questions"] = [
+            self._hydrate_question_signed_url(q) for q in result.get("questions", [])
+        ]
+        return result
+
+    async def list_daily_series(
+        self,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves the catalog list of daily challenge series summaries (Day 1, Day 2...).
+        Cached with 1-hour TTL for ultra-low latency catalog browsing.
+        """
+        cache_key = f"daily_series:catalog:{limit}_{offset}"
+        cached = questions_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        series = await self._repo.list_daily_series(limit=limit, offset=offset)
+        questions_cache.set(cache_key, series, ttl_seconds=3600)
+        return series
 
     async def get_marking_scheme(
         self,
@@ -164,16 +225,21 @@ class QuestionService:
             is_premium=payload.is_premium,
             is_published=payload.is_published,
             scheduled_date=payload.scheduled_date,
+            day_number=payload.day_number,
             custom_id=resolved_id,
         )
         # Invalidate curriculum lesson cache so question_count / premium_count refresh immediately
         curriculum_cache.invalidate_prefix("curriculum:")
-        # Invalidate daily question cache so newly scheduled challenges appear immediately
+        # Invalidate daily question and pack caches so newly scheduled challenges appear immediately
         questions_cache.invalidate_prefix("daily_question")
+        questions_cache.invalidate_prefix("daily_pack")
+        questions_cache.invalidate_prefix("daily_series")
         return result
 
     async def delete_question(self, question_id: str) -> Dict[str, Any]:
         result = await self._repo.delete_question(question_id)
         curriculum_cache.invalidate_prefix("curriculum:")
         questions_cache.invalidate_prefix("daily_question")
+        questions_cache.invalidate_prefix("daily_pack")
+        questions_cache.invalidate_prefix("daily_series")
         return result

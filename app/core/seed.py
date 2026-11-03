@@ -299,6 +299,7 @@ Required equation is $x^2 - Sx + P = 0 \implies 16x^2 - 5x + 32 = 0$.
         "is_premium": False,
         "is_published": True,
         "use_today_scheduled_date": True,
+        "day_number": 1,
     },
     {
         "id": "q_pmat_diff_essay_01",
@@ -334,9 +335,11 @@ $$ = \lim_{h \to 0} \frac{2\cos(2x + h)\sin(h)}{h} = 2\cos(2x) $$
         "source": "PAST_PAPER",
         "source_details": "2023 G.C.E. A/L Pure Maths Part B",
         "allocated_marks": 150,
-        "is_premium": True,
+        "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": False,
+        "use_today_scheduled_date": True,
+        "schedule": "DAILY",
+        "day_number": 1,
     },
     {
         "id": "q_amat_circular_short_01",
@@ -374,7 +377,49 @@ $$ T - mg\cos\theta = \frac{mv^2}{l} \implies T = mg(4 + 3\cos\theta) $$
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": False,
+        "use_today_scheduled_date": True,
+        "schedule": "DAILY",
+        "day_number": 1,
+    },
+    {
+        "id": "q_amat_relvel_essay_01",
+        "title": "Relative Velocity & Shortest Distance Interception",
+        "description": "Two ships A and B moving with uniform velocities. Find shortest distance and closest approach time.",
+        "subject_id": "subj_amat",
+        "lesson_id": "lesson_amat_kinematics",
+        "content_text": r"""# Relative Velocity Structured Essay (Part B)
+
+Ship $A$ is steaming due North at a constant speed of $20	ext{ km/h}$. At 12:00 noon, ship $B$ is $40	ext{ km}$ due East of $A$ and is steaming North-$60^\circ$-West at $20\sqrt{3}	ext{ km/h}$.
+
+1. Find the velocity of $B$ relative to $A$ in magnitude and direction.
+2. Find the shortest distance between the two ships during their subsequent motion.
+3. Determine the time at which the ships are closest to each other.
+""",
+        "solution_text": r"""# Official Marking Scheme (50 Marks)
+
+### Step 1: Relative Velocity Vector (15 Marks)
+$$\mathbf{v}_A = 20\mathbf{j}$$
+$$\mathbf{v}_B = -20\sqrt{3}\sin(60^\circ)\mathbf{i} + 20\sqrt{3}\cos(60^\circ)\mathbf{j} = -30\mathbf{i} + 10\sqrt{3}\mathbf{j}$$
+$$\mathbf{v}_{B/A} = \mathbf{v}_B - \mathbf{v}_A = -30\mathbf{i} + (10\sqrt{3} - 20)\mathbf{j}$$
+
+### Step 2: Magnitude & Direction (15 Marks)
+$$|\mathbf{v}_{B/A}| = \sqrt{(-30)^2 + (10\sqrt{3} - 20)^2} = 30.1	ext{ km/h}$$
+
+### Step 3: Shortest Distance & Closest Time (20 Marks)
+Using relative position triangle: $d_{\min} = 40 	imes \sin(	heta) = 3.56	ext{ km}$.
+Time: $t = 12:00 + \frac{40\cos	heta}{|\mathbf{v}_{B/A}|} \approx 1:19	ext{ PM}$.
+""",
+        "solution_id": "11111111-1111-4111-8111-111111111104",
+        "type": "ESSAY",
+        "difficulty": "HARD",
+        "schedule": "DAILY",
+        "source": "PAST_PAPER",
+        "source_details": "G.C.E. A/L Applied Maths Part B",
+        "allocated_marks": 50,
+        "is_premium": False,
+        "is_published": True,
+        "use_today_scheduled_date": True,
+        "day_number": 1,
     },
 ]
 
@@ -592,6 +637,8 @@ async def seed_database(session: AsyncSession) -> None:
             existing_q.is_published = q["is_published"]
             if sched_date:
                 existing_q.scheduled_date = sched_date
+            if q.get("day_number") is not None:
+                existing_q.day_number = q["day_number"]
         else:
             session.add(
                 Question(
@@ -610,6 +657,7 @@ async def seed_database(session: AsyncSession) -> None:
                     is_premium=q["is_premium"],
                     is_published=q["is_published"],
                     scheduled_date=sched_date,
+                    day_number=q.get("day_number"),
                 )
             )
         await session.flush()

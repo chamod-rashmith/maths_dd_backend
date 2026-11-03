@@ -1,6 +1,7 @@
 """
 FastAPI Router for v1 Questions and Marking Schemes operations.
 Provides catalog filtering, scheduled_date daily challenge resolution,
+dynamic multi-question daily packs, sequential daily challenge series,
 single-question detail hydration, and on-demand marking scheme retrieval.
 """
 
@@ -15,6 +16,8 @@ from app.api.deps import (
 from app.core.security import get_optional_current_user
 from app.domain.repositories.user_repository import UserRepository
 from app.schemas.question import (
+    DailyChallengePackResponse,
+    DailySeriesDaySummaryResponse,
     MarkingSchemeResponse,
     QuestionCreate,
     QuestionDetailResponse,
@@ -50,6 +53,9 @@ async def list_questions(
     is_premium: Optional[bool] = Query(
         None, description="Filter by premium tier status"
     ),
+    day_number: Optional[int] = Query(
+        None, description="Filter by sequential daily challenge day number"
+    ),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
     service: QuestionService = Depends(get_question_service),
@@ -67,6 +73,7 @@ async def list_questions(
         source=source,
         is_premium=is_premium,
         include_unpublished=False,
+        day_number=day_number,
         limit=limit,
         offset=offset,
     )
@@ -81,10 +88,42 @@ async def get_daily_question(
     service: QuestionService = Depends(get_question_service),
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetches today's Daily Challenge question using the immutable `scheduled_date` column.
+    Fetches today's primary Daily Challenge question for backward compatibility with existing client builds.
     Automatically rolls over at midnight Sri Lanka Time with zero background cron jobs.
     """
     return await service.get_daily_question(target_date=date)
+
+
+@router.get("/daily/pack", response_model=Optional[DailyChallengePackResponse])
+async def get_daily_challenge_pack(
+    date: Optional[str] = Query(
+        None,
+        description="Optional target date in YYYY-MM-DD format (defaults to today in Asia/Colombo)",
+    ),
+    day: Optional[int] = Query(
+        None,
+        description="Optional target day number (e.g. 1 for Day 1 challenge pack)",
+    ),
+    service: QuestionService = Depends(get_question_service),
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetches today's complete dynamic multi-question daily challenge pack (e.g. Pure & Applied, Short & Essay).
+    Supports fetching any historical day chronologically using ?day=N (e.g. ?day=1).
+    """
+    return await service.get_daily_pack(target_date=date, day_number=day)
+
+
+@router.get("/daily/series", response_model=List[DailySeriesDaySummaryResponse])
+async def list_daily_challenge_series(
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    service: QuestionService = Depends(get_question_service),
+) -> List[Dict[str, Any]]:
+    """
+    Lists available daily challenge series summaries grouped by day number (Day 1, Day 2...).
+    Enables students to track chronological series progress and practice past daily challenges sequentially.
+    """
+    return await service.list_daily_series(limit=limit, offset=offset)
 
 
 @router.get("/recent", response_model=List[QuestionSummaryResponse])

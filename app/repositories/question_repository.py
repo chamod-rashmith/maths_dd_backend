@@ -1,14 +1,25 @@
 """
-Concrete PostgreSQL Implementation of QuestionRepository using SQLAlchemy 2.0.
-Implements immutable scheduled_date daily lookups, lightweight catalog queries,
-and on-demand marking scheme retrieval without leaking internal timestamps.
+PostgreSQL Repository implementation for Questions and Marking Schemes using SQLAlchemy 2.0 AsyncSession.
+Supports single questions, dynamic multi-question daily packs, and chronological daily challenge series.
+Auto-sorts questions by Combined Maths canonical hierarchy:
+Pure Short (Part A) -> Pure Essay (Part B) -> Applied Short (Part A) -> Applied Essay (Part B).
 """
 
 import datetime
 from typing import Any, Dict, List, Optional
 import uuid
 from zoneinfo import ZoneInfo
-from sqlalchemy import and_, cast, case, Date, func, literal, or_, select
+
+from sqlalchemy import (
+    Date,
+    and_,
+    case,
+    cast,
+    func,
+    literal,
+    or_,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.exceptions import DatabaseOperationError
@@ -85,6 +96,7 @@ def _question_select_stmt():
             Question.is_premium,
             Question.is_published,
             Question.scheduled_date,
+            Question.day_number,
             has_ms_subquery,
             Subject.code.label("subject_code"),
             Subject.name.label("subject_name"),
@@ -123,8 +135,10 @@ class PostgresQuestionRepository(QuestionRepository):
         is_premium: bool = False,
         is_published: bool = True,
         scheduled_date: Optional[str] = None,
+        day_number: Optional[int] = None,
         custom_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Atomically creates or updates a question along with its official marking scheme."""
         try:
             q_id = custom_id.strip() if (custom_id and custom_id.strip()) else str(uuid.uuid4())
             cleaned_lesson_id = lesson_id.strip() if (lesson_id and lesson_id.strip()) else None
@@ -137,12 +151,12 @@ class PostgresQuestionRepository(QuestionRepository):
                     parsed_date = None
 
             effective_schedule = schedule
-            if parsed_date is not None and effective_schedule == "REGULAR":
+            if (parsed_date is not None or day_number is not None) and effective_schedule == "REGULAR":
                 effective_schedule = "DAILY"
 
             cleaned_content_url = content_url.strip() if (content_url and content_url.strip()) else None
 
-            # Upsert Question
+            # Upsert Question entity
             q = (
                 await self._session.execute(
                     select(Question).where(Question.id == q_id)
@@ -166,6 +180,7 @@ class PostgresQuestionRepository(QuestionRepository):
                 q.is_published = is_published
                 q.is_deleted = False
                 q.scheduled_date = parsed_date
+                q.day_number = day_number
             else:
                 q = Question(
                     id=q_id,
@@ -184,12 +199,13 @@ class PostgresQuestionRepository(QuestionRepository):
                     is_premium=is_premium,
                     is_published=is_published,
                     scheduled_date=parsed_date,
+                    day_number=day_number,
                 )
                 self._session.add(q)
 
             await self._session.flush()
 
-            # Upsert MarkingScheme
+            # Upsert MarkingScheme entity
             ms = (
                 await self._session.execute(
                     select(MarkingScheme)
@@ -244,6 +260,7 @@ class PostgresQuestionRepository(QuestionRepository):
                     "is_premium": is_premium,
                     "is_published": is_published,
                     "scheduled_date": parsed_date,
+                    "day_number": day_number,
                     "has_marking_scheme": True,
                 },
                 "marking_scheme": created_solution,
@@ -261,9 +278,11 @@ class PostgresQuestionRepository(QuestionRepository):
         source: Optional[str] = None,
         is_premium: Optional[bool] = None,
         include_unpublished: bool = False,
+        day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
+        """Lists filtered and paginated question summaries."""
         try:
             today_colombo = datetime.datetime.now(_SL_TZ).date()
             stmt = _question_select_stmt()
@@ -312,6 +331,9 @@ class PostgresQuestionRepository(QuestionRepository):
             if is_premium is not None:
                 stmt = stmt.where(Question.is_premium.is_(is_premium))
 
+            if day_number is not None:
+                stmt = stmt.where(Question.day_number == day_number)
+
             stmt = (
                 stmt.order_by(
                     func.coalesce(Question.scheduled_date, cast(Question.created_at, Date)).desc(),
@@ -341,6 +363,7 @@ class PostgresQuestionRepository(QuestionRepository):
     async def get_daily_question(
         self, target_date: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
+        """Fetches a single daily question for backward compatibility with older client builds."""
         resolved_date = _resolve_colombo_date(target_date)
         try:
             # 1. Exact match on scheduled_date
@@ -379,6 +402,159 @@ class PostgresQuestionRepository(QuestionRepository):
                 return d
 
             return None
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
+
+    async def get_daily_pack(
+        self,
+        target_date: Optional[str] = None,
+        day_number: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetches the complete multi-question daily challenge pack for target calendar date or day number.
+        Auto-sorts questions by Combined Maths canonical hierarchy:
+        Pure Short (Part A) -> Pure Essay (Part B) -> Applied Short (Part A) -> Applied Essay (Part B).
+        """
+        canonical_sort_order = [
+            case((func.upper(Subject.code) == "PMAT", 1), (func.upper(Subject.code) == "AMAT", 2), else_=3),
+            case((func.upper(Question.type) == "SHORT", 1), (func.upper(Question.type) == "ESSAY", 2), else_=3),
+            Question.allocated_marks.asc(),
+            Question.id.asc(),
+        ]
+
+        try:
+            # Case A: Explicit day_number lookup (e.g. ?day=1)
+            if day_number is not None and day_number > 0:
+                stmt = (
+                    _question_select_stmt()
+                    .where(
+                        Question.is_published.is_(True),
+                        Question.day_number == day_number,
+                    )
+                    .order_by(*canonical_sort_order)
+                )
+                result = await self._session.execute(stmt)
+                rows = result.mappings().all()
+                if rows:
+                    questions = [dict(r) for r in rows]
+                    return {
+                        "day_number": day_number,
+                        "scheduled_date": questions[0].get("scheduled_date"),
+                        "total_questions": len(questions),
+                        "total_marks": sum(q.get("allocated_marks", 0) for q in questions),
+                        "questions": questions,
+                    }
+                return None
+
+            # Case B: Calendar date resolution
+            resolved_date = _resolve_colombo_date(target_date)
+
+            # Step 1: Exact match on scheduled_date
+            stmt1 = (
+                _question_select_stmt()
+                .where(
+                    Question.is_published.is_(True),
+                    Question.scheduled_date == resolved_date,
+                )
+                .order_by(*canonical_sort_order)
+            )
+            result1 = await self._session.execute(stmt1)
+            rows1 = result1.mappings().all()
+            if rows1:
+                questions = [dict(r) for r in rows1]
+                return {
+                    "day_number": questions[0].get("day_number"),
+                    "scheduled_date": resolved_date,
+                    "total_questions": len(questions),
+                    "total_marks": sum(q.get("allocated_marks", 0) for q in questions),
+                    "questions": questions,
+                }
+
+            # Step 2: Fallback to questions with the latest scheduled_date on or before resolved_date
+            latest_date_stmt = (
+                select(Question.scheduled_date)
+                .where(
+                    Question.is_published.is_(True),
+                    Question.scheduled_date.isnot(None),
+                    Question.scheduled_date <= resolved_date,
+                    Question.is_deleted.is_(False),
+                )
+                .order_by(Question.scheduled_date.desc())
+                .limit(1)
+            )
+            latest_date_res = await self._session.execute(latest_date_stmt)
+            latest_date = latest_date_res.scalar_one_or_none()
+
+            if latest_date:
+                stmt2 = (
+                    _question_select_stmt()
+                    .where(
+                        Question.is_published.is_(True),
+                        Question.scheduled_date == latest_date,
+                    )
+                    .order_by(*canonical_sort_order)
+                )
+                result2 = await self._session.execute(stmt2)
+                rows2 = result2.mappings().all()
+                if rows2:
+                    questions = [dict(r) for r in rows2]
+                    return {
+                        "day_number": questions[0].get("day_number"),
+                        "scheduled_date": latest_date,
+                        "total_questions": len(questions),
+                        "total_marks": sum(q.get("allocated_marks", 0) for q in questions),
+                        "questions": questions,
+                    }
+
+            return None
+        except Exception as exc:
+            raise DatabaseOperationError(str(exc)) from exc
+
+    async def list_daily_series(
+        self,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Lists available daily challenge series summaries grouped by day number (Day 1, Day 2...).
+        Allows students to browse past daily challenges chronologically.
+        """
+        today_colombo = datetime.datetime.now(_SL_TZ).date()
+        try:
+            stmt = (
+                select(
+                    Question.day_number,
+                    Question.scheduled_date,
+                    func.count(Question.id).label("total_questions"),
+                    func.sum(Question.allocated_marks).label("total_marks"),
+                )
+                .where(
+                    Question.is_published.is_(True),
+                    Question.is_deleted.is_(False),
+                    Question.day_number.isnot(None),
+                )
+                .group_by(Question.day_number, Question.scheduled_date)
+                .order_by(Question.day_number.asc())
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await self._session.execute(stmt)
+            rows = result.mappings().all()
+            series = []
+            for r in rows:
+                d = dict(r)
+                day_num = d.get("day_number")
+                sched_date = d.get("scheduled_date")
+                is_unlocked = True if (sched_date is None or sched_date <= today_colombo) else False
+                series.append({
+                    "day_number": day_num,
+                    "scheduled_date": sched_date,
+                    "title": f"Day {day_num:02d} Challenge Workout",
+                    "total_questions": d.get("total_questions", 0),
+                    "total_marks": d.get("total_marks", 0),
+                    "is_unlocked": is_unlocked,
+                })
+            return series
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 

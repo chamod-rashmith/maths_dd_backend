@@ -1,6 +1,7 @@
 """
 SQLAlchemy 2.0 ORM model for Questions.
-Includes soft-delete support (`is_deleted`) to preserve student historical attempts.
+Includes soft-delete support (`is_deleted`) to preserve student historical attempts,
+and `day_number` for sequential dynamic daily challenge series (Day 1, Day 2...).
 """
 
 from datetime import date, datetime, timezone
@@ -17,6 +18,11 @@ if TYPE_CHECKING:
 
 
 class Question(Base):
+    """
+    Core mathematical question entity.
+    Stores problem statement in LaTeX/Markdown, metadata, curriculum relations,
+    and optional day_number / scheduled_date for daily challenge workouts.
+    """
     __tablename__ = "questions"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True, index=True)
@@ -44,6 +50,7 @@ class Question(Base):
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
     scheduled_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    day_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -69,8 +76,9 @@ class Question(Base):
     __table_args__ = (
         Index("idx_questions_subject_lesson", "subject_id", "lesson_id", "is_published", "is_deleted"),
         Index("idx_questions_scheduled_date", "scheduled_date"),
+        Index("idx_questions_day_scheduled", "day_number", "scheduled_date", "is_published", "is_deleted"),
         Index("idx_questions_is_deleted", "is_deleted"),
     )
 
     def __repr__(self) -> str:
-        return f"<Question(id='{self.id}', title='{self.title}', subject_id='{self.subject_id}')>"
+        return f"<Question(id='{self.id}', title='{self.title}', day_number={self.day_number}, subject_id='{self.subject_id}')>"

@@ -1,12 +1,13 @@
 """
 Pydantic DTO schemas for Questions and Marking Schemes.
 Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source,
-lightweight Summary responses for catalog listings, and on-demand Detail/Solution schemas.
+lightweight Summary responses for catalog listings, dynamic Multi-Question Daily Challenge Pack schemas,
+and on-demand Detail/Solution schemas.
 Omits internal database timestamps for security and minimal bandwidth payload.
 """
 
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
@@ -40,6 +41,7 @@ class QuestionCreate(BaseModel):
     is_premium: bool = False
     is_published: bool = True
     scheduled_date: Optional[str] = None
+    day_number: Optional[int] = None
 
 
 class QuestionSummaryResponse(BaseModel):
@@ -69,6 +71,7 @@ class QuestionSummaryResponse(BaseModel):
     is_premium: bool = False
     is_published: bool = True
     scheduled_date: Optional[date] = None
+    day_number: Optional[int] = None
     has_marking_scheme: bool = True
 
 
@@ -118,7 +121,35 @@ class QuestionDetailResponse(BaseModel):
     is_premium: bool = False
     is_published: bool = True
     scheduled_date: Optional[date] = None
+    day_number: Optional[int] = None
     has_marking_scheme: bool = True
+
+
+class DailyChallengePackResponse(BaseModel):
+    """
+    Composite response returning the complete dynamic N-question challenge pack for a target day/date.
+    Adaptable to any number of questions (e.g. 1, 4, or 8 questions for Marathon practice).
+    """
+
+    day_number: Optional[int] = None
+    scheduled_date: Optional[date] = None
+    total_questions: int = 0
+    total_marks: int = 0
+    questions: List[QuestionDetailResponse] = []
+
+
+class DailySeriesDaySummaryResponse(BaseModel):
+    """
+    Lightweight summary of a single daily challenge in the Day 1..N series catalog.
+    Enables students to browse all days chronologically and practice historical challenges.
+    """
+
+    day_number: int
+    scheduled_date: Optional[date] = None
+    title: str = ""
+    total_questions: int = 0
+    total_marks: int = 0
+    is_unlocked: bool = True
 
 
 class QuestionWithSolutionResponse(BaseModel):

@@ -61,12 +61,83 @@ class TestQuestionsFeature(unittest.TestCase):
             "allocated_marks": 25,
             "is_premium": False,
             "scheduled_date": "2026-11-02",
+            "day_number": 1,
         }
         client = TestClient(app)
         response = client.get("/api/v1/questions/daily")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], "q_daily_today")
         self.assertEqual(response.json()["schedule"], "DAILY")
+
+    def test_get_daily_challenge_pack(self) -> None:
+        self.mock_service.get_daily_pack.return_value = {
+            "day_number": 1,
+            "scheduled_date": "2026-11-03",
+            "total_questions": 2,
+            "total_marks": 75,
+            "questions": [
+                {
+                    "id": "q_pmat_01",
+                    "title": "Pure Maths Short",
+                    "subject_id": "sub_pmat",
+                    "type": "SHORT",
+                    "difficulty": "MEDIUM",
+                    "schedule": "DAILY",
+                    "source": "PAST_PAPER",
+                    "allocated_marks": 25,
+                    "is_premium": False,
+                    "scheduled_date": "2026-11-03",
+                    "day_number": 1,
+                },
+                {
+                    "id": "q_pmat_02",
+                    "title": "Pure Maths Essay",
+                    "subject_id": "sub_pmat",
+                    "type": "ESSAY",
+                    "difficulty": "HARD",
+                    "schedule": "DAILY",
+                    "source": "PAST_PAPER",
+                    "allocated_marks": 50,
+                    "is_premium": False,
+                    "scheduled_date": "2026-11-03",
+                    "day_number": 1,
+                },
+            ],
+        }
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/daily/pack?day=1")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["day_number"], 1)
+        self.assertEqual(data["total_questions"], 2)
+        self.assertEqual(len(data["questions"]), 2)
+
+    def test_list_daily_challenge_series(self) -> None:
+        self.mock_service.list_daily_series.return_value = [
+            {
+                "day_number": 1,
+                "scheduled_date": "2026-11-01",
+                "title": "Day 01 Challenge Workout",
+                "total_questions": 4,
+                "total_marks": 150,
+                "is_unlocked": True,
+            },
+            {
+                "day_number": 2,
+                "scheduled_date": "2026-11-02",
+                "title": "Day 02 Challenge Workout",
+                "total_questions": 4,
+                "total_marks": 150,
+                "is_unlocked": True,
+            },
+        ]
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/daily/series")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["day_number"], 1)
+        self.assertTrue(data[0]["is_unlocked"])
 
     def test_solution_free_marking_scheme_accessible_to_everyone(self) -> None:
         self.mock_service.get_marking_scheme.return_value = {
@@ -303,6 +374,65 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
         self.mock_repo.delete_question.return_value = {"deleted": True}
         await self.service.delete_question("some_id")
         self.assertIsNone(questions_cache.get("daily_question:2026-11-03"))
+
+    async def test_get_daily_pack_caching_and_url_hydration(self) -> None:
+        from app.core.cache import questions_cache
+
+        raw_pack = {
+            "day_number": 1,
+            "scheduled_date": "2026-11-03",
+            "total_questions": 2,
+            "total_marks": 50,
+            "questions": [
+                {
+                    "id": "q_pack_1",
+                    "title": "Question 1 with Image",
+                    "content_url": "questions/diagram.png",
+                    "allocated_marks": 25,
+                },
+                {
+                    "id": "q_pack_2",
+                    "title": "Question 2 plain",
+                    "content_url": None,
+                    "allocated_marks": 25,
+                },
+            ],
+        }
+        self.mock_repo.get_daily_pack.return_value = raw_pack
+
+        # First request (Cache MISS -> Database query)
+        pack1 = await self.service.get_daily_pack(day_number=1)
+        self.assertIsNotNone(pack1)
+        self.assertEqual(self.mock_repo.get_daily_pack.call_count, 1)
+        self.assertTrue(pack1["questions"][0]["content_url"].startswith("http"))
+
+        # Raw cache preserves storage path
+        cached_raw = questions_cache.get("daily_pack:day_1")
+        self.assertIsNotNone(cached_raw)
+        self.assertEqual(cached_raw["questions"][0]["content_url"], "questions/diagram.png")
+
+        # Second request (Cache HIT -> Served from cache with fresh hydrated URL)
+        pack2 = await self.service.get_daily_pack(day_number=1)
+        self.assertIsNotNone(pack2)
+        self.assertEqual(self.mock_repo.get_daily_pack.call_count, 1)
+        self.assertTrue(pack2["questions"][0]["content_url"].startswith("http"))
+
+    async def test_list_daily_series_caching(self) -> None:
+        from app.core.cache import questions_cache
+
+        series_data = [
+            {"day_number": 1, "title": "Day 01", "total_questions": 4, "total_marks": 150, "is_unlocked": True}
+        ]
+        self.mock_repo.list_daily_series.return_value = series_data
+
+        res1 = await self.service.list_daily_series(limit=30, offset=0)
+        self.assertEqual(len(res1), 1)
+        self.assertEqual(self.mock_repo.list_daily_series.call_count, 1)
+
+        # Second request should be served from cache
+        res2 = await self.service.list_daily_series(limit=30, offset=0)
+        self.assertEqual(len(res2), 1)
+        self.assertEqual(self.mock_repo.list_daily_series.call_count, 1)
 
 
 if __name__ == "__main__":
