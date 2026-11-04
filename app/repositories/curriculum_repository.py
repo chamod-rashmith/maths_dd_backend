@@ -1,5 +1,16 @@
 """
 Concrete PostgreSQL Implementation of CurriculumRepository using SQLAlchemy 2.0.
+
+===============================================================================
+විෂය නිර්දේශයේ දත්ත ගබඩා මෙහෙයුම් (Postgres Curriculum Repository):
+-------------------------------------------------------------------------------
+1. Subjects (විෂයයන්) විමසීම, නිර්මාණය, සහ මකා දැමීම.
+2. Syllabus Lessons සහ Hierarchical Sub-lessons (ප්‍රධාන පාඩම් සහ උප පාඩම්)
+   කළමනාකරණය:
+   - `parent_lesson_id` filter මඟින් කිසියම් unit එකක sub-topics පමණක් ලබාගැනීම.
+   - `root_only=True` මඟින් ප්‍රධාන ඒකක (Root units) පමණක් ලබාගැනීම.
+   - සම්පූර්ණ ලැයිස්තුව (All units & sub-lessons) එකවර ලබාගැනීම.
+===============================================================================
 """
 
 import datetime
@@ -19,6 +30,7 @@ _SL_TZ = ZoneInfo("Asia/Colombo")
 
 
 def _serialize_subject(subj: Subject) -> Dict[str, Any]:
+    """Serializes a Subject SQLAlchemy model into a clean dictionary."""
     return {
         "id": subj.id,
         "name": subj.name,
@@ -30,9 +42,11 @@ def _serialize_subject(subj: Subject) -> Dict[str, Any]:
 
 
 def _serialize_lesson(lesson: SyllabusLesson) -> Dict[str, Any]:
+    """Serializes a SyllabusLesson SQLAlchemy model with parent_lesson_id into a clean dictionary."""
     return {
         "id": lesson.id,
         "subject_id": lesson.subject_id,
+        "parent_lesson_id": lesson.parent_lesson_id,
         "title": lesson.title,
         "sinhala_title": lesson.sinhala_title,
         "order_index": lesson.order_index,
@@ -49,6 +63,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
         self._session = session
 
     async def get_subjects(self) -> List[Dict[str, Any]]:
+        """Fetches all subjects sorted by order_index ascending."""
         try:
             stmt = select(
                 Subject.id,
@@ -72,6 +87,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
         order_index: int,
         description: str = "",
     ) -> Dict[str, Any]:
+        """Creates or updates a Subject record."""
         cleaned_code = code.strip().upper()
         try:
             subj: Optional[Subject] = None
@@ -118,6 +134,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def delete_subject(self, subject_id: str) -> Dict[str, Any]:
+        """Deletes a Subject record and cascades to its lessons."""
         try:
             subj = (
                 await self._session.execute(
@@ -142,7 +159,13 @@ class PostgresCurriculumRepository(CurriculumRepository):
         self,
         subject_id: Optional[str] = None,
         subject_code: Optional[str] = None,
+        parent_lesson_id: Optional[str] = None,
+        root_only: bool = False,
     ) -> List[Dict[str, Any]]:
+        """
+        Fetches syllabus lessons with real-time question counts.
+        Supports filtering by subject, parent_lesson_id (for subtopics), or root_only (for main units).
+        """
         try:
             today_colombo = datetime.datetime.now(_SL_TZ).date()
 
@@ -155,6 +178,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 select(
                     SyllabusLesson.id,
                     SyllabusLesson.subject_id,
+                    SyllabusLesson.parent_lesson_id,
                     SyllabusLesson.title,
                     SyllabusLesson.sinhala_title,
                     SyllabusLesson.order_index,
@@ -179,6 +203,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 )
             )
 
+            # Subject filter
             raw_filter = (subject_code or subject_id or "").strip()
             if raw_filter:
                 stmt = stmt.where(
@@ -200,8 +225,15 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     )
                 )
 
+            # Hierarchy filter: specific parent unit or top-level units only
+            if parent_lesson_id and parent_lesson_id.strip():
+                stmt = stmt.where(SyllabusLesson.parent_lesson_id == parent_lesson_id.strip())
+            elif root_only:
+                stmt = stmt.where(SyllabusLesson.parent_lesson_id.is_(None))
+
             stmt = stmt.group_by(
                 SyllabusLesson.id,
+                SyllabusLesson.parent_lesson_id,
                 Subject.order_index,
                 Subject.code,
                 Subject.name,
@@ -220,7 +252,11 @@ class PostgresCurriculumRepository(CurriculumRepository):
         sinhala_title: str,
         order_index: int,
         description: str = "",
+        parent_lesson_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """
+        Creates or updates a SyllabusLesson record (supporting hierarchical units and sub-lessons).
+        """
         try:
             lesson: Optional[SyllabusLesson] = None
             if lesson_id and lesson_id.strip():
@@ -232,8 +268,15 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     )
                 ).scalar_one_or_none()
 
+            resolved_parent_id = (
+                parent_lesson_id.strip()
+                if (parent_lesson_id and parent_lesson_id.strip())
+                else None
+            )
+
             if lesson:
                 lesson.subject_id = subject_id
+                lesson.parent_lesson_id = resolved_parent_id
                 lesson.title = title
                 lesson.sinhala_title = sinhala_title
                 lesson.order_index = order_index
@@ -247,6 +290,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 lesson = SyllabusLesson(
                     id=resolved_id,
                     subject_id=subject_id,
+                    parent_lesson_id=resolved_parent_id,
                     title=title,
                     sinhala_title=sinhala_title,
                     order_index=order_index,
@@ -261,6 +305,7 @@ class PostgresCurriculumRepository(CurriculumRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def delete_lesson(self, lesson_id: str) -> Dict[str, Any]:
+        """Deletes a SyllabusLesson record and cascades to its sub-lessons."""
         try:
             lesson = (
                 await self._session.execute(

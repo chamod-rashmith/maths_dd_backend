@@ -1,5 +1,17 @@
 """
 FastAPI Router for v1 Curriculum (Subjects & Syllabus Lessons) operations.
+
+===============================================================================
+Curriculum API Endpoints (v1):
+-------------------------------------------------------------------------------
+1. `GET /subjects` - විෂයයන් ලැයිස්තුව.
+2. `POST /subjects` - විෂයයක් ඇතුළත් කිරීම (Admin only).
+3. `DELETE /subjects/{id}` - විෂයයක් ඉවත් කිරීම (Admin only).
+4. `GET /lessons` - පාඩම් ලැයිස්තුව. `subject_code`, `subject_id`, `parent_lesson_id`,
+   සහ `root_only` මඟින් units සහ hierarchical sub-lessons filter කළ හැක.
+5. `POST /lessons` - පාඩමක් හෝ උප-පාඩමක් ඇතුළත් කිරීම (Admin only).
+6. `DELETE /lessons/{id}` - පාඩමක් ඉවත් කිරීම (Admin only).
+===============================================================================
 """
 
 from typing import List, Optional, Dict, Any
@@ -59,14 +71,26 @@ async def list_lessons(
         None,
         description="Filter lessons by subject UUID or ID (fallback)",
     ),
+    parent_lesson_id: Optional[str] = Query(
+        None,
+        description="Filter sub-lessons belonging to a parent unit UUID/ID (උදා: 'les_trig')",
+    ),
+    root_only: bool = Query(
+        False,
+        description="If True, returns only top-level units (parent_lesson_id IS NULL)",
+    ),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> List[Dict[str, Any]]:
     """
     Fetches syllabus lessons.
-    Supports filtering by human-readable subject code (`?subject_code=PMAT`) or `?subject_id=...`.
+    Supports filtering by subject (`?subject_code=PMAT`), parent unit (`?parent_lesson_id=les_trig`),
+    or top-level units only (`?root_only=true`).
     """
     return await service.list_lessons(
-        subject_id=subject_id, subject_code=subject_code
+        subject_id=subject_id,
+        subject_code=subject_code,
+        parent_lesson_id=parent_lesson_id,
+        root_only=root_only,
     )
 
 
@@ -80,7 +104,7 @@ async def add_lesson(
     _admin: Dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> Dict[str, Any]:
-    """Creates or updates a syllabus lesson with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
+    """Creates or updates a syllabus lesson/sub-lesson with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
     return await service.upsert_lesson(les)
 
 

@@ -1,5 +1,12 @@
 """
 Abstract Repository Contract for Curriculum (Subjects & Syllabus Lessons).
+
+===============================================================================
+විෂය නිර්දේශයේ Repository අතුරුමුහුණත (Curriculum Repository Contract):
+-------------------------------------------------------------------------------
+Subjects සහ Hierarchical Syllabus Lessons (Units & Sub-lessons) කළමනාකරණය
+සඳහා අවශ්‍ය සියලු database operations මෙම interface එක මඟින් අර්ථ දක්වයි.
+===============================================================================
 """
 
 from abc import ABC, abstractmethod
@@ -37,8 +44,18 @@ class CurriculumRepository(ABC):
         self,
         subject_id: Optional[str] = None,
         subject_code: Optional[str] = None,
+        parent_lesson_id: Optional[str] = None,
+        root_only: bool = False,
     ) -> List[Dict[str, Any]]:
-        """Returns syllabus lessons, optionally filtered by subject_id or subject_code."""
+        """
+        Returns syllabus lessons, optionally filtered by subject, parent_lesson_id, or root_only.
+
+        Args:
+            subject_id: Filter by subject ID.
+            subject_code: Filter by subject code (e.g. 'PMAT', 'AMAT').
+            parent_lesson_id: Filter sub-lessons belonging to this specific parent unit.
+            root_only: If True, returns only top-level units (parent_lesson_id IS NULL).
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -50,8 +67,20 @@ class CurriculumRepository(ABC):
         sinhala_title: str,
         order_index: int,
         description: str = "",
+        parent_lesson_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Creates or updates a syllabus lesson."""
+        """
+        Creates or updates a syllabus lesson or sub-lesson.
+
+        Args:
+            lesson_id: Lesson UUID or string ID (auto-generated if None).
+            subject_id: ID of the subject this lesson belongs to.
+            title: English title.
+            sinhala_title: Sinhala title.
+            order_index: Sequence order among siblings.
+            description: Overview or notes.
+            parent_lesson_id: Optional parent unit ID for hierarchical sub-lessons.
+        """
         raise NotImplementedError
 
     @abstractmethod

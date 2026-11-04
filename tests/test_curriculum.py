@@ -1,5 +1,6 @@
 """
 Unit tests for Curriculum (Subjects & Syllabus Lessons) endpoints and RBAC security.
+Verifies hierarchical sub-lessons, parent lesson filtering, and admin CRUD protection.
 """
 
 import unittest
@@ -16,7 +17,7 @@ from app.services.curriculum_service import CurriculumService
 
 
 class TestCurriculumFeature(unittest.TestCase):
-    """Tests curriculum retrieval and admin CRUD protection."""
+    """Tests curriculum retrieval, hierarchical sub-lessons, and admin CRUD protection."""
 
     def setUp(self) -> None:
         self.mock_service = AsyncMock(spec=CurriculumService)
@@ -57,6 +58,7 @@ class TestCurriculumFeature(unittest.TestCase):
             {
                 "id": "les_trig",
                 "subject_id": "sub_pmat",
+                "parent_lesson_id": None,
                 "title": "Trigonometry",
                 "sinhala_title": "ත්‍රිකෝණමිතිය",
                 "order_index": 1,
@@ -71,6 +73,72 @@ class TestCurriculumFeature(unittest.TestCase):
         data = response.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["title"], "Trigonometry")
+        self.assertIsNone(data[0]["parent_lesson_id"])
+
+    def test_list_sub_lessons_hierarchy_filter(self) -> None:
+        """Verifies filtering sub-lessons by parent_lesson_id query parameter."""
+        self.mock_service.list_lessons.return_value = [
+            {
+                "id": "les_trig_01",
+                "subject_id": "sub_pmat",
+                "parent_lesson_id": "les_trig",
+                "title": "Trigonometric Ratios",
+                "sinhala_title": "ත්‍රිකෝණමිතික අනුපාත",
+                "order_index": 1,
+                "description": "Sin, Cos, Tan formulas and identities",
+                "question_count": 15,
+                "premium_count": 2,
+            },
+            {
+                "id": "les_trig_02",
+                "subject_id": "sub_pmat",
+                "parent_lesson_id": "les_trig",
+                "title": "General Solutions",
+                "sinhala_title": "සාමාන්‍ය විසඳුම්",
+                "order_index": 2,
+                "description": "Solving trig equations",
+                "question_count": 20,
+                "premium_count": 5,
+            },
+        ]
+        client = TestClient(app)
+        response = client.get("/api/v1/curriculum/lessons?parent_lesson_id=les_trig")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["parent_lesson_id"], "les_trig")
+        self.assertEqual(data[1]["parent_lesson_id"], "les_trig")
+        self.assertEqual(data[0]["sinhala_title"], "ත්‍රිකෝණමිතික අනුපාත")
+
+    def test_add_sub_lesson_allows_admin(self) -> None:
+        """Verifies admin can create a sub-lesson linked to a parent unit."""
+        admin_user = {"uid": "admin_001", "email": "admin@mathsdd.lk", "role": "ADMIN"}
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+        self.mock_service.upsert_lesson.return_value = {
+            "id": "les_trig_01",
+            "subject_id": "sub_pmat",
+            "parent_lesson_id": "les_trig",
+            "title": "Trigonometric Ratios",
+            "sinhala_title": "ත්‍රිකෝණමිතික අනුපාත",
+            "order_index": 1,
+            "description": "Subtopic 1",
+            "question_count": 0,
+            "premium_count": 0,
+        }
+
+        client = TestClient(app)
+        payload = {
+            "subject_id": "sub_pmat",
+            "parent_lesson_id": "les_trig",
+            "title": "Trigonometric Ratios",
+            "sinhala_title": "ත්‍රිකෝණමිතික අනුපාත",
+            "order_index": 1,
+        }
+        response = client.post("/api/v1/curriculum/lessons", json=payload)
+        self.assertEqual(response.status_code, 201)
+        res_data = response.json()
+        self.assertEqual(res_data["id"], "les_trig_01")
+        self.assertEqual(res_data["parent_lesson_id"], "les_trig")
 
     def test_add_subject_blocks_standard_user(self) -> None:
         standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}

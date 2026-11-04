@@ -77,6 +77,26 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.id, "lesson_001")
         self.assertEqual(dto.subject_id, "subj_pmat")
         self.assertEqual(dto.title, "Real Numbers")
+        self.assertIsNone(dto.parent_lesson_id)
+
+    def test_syllabus_sub_lesson_hierarchy_serialization(self) -> None:
+        """Verifies hierarchical sub-lesson model attributes and DTO serialization."""
+        sub_lesson = SyllabusLesson(
+            id="les_trig_01",
+            subject_id="subj_pmat",
+            parent_lesson_id="les_trig",
+            title="Trigonometric Ratios",
+            sinhala_title="ත්‍රිකෝණමිතික අනුපාත",
+            order_index=1,
+            description="Subtopic 1",
+        )
+        self.assertEqual(sub_lesson.parent_lesson_id, "les_trig")
+        self.assertIn("parent='les_trig'", repr(sub_lesson))
+
+        dto = LessonResponse.model_validate(sub_lesson, from_attributes=True)
+        self.assertEqual(dto.id, "les_trig_01")
+        self.assertEqual(dto.parent_lesson_id, "les_trig")
+        self.assertEqual(dto.sinhala_title, "ත්‍රිකෝණමිතික අනුපාත")
 
     def test_question_model_serialization(self) -> None:
         today = datetime.date(2026, 10, 29)
