@@ -298,18 +298,26 @@ class PostgresProgressRepository(ProgressRepository):
             )
             self.session.add(xp_tx)
 
-            # Daily challenge bonus
+            # Daily challenge bonus (Strictly ONCE per Colombo calendar day)
             if request.is_daily_question:
-                daily_bonus_tx = XpTransaction(
-                    user_id=user_id,
-                    amount=50,
-                    reason="DAILY_CHALLENGE_BONUS",
-                    attempt_id=attempt.id,
-                    question_id=request.question_id,
-                    description_si="දිනපතා අභ්‍යාස ප්‍රසාද ලකුණු (+50 XP)",
-                    description_en="Daily Challenge Bonus (+50 XP)",
-                )
-                self.session.add(daily_bonus_tx)
+                today_start_utc = datetime.combine(today, datetime.min.time(), tzinfo=_COLOMBO_TZ).astimezone(timezone.utc)
+                stmt_daily_bonus = select(XpTransaction.id).where(
+                    XpTransaction.user_id == user_id,
+                    XpTransaction.reason == "DAILY_CHALLENGE_BONUS",
+                    XpTransaction.created_at >= today_start_utc,
+                ).limit(1)
+                existing_bonus = (await self.session.execute(stmt_daily_bonus)).first()
+                if not existing_bonus:
+                    daily_bonus_tx = XpTransaction(
+                        user_id=user_id,
+                        amount=50,
+                        reason="DAILY_CHALLENGE_BONUS",
+                        attempt_id=attempt.id,
+                        question_id=request.question_id,
+                        description_si="දිනපතා අභ්‍යාස ප්‍රසාද ලකුණු (+50 XP)",
+                        description_en="Daily Challenge Bonus (+50 XP)",
+                    )
+                    self.session.add(daily_bonus_tx)
         else:
             # Re-attempt practice bonus
             re_xp = 5
