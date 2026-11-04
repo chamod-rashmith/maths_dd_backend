@@ -240,11 +240,50 @@ class PostgresProgressRepository(ProgressRepository):
         attempt = result.scalar_one_or_none()
         is_new_solve = attempt is None
 
-        # 2. Determine question type for XP calculation
-        q_stmt = select(Question.type).where(Question.id == request.question_id)
+        # 2. Determine question metadata & server-side verification of Daily Challenge status
+        q_stmt = select(
+            Question.type,
+            Question.scheduled_date,
+            Question.day_number,
+        ).where(Question.id == request.question_id)
         q_res = await self.session.execute(q_stmt)
         q_row = q_res.first()
         q_type = str(q_row[0]).upper() if (q_row and q_row[0]) else "SHORT"
+        q_scheduled_date = q_row[1] if (q_row and len(q_row) > 1) else None
+
+        # Server-side verification of Daily Challenge status:
+        # A question is genuinely a daily challenge question for today if:
+        # a. Its scheduled_date is strictly today in Asia/Colombo.
+        # b. In fallback mode (when no questions exist for today), its scheduled_date matches the active fallback date <= today.
+        is_verified_daily = False
+        if q_scheduled_date == today:
+            is_verified_daily = True
+        elif q_scheduled_date is not None and q_scheduled_date <= today:
+            today_count_stmt = select(func.count(Question.id)).where(
+                Question.is_published.is_(True),
+                Question.is_deleted.is_(False),
+                Question.scheduled_date == today,
+            )
+            has_today_questions = (await self.session.execute(today_count_stmt)).scalar() or 0
+            if has_today_questions == 0:
+                latest_date_stmt = (
+                    select(Question.scheduled_date)
+                    .where(
+                        Question.is_published.is_(True),
+                        Question.is_deleted.is_(False),
+                        Question.scheduled_date.isnot(None),
+                        Question.scheduled_date <= today,
+                    )
+                    .order_by(Question.scheduled_date.desc())
+                    .limit(1)
+                )
+                latest_date = (await self.session.execute(latest_date_stmt)).scalar_one_or_none()
+                if latest_date and q_scheduled_date == latest_date:
+                    is_verified_daily = True
+
+        # Enforce server-side verified daily question flag
+        # (Client cannot spoof is_daily_question for regular practice questions)
+        is_effective_daily = is_verified_daily
 
         # 3. Update or Create Attempt with Cumulative Time
         if attempt:
@@ -254,7 +293,7 @@ class PostgresProgressRepository(ProgressRepository):
             attempt.last_attempt_duration_seconds = time_delta
             attempt.target_duration_seconds = request.target_duration_seconds
             attempt.was_overtime = request.was_overtime
-            attempt.is_daily_question = request.is_daily_question
+            attempt.is_daily_question = is_effective_daily
             attempt.completed_date = today
             attempt.completed_at = now_utc
             if request.confidence is not None:
@@ -273,7 +312,7 @@ class PostgresProgressRepository(ProgressRepository):
                 target_duration_seconds=request.target_duration_seconds,
                 was_overtime=request.was_overtime,
                 attempt_count=1,
-                is_daily_question=request.is_daily_question,
+                is_daily_question=is_effective_daily,
                 completed_date=today,
                 completed_at=now_utc,
                 is_bookmarked=request.is_bookmarked if request.is_bookmarked is not None else False,
@@ -298,8 +337,8 @@ class PostgresProgressRepository(ProgressRepository):
             )
             self.session.add(xp_tx)
 
-            # Daily challenge bonus (Strictly ONCE per Colombo calendar day)
-            if request.is_daily_question:
+            # Daily challenge bonus (Strictly ONCE per Colombo calendar day and ONLY for verified daily questions)
+            if is_effective_daily:
                 today_start_utc = datetime.combine(today, datetime.min.time(), tzinfo=_COLOMBO_TZ).astimezone(timezone.utc)
                 stmt_daily_bonus = select(XpTransaction.id).where(
                     XpTransaction.user_id == user_id,
@@ -343,7 +382,7 @@ class PostgresProgressRepository(ProgressRepository):
         if activity:
             activity.questions_solved_count += 1
             activity.total_time_spent_seconds += time_delta
-            if request.is_daily_question:
+            if is_effective_daily:
                 activity.daily_challenge_completed = True
         else:
             activity = UserDailyActivity(
@@ -352,7 +391,7 @@ class PostgresProgressRepository(ProgressRepository):
                 date_key=today_key,
                 questions_solved_count=1,
                 total_time_spent_seconds=time_delta,
-                daily_challenge_completed=request.is_daily_question,
+                daily_challenge_completed=is_effective_daily,
             )
             self.session.add(activity)
 

@@ -13,13 +13,19 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from app.core.database import Base
 from app.main import app
 from app.models.progress import UserDailyActivity, UserQuestionAttempt, XpTransaction
+from app.models.question import Question
+from app.models.subject import Subject
+from app.models.user import User
 from app.models.user_stats import UserStats
+from app.repositories.progress_repository import PostgresProgressRepository, _get_colombo_today
 from app.schemas.progress import (
     CompletedQuestionRecordSchema,
     DailyActivityBucketSchema,
+    MarkQuestionCompletedRequest,
     UserProgressSummaryResponse,
     XpHistoryResponse,
     XpTransactionResponse,
@@ -262,6 +268,98 @@ class TestProgressFeature(unittest.TestCase):
         finally:
             app.dependency_overrides.clear()
 
+
+
+class TestProgressRepositoryDailyVerification(unittest.IsolatedAsyncioTestCase):
+    """Verifies server-side Daily Challenge question verification in PostgresProgressRepository."""
+
+    async def asyncSetUp(self) -> None:
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        self.session_factory = async_sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+    async def asyncTearDown(self) -> None:
+        await self.engine.dispose()
+
+    async def test_server_rejects_client_spoofed_daily_bonus(self) -> None:
+        """Verify that completing a regular question with client sending is_daily_question=True
+        is server-verified and denied daily bonus XP and streak completion."""
+        today = _get_colombo_today()
+        async with self.session_factory() as session:
+            subj = Subject(id="pmat_v", name="Pure Maths", sinhala_name="ශුද්ධ ගණිතය", code="PMAT", order_index=1)
+            session.add(subj)
+            user = User(uid="usr_v1", email="v1@test.com", name="Verifier 1")
+            session.add(user)
+            q_regular = Question(
+                id="q_reg_spoof",
+                title="Regular Practice Problem",
+                subject_id="pmat_v",
+                type="SHORT",
+                schedule="REGULAR",
+                scheduled_date=None,
+                is_published=True,
+                is_deleted=False,
+            )
+            session.add(q_regular)
+            await session.commit()
+
+        async with self.session_factory() as session:
+            repo = PostgresProgressRepository(session)
+            req = MarkQuestionCompletedRequest(
+                question_id="q_reg_spoof",
+                time_spent_seconds=90,
+                is_daily_question=True,  # Client attempts to spoof daily question
+            )
+            summary = await repo.mark_question_completed("usr_v1", req)
+            # Base SHORT XP is 10; NO +50 daily bonus should be awarded!
+            self.assertEqual(summary.xp, 10)
+            attempt_rec = summary.completed_questions["q_reg_spoof"]
+            self.assertFalse(attempt_rec.is_daily_question)
+            today_act = summary.daily_activity.get(today.isoformat())
+            self.assertIsNotNone(today_act)
+            self.assertFalse(today_act.daily_challenge_completed)
+
+    async def test_server_verifies_genuine_daily_question_and_awards_bonus(self) -> None:
+        """Verify that completing a question whose scheduled_date == today is verified
+        and awarded both base XP and +50 XP daily challenge bonus with streak completion."""
+        today = _get_colombo_today()
+        async with self.session_factory() as session:
+            subj = Subject(id="pmat_v2", name="Pure Maths", sinhala_name="ශුද්ධ ගණිතය", code="PMAT", order_index=1)
+            session.add(subj)
+            user = User(uid="usr_v2", email="v2@test.com", name="Verifier 2")
+            session.add(user)
+            q_daily = Question(
+                id="q_genuine_daily",
+                title="Genuine Daily Short",
+                subject_id="pmat_v2",
+                type="SHORT",
+                schedule="DAILY",
+                scheduled_date=today,
+                day_number=1,
+                is_published=True,
+                is_deleted=False,
+            )
+            session.add(q_daily)
+            await session.commit()
+
+        async with self.session_factory() as session:
+            repo = PostgresProgressRepository(session)
+            req = MarkQuestionCompletedRequest(
+                question_id="q_genuine_daily",
+                time_spent_seconds=120,
+                is_daily_question=True,
+            )
+            summary = await repo.mark_question_completed("usr_v2", req)
+            # Base SHORT XP is 10 + 50 daily bonus = 60 XP
+            self.assertEqual(summary.xp, 60)
+            attempt_rec = summary.completed_questions["q_genuine_daily"]
+            self.assertTrue(attempt_rec.is_daily_question)
+            today_act = summary.daily_activity.get(today.isoformat())
+            self.assertIsNotNone(today_act)
+            self.assertTrue(today_act.daily_challenge_completed)
 
 if __name__ == "__main__":
     unittest.main()
