@@ -26,4 +26,4 @@ USER appuser
 EXPOSE 8080
 
 # Run alembic migrations then launch uvicorn server binding to dynamic Cloud Run $PORT (defaults to 8080)
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "alembic upgrade head || true; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

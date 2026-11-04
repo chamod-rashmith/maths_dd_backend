@@ -74,80 +74,13 @@ get_db = get_db_session  # Backward-compatible alias for dependency injection
 async def init_db() -> None:
     """
     Initializes database tables and default seeds on application startup.
-    Idempotent and safe across multiple instances.
+    Idempotent and safe across multiple instances and local/cloud environments.
     """
     try:
         async with engine.begin() as conn:
             # Import models so they are registered with Base.metadata
             from app import models  # noqa: F401
             await conn.run_sync(Base.metadata.create_all)
-
-            # PostgreSQL legacy schema reconciliation (ensures newly normalized columns exist)
-            if conn.dialect.name == "postgresql":
-                await conn.execute(text("""
-                    DO $$
-                    BEGIN
-                        -- 1. users.district_id
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users') THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'users' AND column_name = 'district_id'
-                            ) THEN
-                                ALTER TABLE users ADD COLUMN district_id INTEGER REFERENCES districts(id) ON DELETE SET NULL;
-                                CREATE INDEX IF NOT EXISTS ix_users_district_id ON users (district_id);
-                            END IF;
-                        END IF;
-
-                        -- 2. syllabus_lessons.parent_lesson_id
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'syllabus_lessons') THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'syllabus_lessons' AND column_name = 'parent_lesson_id'
-                            ) THEN
-                                ALTER TABLE syllabus_lessons ADD COLUMN parent_lesson_id VARCHAR(100) REFERENCES syllabus_lessons(id) ON DELETE CASCADE;
-                                CREATE INDEX IF NOT EXISTS ix_syllabus_lessons_parent_lesson_id ON syllabus_lessons (parent_lesson_id);
-                            END IF;
-                        END IF;
-
-                        -- 3. questions.exam_paper_id & is_deleted
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'questions') THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'questions' AND column_name = 'exam_paper_id'
-                            ) THEN
-                                ALTER TABLE questions ADD COLUMN exam_paper_id VARCHAR(36);
-                                CREATE INDEX IF NOT EXISTS ix_questions_exam_paper_id ON questions (exam_paper_id);
-                            END IF;
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'questions' AND column_name = 'is_deleted'
-                            ) THEN
-                                ALTER TABLE questions ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL;
-                            END IF;
-                        END IF;
-
-                        -- 4. marking_schemes.description_si
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'marking_schemes') THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'marking_schemes' AND column_name = 'description_si'
-                            ) THEN
-                                ALTER TABLE marking_schemes ADD COLUMN description_si TEXT;
-                            END IF;
-                        END IF;
-
-                        -- 5. study_notes.is_deleted
-                        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'study_notes') THEN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'study_notes' AND column_name = 'is_deleted'
-                            ) THEN
-                                ALTER TABLE study_notes ADD COLUMN is_deleted BOOLEAN DEFAULT false NOT NULL;
-                                CREATE INDEX IF NOT EXISTS idx_study_notes_is_deleted ON study_notes (is_deleted);
-                            END IF;
-                        END IF;
-                    END $$;
-                """))
 
         logger.info("SQLAlchemy database tables verified/created successfully.")
 
@@ -158,8 +91,7 @@ async def init_db() -> None:
         except Exception as seed_exc:
             logger.error("Non-fatal error during seed_database: %s", seed_exc)
     except Exception as e:
-        logger.error("Database initialization failed: %s", e)
-        raise
+        logger.error("Database initialization encountered an issue (non-fatal): %s", e)
 
 
 async def init_db_pool() -> None:
