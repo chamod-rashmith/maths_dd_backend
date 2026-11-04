@@ -117,6 +117,14 @@ async def _repair_schema_anomalies(conn) -> None:
             text("ALTER TABLE daily_challenges ADD COLUMN IF NOT EXISTS subject_id VARCHAR(100);")
         )
 
+        # Ensure daily_challenge_questions and marking_scheme_steps allow varchar(100) IDs
+        await conn.execute(
+            text("ALTER TABLE daily_challenge_questions ALTER COLUMN id TYPE VARCHAR(100);")
+        )
+        await conn.execute(
+            text("ALTER TABLE marking_scheme_steps ALTER COLUMN id TYPE VARCHAR(100);")
+        )
+
         # Ensure xp_transactions has reason and attempt columns
         await conn.execute(
             text("ALTER TABLE xp_transactions ADD COLUMN IF NOT EXISTS reason VARCHAR(64) DEFAULT 'QUESTION_SOLVED';")

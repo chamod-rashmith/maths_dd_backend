@@ -1361,7 +1361,7 @@ async def seed_database(session: AsyncSession) -> None:
 
         # Link questions to daily challenge junction table
         for q_order, q_id in enumerate(dc["question_ids"], start=1):
-            junction_id = f"dcq_{challenge_id}_{q_id}"
+            junction_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"dcq_{challenge_id}_{q_id}"))
             existing_junction = (
                 await session.execute(
                     select(DailyChallengeQuestion).where(

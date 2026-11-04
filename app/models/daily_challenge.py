@@ -149,7 +149,7 @@ class DailyChallengeQuestion(Base):
     )
 
     id: Mapped[str] = mapped_column(
-        String(36),
+        String(100),
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
     )

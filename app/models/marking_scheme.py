@@ -153,7 +153,7 @@ class MarkingSchemeStep(Base):
     __tablename__ = "marking_scheme_steps"
 
     id: Mapped[str] = mapped_column(
-        String(36),
+        String(100),
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
         comment="පියවරේ අනන්‍ය හැඳුනුම් අංකය (UUID)",

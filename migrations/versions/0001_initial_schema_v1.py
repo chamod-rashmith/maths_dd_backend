@@ -240,7 +240,7 @@ def upgrade() -> None:
     # 10. marking_scheme_steps (Normalized Step-by-Step Marking Rubric: Method, Accuracy, Final)
     op.create_table(
         "marking_scheme_steps",
-        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
+        sa.Column("id", sa.String(length=100), primary_key=True, nullable=False),
         sa.Column("marking_scheme_id", sa.Uuid(), sa.ForeignKey("marking_schemes.id", ondelete="CASCADE"), nullable=False),
         sa.Column("step_number", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.Column("step_type", sa.String(length=32), server_default=sa.text("'METHOD'"), nullable=False),
@@ -408,7 +408,7 @@ def upgrade() -> None:
     # 19. daily_challenge_questions
     op.create_table(
         "daily_challenge_questions",
-        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
+        sa.Column("id", sa.String(length=100), primary_key=True, nullable=False),
         sa.Column("daily_challenge_id", sa.String(length=36), sa.ForeignKey("daily_challenges.id", ondelete="CASCADE"), nullable=False),
         sa.Column("question_id", sa.String(length=100), sa.ForeignKey("questions.id", ondelete="CASCADE"), nullable=False),
         sa.Column("order_index", sa.Integer(), server_default=sa.text("1"), nullable=False),
