@@ -38,6 +38,24 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    from sqlalchemy import inspect
+    from alembic.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    inspector = inspect(connection)
+    existing_tables = inspector.get_table_names()
+
+    # If tables already exist (e.g. from initial schema) but alembic_version table
+    # has not yet been stamped, stamp 0001_initial_schema_v1 so Alembic skips
+    # re-creating existing tables and smoothly applies incremental migrations (0002+).
+    if "questions" in existing_tables:
+        mig_context = MigrationContext.configure(connection)
+        current_rev = mig_context.get_current_revision()
+        if not current_rev:
+            script = ScriptDirectory.from_config(config)
+            mig_context.stamp(script, "0001_initial_schema_v1")
+            connection.commit()
+
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
