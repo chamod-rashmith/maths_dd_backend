@@ -1,7 +1,8 @@
 """
-Application Service for Questions and Marking Schemes.
+Application Service for Questions, Marking Schemes, and Daily Challenges.
 Orchestrates catalog filtering, dynamic multi-question daily pack resolution with hybrid Redis caching,
-sequential daily challenge series cataloging, on-demand marking scheme retrieval,
+sequential daily challenge series cataloging with tomorrow's teaser support,
+strict anti-leak time-locks, on-demand marking scheme retrieval,
 dynamic signed URL generation, and cache invalidation.
 """
 
@@ -65,7 +66,7 @@ class QuestionService:
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
-        return await self._repo.list_questions(
+        questions = await self._repo.list_questions(
             subject_id=subject_id,
             lesson_id=lesson_id,
             question_type=question_type,
@@ -78,51 +79,74 @@ class QuestionService:
             limit=limit,
             offset=offset,
         )
+        return [self._hydrate_question_signed_url(q) for q in questions]
 
     async def list_recent_questions(
         self, limit: int = 15
     ) -> List[Dict[str, Any]]:
-        return await self._repo.get_recent(limit=limit)
+        questions = await self._repo.list_recent_questions(limit=limit)
+        return [self._hydrate_question_signed_url(q) for q in questions]
 
     async def get_question_by_id(self, question_id: str) -> Dict[str, Any]:
         question = await self._repo.get_by_id(question_id)
         if not question:
-            raise EntityNotFoundError(f"Question '{question_id}' not found.")
+            raise EntityNotFoundError(
+                f"Question with ID '{question_id}' was not found in database."
+            )
         return self._hydrate_question_signed_url(question)
 
     async def get_daily_question(
         self, target_date: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """Fetches the primary daily question for backward compatibility with older client builds."""
+        """Internal helper for single daily question lookup."""
         resolved_date_str = _resolve_colombo_date_str(target_date)
         cache_key = f"daily_question:{resolved_date_str}"
 
-        # 1. Check Redis / In-Memory hybrid cache
         cached = questions_cache.get(cache_key)
         if cached is not None:
-            # Re-hydrate signed download URL dynamically on-the-fly so it never expires in cache
             return self._hydrate_question_signed_url(cached)
 
-        # 2. Cache miss -> query Cloud SQL repository
         question = await self._repo.get_daily_question(target_date=target_date)
         if not question:
             return None
 
-        # 3. Store raw question in cache (without pre-signed URL) with 24-hour TTL
         questions_cache.set(cache_key, question, ttl_seconds=86400)
-
-        # 4. Hydrate signed URL dynamically for client response
         return self._hydrate_question_signed_url(question)
 
     async def get_daily_pack(
         self,
         target_date: Optional[str] = None,
         day_number: Optional[int] = None,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Retrieves the complete dynamic multi-question daily challenge pack for a target date or day number.
         Uses date-based or day-based hybrid Redis caching with on-the-fly pre-signed download URL hydration.
+
+        Strict Anti-Leak Security Policy:
+        - Regular students cannot access future challenge packs. If the scheduled date is in the future
+          compared to Asia/Colombo time, a PermissionDeniedError (HTTP 403) is raised.
+        - Privileged roles (ADMIN, EDITOR) can preview future packs.
         """
+        is_privileged = False
+        if current_user:
+            role = str(current_user.get("role", "")).upper()
+            if role in ("ADMIN", "EDITOR"):
+                is_privileged = True
+
+        today_colombo = datetime.now(_COLOMBO_TZ).date()
+
+        # Pre-check target_date parameter if explicitly provided
+        if target_date and not is_privileged:
+            try:
+                requested_date = date.fromisoformat(str(target_date).strip()[:10])
+                if requested_date > today_colombo:
+                    raise PermissionDeniedError(
+                        f"Daily Challenge Pack for {requested_date} is locked until that date."
+                    )
+            except (ValueError, TypeError):
+                pass
+
         if day_number is not None and day_number > 0:
             cache_key = f"daily_pack:day_{day_number}"
         else:
@@ -132,6 +156,17 @@ class QuestionService:
         # 1. Check Redis / In-Memory hybrid cache
         cached = questions_cache.get(cache_key)
         if cached is not None:
+            pack_date = cached.get("scheduled_date")
+            if not is_privileged and pack_date is not None:
+                if isinstance(pack_date, str):
+                    try:
+                        pack_date = date.fromisoformat(pack_date[:10])
+                    except (ValueError, TypeError):
+                        pack_date = None
+                if pack_date and pack_date > today_colombo:
+                    raise PermissionDeniedError(
+                        f"Day {cached.get('day_number', day_number)} Challenge Pack is locked until {pack_date} 00:00 AM Sri Lanka Time."
+                    )
             result = dict(cached)
             result["questions"] = [
                 self._hydrate_question_signed_url(q) for q in result.get("questions", [])
@@ -142,6 +177,19 @@ class QuestionService:
         pack = await self._repo.get_daily_pack(target_date=target_date, day_number=day_number)
         if not pack:
             return None
+
+        # Verify anti-leak lock on repository result
+        pack_date = pack.get("scheduled_date")
+        if not is_privileged and pack_date is not None:
+            if isinstance(pack_date, str):
+                try:
+                    pack_date = date.fromisoformat(pack_date[:10])
+                except (ValueError, TypeError):
+                    pack_date = None
+            if pack_date and pack_date > today_colombo:
+                raise PermissionDeniedError(
+                    f"Day {pack.get('day_number', day_number)} Challenge Pack is locked until {pack_date} 00:00 AM Sri Lanka Time."
+                )
 
         # 3. Store raw pack in cache (without pre-signed URLs) with 24-hour TTL
         questions_cache.set(cache_key, pack, ttl_seconds=86400)
@@ -157,10 +205,11 @@ class QuestionService:
         self,
         limit: int = 30,
         offset: int = 0,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Retrieves the catalog list of daily challenge series summaries (Day 1, Day 2...).
-        Cached with 1-hour TTL for ultra-low latency catalog browsing.
+        Retrieves the catalog list of daily challenge series summaries in reverse-chronological order.
+        Includes safe teaser metadata for tomorrow's challenge (without leaking question bodies).
         """
         cache_key = f"daily_series:catalog:{limit}_{offset}"
         cached = questions_cache.get(cache_key)
@@ -168,7 +217,7 @@ class QuestionService:
             return cached
 
         series = await self._repo.list_daily_series(limit=limit, offset=offset)
-        questions_cache.set(cache_key, series, ttl_seconds=3600)
+        questions_cache.set(cache_key, series, ttl_seconds=300)
         return series
 
     async def get_marking_scheme(
@@ -228,9 +277,7 @@ class QuestionService:
             day_number=payload.day_number,
             custom_id=resolved_id,
         )
-        # Invalidate curriculum lesson cache so question_count / premium_count refresh immediately
         curriculum_cache.invalidate_prefix("curriculum:")
-        # Invalidate daily question and pack caches so newly scheduled challenges appear immediately
         questions_cache.invalidate_prefix("daily_question")
         questions_cache.invalidate_prefix("daily_pack")
         questions_cache.invalidate_prefix("daily_series")

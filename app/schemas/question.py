@@ -3,7 +3,7 @@ Pydantic DTO schemas for Questions and Marking Schemes.
 Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source,
 lightweight Summary responses for catalog listings, dynamic Multi-Question Daily Challenge Pack schemas,
 and on-demand Detail/Solution schemas.
-Omits internal database timestamps for security and minimal bandwidth payload.
+Omits internal database timestamps (created_at, updated_at, deleted_at) for security and minimal bandwidth payload.
 """
 
 from datetime import date
@@ -142,15 +142,23 @@ class DailyChallengePackResponse(BaseModel):
 class DailySeriesDaySummaryResponse(BaseModel):
     """
     Lightweight summary of a single daily challenge in the Day 1..N series catalog.
-    Enables students to browse all days chronologically and practice historical challenges.
+    Enables students to browse all days in reverse-chronological order (Tomorrow/Today first, older past days below).
+    
+    For future locked days (e.g. tomorrow's teaser), sends safe high-level metadata (counts, duration, unlock time)
+    WITHOUT leaking question IDs, problem texts, LaTeX formulas, or marking scheme solutions.
+    Internal DB timestamps (created_at, updated_at) are omitted for maximum security and minimal mobile bandwidth.
     """
 
     day_number: int
     scheduled_date: Optional[date] = None
     title: str = ""
     total_questions: int = 0
+    short_questions_count: int = 0
+    essay_questions_count: int = 0
     total_marks: int = 0
+    target_duration_seconds: int = 3600
     is_unlocked: bool = True
+    unlocks_at: Optional[str] = None
 
 
 class QuestionWithSolutionResponse(BaseModel):

@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.user_stats import UserStats
 from app.models.subscription import UserSubscription, ProcessedWebhookEvent
 from app.models.progress import UserQuestionAttempt, UserDailyActivity
+from app.models.daily_challenge import DailyChallenge, DailyChallengeQuestion
 
 __all__ = [
     "Subject",
@@ -27,4 +28,6 @@ __all__ = [
     "ProcessedWebhookEvent",
     "UserQuestionAttempt",
     "UserDailyActivity",
+    "DailyChallenge",
+    "DailyChallengeQuestion",
 ]

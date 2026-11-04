@@ -531,25 +531,34 @@ class PostgresQuestionRepository(QuestionRepository):
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
-        Lists available daily challenge series summaries grouped by day number (Day 1, Day 2...).
-        Allows students to browse past daily challenges chronologically.
+        Lists available daily challenge series summaries grouped by day number.
+        Sorted in reverse-chronological order (Newest/Tomorrow/Today first, older past days below).
+        Filters challenges up to tomorrow (Sri Lanka time) so students get a safe teaser without leaking
+        distant future content.
         """
         today_colombo = datetime.datetime.now(_SL_TZ).date()
+        tomorrow_colombo = today_colombo + datetime.timedelta(days=1)
         try:
             stmt = (
                 select(
                     Question.day_number,
                     Question.scheduled_date,
                     func.count(Question.id).label("total_questions"),
+                    func.count(case((func.upper(Question.type) == "SHORT", 1))).label("short_questions_count"),
+                    func.count(case((func.upper(Question.type) == "ESSAY", 1))).label("essay_questions_count"),
                     func.sum(Question.allocated_marks).label("total_marks"),
                 )
                 .where(
                     Question.is_published.is_(True),
                     Question.is_deleted.is_(False),
                     Question.day_number.isnot(None),
+                    or_(
+                        Question.scheduled_date.is_(None),
+                        Question.scheduled_date <= tomorrow_colombo,
+                    ),
                 )
                 .group_by(Question.day_number, Question.scheduled_date)
-                .order_by(Question.day_number.asc())
+                .order_by(Question.day_number.desc())
                 .limit(limit)
                 .offset(offset)
             )
@@ -561,13 +570,18 @@ class PostgresQuestionRepository(QuestionRepository):
                 day_num = d.get("day_number")
                 sched_date = d.get("scheduled_date")
                 is_unlocked = True if (sched_date is None or sched_date <= today_colombo) else False
+                unlocks_at = f"{sched_date.isoformat()}T00:00:00+05:30" if not is_unlocked and sched_date else None
                 series.append({
                     "day_number": day_num,
                     "scheduled_date": sched_date,
                     "title": f"Day {day_num:02d} Challenge Workout",
                     "total_questions": d.get("total_questions", 0),
+                    "short_questions_count": d.get("short_questions_count", 0),
+                    "essay_questions_count": d.get("essay_questions_count", 0),
                     "total_marks": d.get("total_marks", 0),
+                    "target_duration_seconds": 3600,
                     "is_unlocked": is_unlocked,
+                    "unlocks_at": unlocks_at,
                 })
             return series
         except Exception as exc:

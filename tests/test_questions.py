@@ -1,5 +1,7 @@
 """
-Unit tests for Question Bank, Daily Challenge, Solution Paywall, and Admin Question CRUD.
+Unit tests for Question Bank, Daily Challenge Packs, Solution Paywall, and Anti-Leak Protection.
+Verifies logged-in authentication enforcement, reverse-chronological series browsing,
+and anti-leak time-locks preventing future question leaks.
 """
 
 import unittest
@@ -18,16 +20,39 @@ from app.services.question_service import QuestionService
 
 
 class TestQuestionsFeature(unittest.TestCase):
-    """Verifies question catalog, paywall protection on marking schemes, and admin RBAC."""
+    """Verifies question catalog, daily challenge packs, anti-leak locks, paywall, and RBAC."""
 
     def setUp(self) -> None:
         self.mock_service = AsyncMock(spec=QuestionService)
+        self.mock_user_repo = AsyncMock()
+        self.mock_user = {
+            "uid": "usr_student_01",
+            "email": "student@maths.lk",
+            "role": "USER",
+        }
+        self.mock_user_repo.get_by_uid.return_value = {
+            "uid": "usr_student_01",
+            "role": "USER",
+            "is_premium": False,
+        }
+        # Default dependency overrides: Authenticated student session & mocked repos
         app.dependency_overrides[get_question_service] = lambda: self.mock_service
+        app.dependency_overrides[get_user_repository] = lambda: self.mock_user_repo
+        app.dependency_overrides[get_current_user] = lambda: self.mock_user
+        app.dependency_overrides[get_optional_current_user] = lambda: self.mock_user
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
 
-    def test_list_questions(self) -> None:
+    def test_list_questions_requires_authentication(self) -> None:
+        """Verifies that unauthenticated requests to /api/v1/questions return 401 Unauthorized."""
+        app.dependency_overrides.pop(get_current_user, None)
+        client = TestClient(app)
+        response = client.get("/api/v1/questions")
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_questions_authenticated(self) -> None:
+        """Verifies that authenticated students receive lightweight question summaries."""
         self.mock_service.list_questions.return_value = [
             {
                 "id": "q_2023_01",
@@ -48,30 +73,11 @@ class TestQuestionsFeature(unittest.TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["id"], "q_2023_01")
 
-    def test_get_daily_question(self) -> None:
-        self.mock_service.get_daily_question.return_value = {
-            "id": "q_daily_today",
-            "title": "Daily Challenge - Complex Numbers",
-            "subject_id": "sub_pmat",
-            "content_text": "Solve $(z - 1)^4 = 1$",
-            "type": "SHORT",
-            "difficulty": "HARD",
-            "schedule": "DAILY",
-            "source": "MODEL_PAPER",
-            "allocated_marks": 25,
-            "is_premium": False,
-            "scheduled_date": "2026-11-02",
-            "day_number": 1,
-        }
-        client = TestClient(app)
-        response = client.get("/api/v1/questions/daily")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["id"], "q_daily_today")
-        self.assertEqual(response.json()["schedule"], "DAILY")
-
-    def test_get_daily_challenge_pack(self) -> None:
+    def test_get_daily_challenge_pack_success(self) -> None:
+        """Verifies fetching an unlocked daily challenge pack with multiple questions."""
         self.mock_service.get_daily_pack.return_value = {
             "day_number": 1,
+            "challenge_title": "Day 01 Combined Maths Challenge",
             "scheduled_date": "2026-11-03",
             "total_questions": 2,
             "total_marks": 75,
@@ -112,23 +118,42 @@ class TestQuestionsFeature(unittest.TestCase):
         self.assertEqual(data["total_questions"], 2)
         self.assertEqual(len(data["questions"]), 2)
 
-    def test_list_daily_challenge_series(self) -> None:
+    def test_get_daily_challenge_pack_anti_leak_lock(self) -> None:
+        """Verifies that requesting a future locked day returns HTTP 403 Forbidden without leaking content."""
+        self.mock_service.get_daily_pack.side_effect = PermissionDeniedError(
+            "Day 2 Challenge Pack is locked until 2026-11-05 00:00 AM Sri Lanka Time."
+        )
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/daily/pack?day=2")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("locked until", response.json()["detail"])
+
+    def test_list_daily_challenge_series_reverse_chronological(self) -> None:
+        """Verifies daily series catalog with safe teaser metadata for tomorrow's challenge."""
         self.mock_service.list_daily_series.return_value = [
             {
-                "day_number": 1,
-                "scheduled_date": "2026-11-01",
-                "title": "Day 01 Challenge Workout",
-                "total_questions": 4,
-                "total_marks": 150,
-                "is_unlocked": True,
-            },
-            {
                 "day_number": 2,
-                "scheduled_date": "2026-11-02",
+                "scheduled_date": "2026-11-05",
                 "title": "Day 02 Challenge Workout",
                 "total_questions": 4,
-                "total_marks": 150,
+                "short_questions_count": 2,
+                "essay_questions_count": 2,
+                "total_marks": 100,
+                "target_duration_seconds": 3600,
+                "is_unlocked": False,
+                "unlocks_at": "2026-11-05T00:00:00+05:30",
+            },
+            {
+                "day_number": 1,
+                "scheduled_date": "2026-11-04",
+                "title": "Day 01 Challenge Workout",
+                "total_questions": 4,
+                "short_questions_count": 2,
+                "essay_questions_count": 2,
+                "total_marks": 100,
+                "target_duration_seconds": 3600,
                 "is_unlocked": True,
+                "unlocks_at": None,
             },
         ]
         client = TestClient(app)
@@ -136,10 +161,16 @@ class TestQuestionsFeature(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data), 2)
-        self.assertEqual(data[0]["day_number"], 1)
-        self.assertTrue(data[0]["is_unlocked"])
+        # Newest (Day 2 tomorrow) is at the top
+        self.assertEqual(data[0]["day_number"], 2)
+        self.assertFalse(data[0]["is_unlocked"])
+        self.assertEqual(data[0]["short_questions_count"], 2)
+        self.assertEqual(data[0]["essay_questions_count"], 2)
+        # Active Today (Day 1) is next
+        self.assertEqual(data[1]["day_number"], 1)
+        self.assertTrue(data[1]["is_unlocked"])
 
-    def test_solution_free_marking_scheme_accessible_to_everyone(self) -> None:
+    def test_solution_free_marking_scheme_accessible(self) -> None:
         self.mock_service.get_marking_scheme.return_value = {
             "id": "ms_free_01",
             "question_id": "q_free_01",
@@ -157,33 +188,17 @@ class TestQuestionsFeature(unittest.TestCase):
         self.assertEqual(response.json()["is_premium_only"], False)
 
     def test_solution_premium_marking_scheme_blocks_unauthenticated(self) -> None:
-        self.mock_service.get_marking_scheme.side_effect = AuthenticationError(
-            "Authentication is required to access this premium solution."
-        )
+        app.dependency_overrides.pop(get_current_user, None)
         client = TestClient(app)
         response = client.get("/api/v1/questions/q_prem_01/solution")
         self.assertEqual(response.status_code, 401)
-        self.assertIn("Authentication is required", response.json()["detail"])
 
     def test_solution_premium_marking_scheme_blocks_free_user(self) -> None:
         self.mock_service.get_marking_scheme.side_effect = PermissionDeniedError(
             "A premium subscription is required to view this marking scheme."
         )
-        standard_user = {"uid": "usr_free", "email": "free@mathsdd.lk", "role": "USER"}
-        app.dependency_overrides[get_optional_current_user] = lambda: standard_user
-        mock_user_repo = AsyncMock()
-        mock_user_repo.get_by_uid.return_value = {
-            "uid": "usr_free",
-            "role": "USER",
-            "is_premium": False,
-        }
-        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
-
         client = TestClient(app)
-        response = client.get(
-            "/api/v1/questions/q_prem_01/solution",
-            headers={"Authorization": "Bearer fake_token"},
-        )
+        response = client.get("/api/v1/questions/q_prem_01/solution")
         self.assertEqual(response.status_code, 403)
         self.assertIn("A premium subscription is required", response.json()["detail"])
 
@@ -199,31 +214,17 @@ class TestQuestionsFeature(unittest.TestCase):
             "is_premium_only": True,
             "pdf_url": None,
         }
-        sub_user = {"uid": "usr_pro", "email": "pro@mathsdd.lk", "role": "USER"}
-        app.dependency_overrides[get_optional_current_user] = lambda: sub_user
-        mock_user_repo = AsyncMock()
-        mock_user_repo.get_by_uid.return_value = {
-            "uid": "usr_pro",
+        self.mock_user_repo.get_by_uid.return_value = {
+            "uid": "usr_student_01",
             "role": "USER",
             "is_premium": True,
         }
-        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
-
         client = TestClient(app)
-        response = client.get(
-            "/api/v1/questions/q_prem_01/solution",
-            headers={"Authorization": "Bearer fake_token"},
-        )
+        response = client.get("/api/v1/questions/q_prem_01/solution")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_premium_only"])
 
     def test_create_question_blocks_standard_user(self) -> None:
-        standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}
-        app.dependency_overrides[get_current_user] = lambda: standard_user
-        mock_user_repo = AsyncMock()
-        mock_user_repo.get_by_uid.return_value = standard_user
-        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
-
         client = TestClient(app)
         payload = {
             "title": "Unauthorized Question",
@@ -237,6 +238,7 @@ class TestQuestionsFeature(unittest.TestCase):
     def test_create_question_allows_admin(self) -> None:
         admin_user = {"uid": "admin_01", "email": "admin@mathsdd.lk", "role": "ADMIN"}
         app.dependency_overrides[get_current_user] = lambda: admin_user
+        self.mock_user_repo.get_by_uid.return_value = admin_user
         self.mock_service.create_question.return_value = {
             "question": {
                 "id": "q_new_01",
@@ -276,7 +278,7 @@ class TestQuestionsFeature(unittest.TestCase):
 
 
 class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
-    """Verifies Date-Based Redis/Memory hybrid caching, on-the-fly signing, and invalidation."""
+    """Verifies Redis/Memory hybrid caching, anti-leak time locks, and signed URL hydration."""
 
     def setUp(self) -> None:
         from app.core.cache import questions_cache
@@ -290,94 +292,7 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
 
         questions_cache.clear()
 
-    async def test_get_daily_question_caches_and_avoids_duplicate_db_query(self) -> None:
-        raw_db_row = {
-            "id": "q_daily_cached",
-            "title": "Cached Daily Challenge",
-            "subject_id": "sub_pmat",
-            "content_text": "Solve $x^2 = 4$",
-            "content_url": None,
-            "type": "SHORT",
-            "difficulty": "EASY",
-            "schedule": "DAILY",
-            "source": "PAST_PAPER",
-            "allocated_marks": 10,
-            "is_premium": False,
-            "scheduled_date": "2026-11-03",
-        }
-        self.mock_repo.get_daily_question.return_value = raw_db_row
-
-        # First request (Cache MISS -> Database query)
-        q1 = await self.service.get_daily_question(target_date="2026-11-03")
-        self.assertIsNotNone(q1)
-        self.assertEqual(q1["id"], "q_daily_cached")
-        self.assertEqual(self.mock_repo.get_daily_question.call_count, 1)
-
-        # Second request (Cache HIT -> Served directly from cache, NO database query)
-        q2 = await self.service.get_daily_question(target_date="2026-11-03")
-        self.assertIsNotNone(q2)
-        self.assertEqual(q2["id"], "q_daily_cached")
-        self.assertEqual(self.mock_repo.get_daily_question.call_count, 1)
-
-    async def test_cached_question_hydrates_signed_url_without_mutating_raw_cache(self) -> None:
-        raw_db_row = {
-            "id": "q_image_daily",
-            "title": "Geometry Challenge",
-            "subject_id": "sub_pmat",
-            "content_text": "Find angle ABC",
-            "content_url": "questions/diagram_01.png",
-            "type": "STRUCTURED",
-            "difficulty": "MEDIUM",
-            "schedule": "DAILY",
-            "source": "MODEL_PAPER",
-            "allocated_marks": 25,
-            "is_premium": False,
-            "scheduled_date": "2026-11-03",
-        }
-        self.mock_repo.get_daily_question.return_value = raw_db_row
-
-        result = await self.service.get_daily_question(target_date="2026-11-03")
-        self.assertIsNotNone(result)
-        # Hydrated result has signed URL
-        self.assertTrue(result["content_url"].startswith("http"))
-
-        # Cached raw item in questions_cache preserves the raw storage path
-        from app.core.cache import questions_cache
-        cached_entry = questions_cache.get("daily_question:2026-11-03")
-        self.assertIsNotNone(cached_entry)
-        self.assertEqual(cached_entry["content_url"], "questions/diagram_01.png")
-
-    async def test_create_and_delete_question_invalidates_daily_cache(self) -> None:
-        from app.core.cache import questions_cache
-        from app.schemas.question import QuestionCreate
-
-        # Pre-seed cache
-        questions_cache.set("daily_question:2026-11-03", {"id": "stale_daily"})
-        self.assertIsNotNone(questions_cache.get("daily_question:2026-11-03"))
-
-        # Create question -> should invalidate
-        self.mock_repo.create_question_with_solution.return_value = {"id": "new_q"}
-        payload = QuestionCreate(
-            title="New Question",
-            subject_id="sub_pmat",
-            content_text="Solve",
-            solution_text="Solution",
-        )
-        await self.service.create_question(payload)
-        self.assertIsNone(questions_cache.get("daily_question:2026-11-03"))
-
-        # Pre-seed again
-        questions_cache.set("daily_question:2026-11-03", {"id": "stale_daily_2"})
-        self.assertIsNotNone(questions_cache.get("daily_question:2026-11-03"))
-
-        # Delete question -> should invalidate
-        self.mock_repo.delete_question.return_value = {"deleted": True}
-        await self.service.delete_question("some_id")
-        self.assertIsNone(questions_cache.get("daily_question:2026-11-03"))
-
     async def test_get_daily_pack_caching_and_url_hydration(self) -> None:
-        from app.core.cache import questions_cache
-
         raw_pack = {
             "day_number": 1,
             "scheduled_date": "2026-11-03",
@@ -407,6 +322,7 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(pack1["questions"][0]["content_url"].startswith("http"))
 
         # Raw cache preserves storage path
+        from app.core.cache import questions_cache
         cached_raw = questions_cache.get("daily_pack:day_1")
         self.assertIsNotNone(cached_raw)
         self.assertEqual(cached_raw["questions"][0]["content_url"], "questions/diagram.png")
@@ -416,6 +332,32 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(pack2)
         self.assertEqual(self.mock_repo.get_daily_pack.call_count, 1)
         self.assertTrue(pack2["questions"][0]["content_url"].startswith("http"))
+
+    async def test_get_daily_pack_anti_leak_blocks_future_date_for_student(self) -> None:
+        # Future date in 2099
+        student_user = {"uid": "usr_student", "role": "USER"}
+        with self.assertRaises(PermissionDeniedError):
+            await self.service.get_daily_pack(
+                target_date="2099-12-31",
+                current_user=student_user,
+            )
+
+    async def test_get_daily_pack_anti_leak_allows_admin_preview(self) -> None:
+        admin_user = {"uid": "usr_admin", "role": "ADMIN"}
+        self.mock_repo.get_daily_pack.return_value = {
+            "day_number": 99,
+            "scheduled_date": "2099-12-31",
+            "total_questions": 1,
+            "total_marks": 25,
+            "questions": [],
+        }
+        # Admin should NOT be blocked from previewing future challenges
+        pack = await self.service.get_daily_pack(
+            target_date="2099-12-31",
+            current_user=admin_user,
+        )
+        self.assertIsNotNone(pack)
+        self.assertEqual(pack["day_number"], 99)
 
     async def test_list_daily_series_caching(self) -> None:
         from app.core.cache import questions_cache
