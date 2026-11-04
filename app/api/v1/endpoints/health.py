@@ -59,3 +59,43 @@ async def test_database() -> Any:
                 "detail": "Database connection verification failed.",
             },
         )
+
+
+async def _execute_seed_operation() -> Any:
+    """Internal helper to execute seed database."""
+    try:
+        from app.core.seed import seed_database
+        from app.core.database import init_db
+
+        await init_db()
+        async with async_session_factory() as session:
+            await seed_database(session)
+
+        return {
+            "status": "success",
+            "message": "Database seeded successfully across all domains.",
+        }
+    except Exception as exc:
+        logger.exception("Manual seed trigger (/db-seed) failed: %s", exc)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "error",
+                "detail": f"Database seeding failed: {str(exc)}",
+            },
+        )
+
+
+@router.post("/db-seed", operation_id="post_trigger_db_seed")
+async def post_trigger_seed_database() -> Any:
+    """
+    Triggers idempotent reference data seeding across all 7 architectural domains.
+    Populates subjects, syllabus lessons, exam papers, subscription plans, questions, and marking rubrics.
+    """
+    return await _execute_seed_operation()
+
+
+@router.get("/db-seed", operation_id="get_trigger_db_seed")
+async def get_trigger_seed_database() -> Any:
+    """Convenience GET endpoint to trigger database seeding directly from browser."""
+    return await _execute_seed_operation()

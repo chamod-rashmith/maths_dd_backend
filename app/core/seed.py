@@ -1396,3 +1396,18 @@ async def seed_database(session: AsyncSession) -> None:
 
     await session.commit()
     logger.info("Database seeding completed successfully via SQLAlchemy across all domains.")
+
+
+async def run_seed() -> None:
+    """Standalone CLI entry point to run seed_database directly."""
+    logger.info("Executing standalone database seed runner...")
+    from app.core.database import async_session_factory, init_db
+    await init_db()
+    async with async_session_factory() as session:
+        await seed_database(session)
+    logger.info("Standalone database seed runner finished successfully.")
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(run_seed())

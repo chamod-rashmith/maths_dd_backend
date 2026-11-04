@@ -11,7 +11,7 @@ Establishes the unified 3NF/BCNF relational database schema across all 7 archite
 4. Daily Challenge Engine (daily_challenges, daily_challenge_questions)
 5. Student Progress & Gamification (user_question_attempts, user_daily_activities, xp_transactions)
 6. Webhooks & Observability (processed_webhook_events)
-7. Billing & Subscriptions (subscription_plans, plan_prices in minor units, user_subscriptions, payments, bank_transfer_slips)
+7. Billing & Subscriptions (subscription_plans, plan_prices, user_subscriptions, payments, bank_transfer_slips)
 """
 
 from typing import Sequence, Union
@@ -26,38 +26,29 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 SRI_LANKAN_DISTRICTS = [
-    # Western Province
     {"id": 1, "code": "COLOMBO", "name_en": "Colombo", "name_si": "කොළඹ", "name_ta": "கொழும்பு", "province": "WESTERN", "display_order": 1},
     {"id": 2, "code": "GAMPAHA", "name_en": "Gampaha", "name_si": "ගම්පහ", "name_ta": "கம்பஹா", "province": "WESTERN", "display_order": 2},
     {"id": 3, "code": "KALUTARA", "name_en": "Kalutara", "name_si": "කළුතර", "name_ta": "களுத்துறை", "province": "WESTERN", "display_order": 3},
-    # Central Province
     {"id": 4, "code": "KANDY", "name_en": "Kandy", "name_si": "මහනුවර", "name_ta": "கண்டி", "province": "CENTRAL", "display_order": 4},
     {"id": 5, "code": "MATALE", "name_en": "Matale", "name_si": "මාතලේ", "name_ta": "மாத்தளை", "province": "CENTRAL", "display_order": 5},
     {"id": 6, "code": "NUWARA_ELIYA", "name_en": "Nuwara Eliya", "name_si": "නුවරඑළිය", "name_ta": "நுவரெலியா", "province": "CENTRAL", "display_order": 6},
-    # Southern Province
     {"id": 7, "code": "GALLE", "name_en": "Galle", "name_si": "ගාල්ල", "name_ta": "காலி", "province": "SOUTHERN", "display_order": 7},
     {"id": 8, "code": "MATARA", "name_en": "Matara", "name_si": "මාතර", "name_ta": "மாத்தறை", "province": "SOUTHERN", "display_order": 8},
     {"id": 9, "code": "HAMBANTOTA", "name_en": "Hambantota", "name_si": "හම්බන්තොට", "name_ta": "அம்பாந்தோட்டை", "province": "SOUTHERN", "display_order": 9},
-    # Northern Province
     {"id": 10, "code": "JAFFNA", "name_en": "Jaffna", "name_si": "යාපනය", "name_ta": "யாழ்ப்பாணம்", "province": "NORTHERN", "display_order": 10},
     {"id": 11, "code": "KILINOCHCHI", "name_en": "Kilinochchi", "name_si": "කිලිනොච්චිය", "name_ta": "கிளிநொச்சி", "province": "NORTHERN", "display_order": 11},
     {"id": 12, "code": "MANNAR", "name_en": "Mannar", "name_si": "මන්නාරම", "name_ta": "மன்னார்", "province": "NORTHERN", "display_order": 12},
     {"id": 13, "code": "VAVUNIYA", "name_en": "Vavuniya", "name_si": "වවුනියාව", "name_ta": "வவுனியா", "province": "NORTHERN", "display_order": 13},
     {"id": 14, "code": "MULLAITIVU", "name_en": "Mullaitivu", "name_si": "මුලතිව්", "name_ta": "முல்லைத்தீவு", "province": "NORTHERN", "display_order": 14},
-    # Eastern Province
     {"id": 15, "code": "BATTICALOA", "name_en": "Batticaloa", "name_si": "මඩකලපුව", "name_ta": "மட்டக்களப்பு", "province": "EASTERN", "display_order": 15},
     {"id": 16, "code": "AMPARA", "name_en": "Ampara", "name_si": "අම්පාර", "name_ta": "அம்பாறை", "province": "EASTERN", "display_order": 16},
     {"id": 17, "code": "TRINCOMALEE", "name_en": "Trincomalee", "name_si": "ත්‍රිකුණාමලය", "name_ta": "திருகோணமலை", "province": "EASTERN", "display_order": 17},
-    # North Western Province
     {"id": 18, "code": "KURUNEGALA", "name_en": "Kurunegala", "name_si": "කුරුණෑගල", "name_ta": "குருணாகல்", "province": "NORTH_WESTERN", "display_order": 18},
     {"id": 19, "code": "PUTTALAM", "name_en": "Puttalam", "name_si": "පුත්තලම", "name_ta": "புத்தளம்", "province": "NORTH_WESTERN", "display_order": 19},
-    # North Central Province
     {"id": 20, "code": "ANURADHAPURA", "name_en": "Anuradhapura", "name_si": "අනුරාධපුරය", "name_ta": "அனுராதபுரம்", "province": "NORTH_CENTRAL", "display_order": 20},
     {"id": 21, "code": "POLONNARUWA", "name_en": "Polonnaruwa", "name_si": "පොළොන්නරුව", "name_ta": "பொலன்னறுவை", "province": "NORTH_CENTRAL", "display_order": 21},
-    # Uva Province
     {"id": 22, "code": "BADULLA", "name_en": "Badulla", "name_si": "බදුල්ල", "name_ta": "பதுளை", "province": "UVA", "display_order": 22},
     {"id": 23, "code": "MONARAGALA", "name_en": "Monaragala", "name_si": "මොනරාගල", "name_ta": "மொணරාகலை", "province": "UVA", "display_order": 23},
-    # Sabaragamuwa Province
     {"id": 24, "code": "RATNAPURA", "name_en": "Ratnapura", "name_si": "රත්නපුර", "name_ta": "இரத்தினபுரி", "province": "SABARAGAMUWA", "display_order": 24},
     {"id": 25, "code": "KEGALLE", "name_en": "Kegalle", "name_si": "කෑගල්ල", "name_ta": "கேகாலை", "province": "SABARAGAMUWA", "display_order": 25},
 ]
@@ -83,54 +74,55 @@ def upgrade() -> None:
     # Bulk insert standard Sri Lankan districts
     op.bulk_insert(districts_table, SRI_LANKAN_DISTRICTS)
 
-    # 2. users
+    # 2. users (Firebase UID primary key matching User ORM model)
     op.create_table(
         "users",
-        sa.Column("id", sa.String(length=128), primary_key=True, nullable=False),
+        sa.Column("uid", sa.String(length=128), primary_key=True, nullable=False),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("telephone_no", sa.String(length=50), nullable=True),
         sa.Column("role", sa.String(length=50), server_default=sa.text("'USER'"), nullable=False),
         sa.Column("avatar_url", sa.Text(), nullable=True),
+        sa.Column("school_name", sa.String(length=255), nullable=True),
         sa.Column("district_id", sa.Integer(), sa.ForeignKey("districts.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("stream", sa.String(length=50), nullable=True),
+        sa.Column("grade", sa.String(length=50), nullable=True),
+        sa.Column("attempt", sa.String(length=50), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
-    op.create_index(op.f("ix_users_id"), "users", ["id"], unique=False)
+    op.create_index(op.f("ix_users_uid"), "users", ["uid"], unique=False)
     op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
     op.create_index(op.f("ix_users_district_id"), "users", ["district_id"], unique=False)
 
-    # 3. student_profiles (1-to-1 extension of users for academic metadata)
+    # 3. student_profiles (1-to-1 extension of users for academic metadata; PK is user_id)
     op.create_table(
         "student_profiles",
-        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), primary_key=True, nullable=False),
         sa.Column("exam_year", sa.Integer(), nullable=True),
-        sa.Column("attempt_number", sa.Integer(), server_default=sa.text("1"), nullable=False),
+        sa.Column("attempt_number", sa.Integer(), nullable=True),
         sa.Column("exam_district_id", sa.Integer(), sa.ForeignKey("districts.id", ondelete="SET NULL"), nullable=True),
         sa.Column("school_name", sa.String(length=255), nullable=True),
-        sa.Column("stream", sa.String(length=64), server_default=sa.text("'COMBINED_MATHEMATICS'"), nullable=False),
-        sa.Column("medium", sa.String(length=32), server_default=sa.text("'SINHALA'"), nullable=False),
-        sa.Column("target_zscore", sa.Float(), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("stream", sa.String(length=50), nullable=True),
+        sa.Column("medium", sa.String(length=20), server_default=sa.text("'SINHALA'"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("user_id", name="uq_student_profiles_user_id"),
+        sa.CheckConstraint("attempt_number IS NULL OR (attempt_number >= 1 AND attempt_number <= 3)", name="chk_student_profiles_attempt_number"),
+        sa.CheckConstraint("exam_year IS NULL OR (exam_year >= 2020 AND exam_year <= 2040)", name="chk_student_profiles_exam_year"),
     )
-    op.create_index(op.f("ix_student_profiles_user_id"), "student_profiles", ["user_id"], unique=True)
-    op.create_index(op.f("ix_student_profiles_exam_district_id"), "student_profiles", ["exam_district_id"], unique=False)
+    op.create_index(op.f("ix_student_profiles_user_id"), "student_profiles", ["user_id"], unique=False)
     op.create_index(op.f("ix_student_profiles_exam_year"), "student_profiles", ["exam_year"], unique=False)
-    op.create_index("idx_student_profiles_year_attempt", "student_profiles", ["exam_year", "attempt_number"], unique=False)
+    op.create_index(op.f("ix_student_profiles_exam_district_id"), "student_profiles", ["exam_district_id"], unique=False)
 
-    # 4. user_stats (User statistics, streak tracking, study time)
+    # 4. user_stats (Projection table for user stats, streaks, XP)
     op.create_table(
         "user_stats",
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), primary_key=True, nullable=False),
         sa.Column("xp", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("current_streak_days", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("longest_streak_days", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("total_solved_count", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("total_study_time_seconds", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("total_study_time_seconds", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
         sa.Column("accuracy_rate", sa.Float(), server_default=sa.text("0.0"), nullable=False),
         sa.Column("last_active_date", sa.Date(), nullable=True),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
@@ -152,7 +144,7 @@ def upgrade() -> None:
     op.create_index(op.f("ix_subjects_id"), "subjects", ["id"], unique=False)
     op.create_index(op.f("ix_subjects_code"), "subjects", ["code"], unique=True)
 
-    # 6. syllabus_lessons (Supports self-referential parent_lesson_id hierarchy)
+    # 6. syllabus_lessons (with hierarchical self-referential sub-lessons)
     op.create_table(
         "syllabus_lessons",
         sa.Column("id", sa.String(length=100), primary_key=True, nullable=False),
@@ -213,7 +205,7 @@ def upgrade() -> None:
         sa.Column("is_published", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("is_deleted", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("scheduled_date", sa.Date(), nullable=True),
-        sa.Column("day_number", sa.Integer(), server_default=sa.text("1"), nullable=False),
+        sa.Column("day_number", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
@@ -269,11 +261,11 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("subject_id", sa.String(length=100), sa.ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False),
         sa.Column("lesson_id", sa.String(length=100), sa.ForeignKey("syllabus_lessons.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("content_text", sa.Text(), server_default=sa.text("''"), nullable=False),
+        sa.Column("content_text", sa.Text(), nullable=True),
         sa.Column("pdf_url", sa.Text(), nullable=True),
         sa.Column("is_premium", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("is_deleted", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("order_index", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("order_index", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.Column("author", sa.String(length=255), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
@@ -323,9 +315,9 @@ def upgrade() -> None:
     op.create_table(
         "user_subscriptions",
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("subscription_plan_id", sa.String(length=36), sa.ForeignKey("subscription_plans.id", ondelete="CASCADE"), nullable=True),
-        sa.Column("plan_id", sa.String(length=100), server_default=sa.text("'pro_access'"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), nullable=False),
+        sa.Column("plan_id", sa.String(length=100), nullable=False),
+        sa.Column("subscription_plan_id", sa.String(length=36), sa.ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True),
         sa.Column("status", sa.String(length=50), server_default=sa.text("'ACTIVE'"), nullable=False),
         sa.Column("provider", sa.String(length=50), nullable=False),
         sa.Column("original_transaction_id", sa.String(length=255), nullable=True),
@@ -335,7 +327,7 @@ def upgrade() -> None:
         sa.Column("slip_image_url", sa.Text(), nullable=True),
         sa.Column("reference_note", sa.String(length=500), nullable=True),
         sa.Column("admin_notes", sa.String(length=500), nullable=True),
-        sa.Column("approved_by", sa.String(length=128), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("approved_by", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="SET NULL"), nullable=True),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -344,159 +336,141 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
-    op.create_index(op.f("ix_user_subscriptions_id"), "user_subscriptions", ["id"], unique=False)
     op.create_index(op.f("ix_user_subscriptions_user_id"), "user_subscriptions", ["user_id"], unique=False)
     op.create_index(op.f("ix_user_subscriptions_plan_id"), "user_subscriptions", ["plan_id"], unique=False)
     op.create_index(op.f("ix_user_subscriptions_subscription_plan_id"), "user_subscriptions", ["subscription_plan_id"], unique=False)
     op.create_index(op.f("ix_user_subscriptions_status"), "user_subscriptions", ["status"], unique=False)
     op.create_index(op.f("ix_user_subscriptions_provider"), "user_subscriptions", ["provider"], unique=False)
-    op.create_index(op.f("ix_user_subscriptions_original_transaction_id"), "user_subscriptions", ["original_transaction_id"], unique=False)
-    op.create_index("idx_user_subs_active_lookup", "user_subscriptions", ["user_id", "status", "expires_at"], unique=False)
 
-    # 15. payments (Audit ledger for all incoming monetization transactions)
+    # 15. payments
     op.create_table(
         "payments",
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("plan_id", sa.String(length=36), sa.ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("price_id", sa.String(length=36), sa.ForeignKey("plan_prices.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("provider", sa.String(length=32), server_default=sa.text("'BANK_TRANSFER'"), nullable=False),
-        sa.Column("provider_payment_id", sa.String(length=255), nullable=True),
-        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
-        sa.Column("currency", sa.String(length=3), server_default=sa.text("'LKR'"), nullable=False),
+        sa.Column("subscription_id", sa.String(length=36), sa.ForeignKey("user_subscriptions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), nullable=False),
+        sa.Column("method", sa.String(length=32), nullable=False),
         sa.Column("status", sa.String(length=32), server_default=sa.text("'PENDING'"), nullable=False),
-        sa.Column("payment_method_type", sa.String(length=64), nullable=True),
-        sa.Column("metadata_json", sa.Text(), nullable=True),
+        sa.Column("currency", sa.String(length=3), server_default=sa.text("'LKR'"), nullable=False),
+        sa.Column("amount_minor", sa.BigInteger(), nullable=False),
+        sa.Column("external_transaction_id", sa.String(length=255), nullable=True),
+        sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
     op.create_index(op.f("ix_payments_user_id"), "payments", ["user_id"], unique=False)
+    op.create_index(op.f("ix_payments_subscription_id"), "payments", ["subscription_id"], unique=False)
     op.create_index(op.f("ix_payments_status"), "payments", ["status"], unique=False)
-    op.create_index(op.f("ix_payments_provider"), "payments", ["provider"], unique=False)
 
-    # 16. bank_transfer_slips (Direct bank deposit slip evidence and approval queue)
+    # 16. bank_transfer_slips
     op.create_table(
         "bank_transfer_slips",
-        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("payment_id", sa.String(length=36), sa.ForeignKey("payments.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("payment_id", sa.String(length=36), sa.ForeignKey("payments.id", ondelete="CASCADE"), primary_key=True, nullable=False),
         sa.Column("slip_image_url", sa.Text(), nullable=False),
-        sa.Column("depositor_name", sa.String(length=255), nullable=True),
-        sa.Column("depositor_bank", sa.String(length=100), nullable=True),
-        sa.Column("deposited_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deposited_amount_minor", sa.BigInteger(), nullable=True),
-        sa.Column("status", sa.String(length=32), server_default=sa.text("'PENDING'"), nullable=False),
-        sa.Column("reviewed_by", sa.String(length=128), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("bank_name", sa.String(length=100), nullable=True),
+        sa.Column("deposit_reference", sa.String(length=100), nullable=True),
+        sa.Column("depositor_note", sa.Text(), nullable=True),
+        sa.Column("review_status", sa.String(length=32), server_default=sa.text("'PENDING'"), nullable=False),
+        sa.Column("reviewed_by", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="SET NULL"), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("rejection_reason", sa.Text(), nullable=True),
+        sa.Column("admin_feedback", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("payment_id", name="uq_bank_transfer_slips_payment_id"),
     )
-    op.create_index(op.f("ix_bank_transfer_slips_payment_id"), "bank_transfer_slips", ["payment_id"], unique=True)
-    op.create_index(op.f("ix_bank_transfer_slips_user_id"), "bank_transfer_slips", ["user_id"], unique=False)
-    op.create_index(op.f("ix_bank_transfer_slips_status"), "bank_transfer_slips", ["status"], unique=False)
+    op.create_index(op.f("ix_bank_transfer_slips_review_status"), "bank_transfer_slips", ["review_status"], unique=False)
 
     # 17. processed_webhook_events
     op.create_table(
         "processed_webhook_events",
         sa.Column("event_id", sa.String(length=128), primary_key=True, nullable=False),
         sa.Column("event_type", sa.String(length=50), nullable=False),
-        sa.Column("app_user_id", sa.String(length=128), nullable=False),
+        sa.Column("app_user_id", sa.String(length=128), nullable=True),
         sa.Column("processed_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
     op.create_index(op.f("ix_processed_webhook_events_app_user_id"), "processed_webhook_events", ["app_user_id"], unique=False)
 
-    # 18. daily_challenges (Domain 4: Daily Question Packs & Series)
+    # 18. daily_challenges
     op.create_table(
         "daily_challenges",
-        sa.Column("id", sa.String(length=100), primary_key=True, nullable=False),
+        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
         sa.Column("day_number", sa.Integer(), nullable=False),
         sa.Column("scheduled_date", sa.Date(), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("target_duration_seconds", sa.Integer(), server_default=sa.text("1800"), nullable=False),
-        sa.Column("total_marks", sa.Integer(), server_default=sa.text("100"), nullable=False),
+        sa.Column("subject_id", sa.String(length=100), sa.ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("target_duration_seconds", sa.Integer(), server_default=sa.text("3600"), nullable=False),
+        sa.Column("total_marks", sa.Integer(), server_default=sa.text("50"), nullable=False),
         sa.Column("is_published", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("day_number", name="uq_daily_challenges_day_number"),
-        sa.UniqueConstraint("scheduled_date", name="uq_daily_challenges_scheduled_date"),
     )
     op.create_index(op.f("ix_daily_challenges_day_number"), "daily_challenges", ["day_number"], unique=True)
-    op.create_index(op.f("ix_daily_challenges_scheduled_date"), "daily_challenges", ["scheduled_date"], unique=True)
+    op.create_index(op.f("ix_daily_challenges_scheduled_date"), "daily_challenges", ["scheduled_date"], unique=False)
+    op.create_index(op.f("ix_daily_challenges_subject_id"), "daily_challenges", ["subject_id"], unique=False)
 
-    # 19. daily_challenge_questions (Junction table linking questions to daily challenges)
+    # 19. daily_challenge_questions
     op.create_table(
         "daily_challenge_questions",
-        sa.Column("id", sa.String(length=100), primary_key=True, nullable=False),
-        sa.Column("daily_challenge_id", sa.String(length=100), sa.ForeignKey("daily_challenges.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
+        sa.Column("daily_challenge_id", sa.String(length=36), sa.ForeignKey("daily_challenges.id", ondelete="CASCADE"), nullable=False),
         sa.Column("question_id", sa.String(length=100), sa.ForeignKey("questions.id", ondelete="CASCADE"), nullable=False),
         sa.Column("order_index", sa.Integer(), server_default=sa.text("1"), nullable=False),
-        sa.Column("section", sa.String(length=32), server_default=sa.text("'SHORT'"), nullable=False),
+        sa.Column("section", sa.String(length=50), server_default=sa.text("'SHORT'"), nullable=False),
         sa.Column("allocated_marks", sa.Integer(), server_default=sa.text("25"), nullable=False),
         sa.Column("is_mandatory", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
-    op.create_index(op.f("ix_daily_challenge_questions_daily_challenge_id"), "daily_challenge_questions", ["daily_challenge_id"], unique=False)
+    op.create_index(op.f("ix_daily_challenge_questions_challenge_id"), "daily_challenge_questions", ["daily_challenge_id"], unique=False)
     op.create_index(op.f("ix_daily_challenge_questions_question_id"), "daily_challenge_questions", ["question_id"], unique=False)
-    op.create_index("idx_dc_question_order", "daily_challenge_questions", ["daily_challenge_id", "order_index"], unique=False)
 
     # 20. user_question_attempts
     op.create_table(
         "user_question_attempts",
         sa.Column("id", sa.String(length=255), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), nullable=False),
         sa.Column("question_id", sa.String(length=100), sa.ForeignKey("questions.id", ondelete="CASCADE"), nullable=False),
         sa.Column("time_spent_seconds", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("last_attempt_duration_seconds", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("target_duration_seconds", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("was_overtime", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("attempt_count", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.Column("is_daily_question", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("completed_date", sa.Date(), nullable=False),
-        sa.Column("completed_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column("completed_date", sa.Date(), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_bookmarked", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("confidence", sa.String(length=50), nullable=True),
+        sa.Column("confidence", sa.String(length=50), server_default=sa.text("'MEDIUM'"), nullable=False),
         sa.Column("student_notes", sa.Text(), nullable=True),
-        sa.Column("marks_awarded", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("earned_xp", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("is_evaluated", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("user_id", "question_id", name="uq_user_question_attempt"),
     )
     op.create_index(op.f("ix_user_question_attempts_user_id"), "user_question_attempts", ["user_id"], unique=False)
     op.create_index(op.f("ix_user_question_attempts_question_id"), "user_question_attempts", ["question_id"], unique=False)
-    op.create_index(op.f("ix_user_question_attempts_completed_date"), "user_question_attempts", ["completed_date"], unique=False)
-    op.create_index("idx_attempt_user_question", "user_question_attempts", ["user_id", "question_id"], unique=False)
-    op.create_index("idx_attempt_user_date", "user_question_attempts", ["user_id", "completed_date"], unique=False)
+    op.create_index("idx_attempts_user_question", "user_question_attempts", ["user_id", "question_id"], unique=False)
 
     # 21. user_daily_activities
     op.create_table(
         "user_daily_activities",
         sa.Column("id", sa.String(length=255), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), primary_key=True, nullable=False),
         sa.Column("date_key", sa.String(length=10), nullable=False),
         sa.Column("questions_solved_count", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("total_time_spent_seconds", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("daily_challenge_completed", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("user_id", "date_key", name="uq_user_daily_activity"),
     )
     op.create_index(op.f("ix_user_daily_activities_user_id"), "user_daily_activities", ["user_id"], unique=False)
-    op.create_index(op.f("ix_user_daily_activities_date_key"), "user_daily_activities", ["date_key"], unique=False)
-    op.create_index("idx_daily_activity_user_date", "user_daily_activities", ["user_id", "date_key"], unique=False)
+    op.create_index("idx_activities_user_date", "user_daily_activities", ["user_id", "date_key"], unique=False)
 
     # 22. xp_transactions (Domain 5: Audit ledger for user XP gains and penalties)
     op.create_table(
         "xp_transactions",
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.String(length=128), sa.ForeignKey("users.uid", ondelete="CASCADE"), nullable=False),
         sa.Column("amount", sa.Integer(), nullable=False),
-        sa.Column("source_type", sa.String(length=32), server_default=sa.text("'QUESTION_SOLVED'"), nullable=False),
-        sa.Column("source_id", sa.String(length=100), nullable=True),
+        sa.Column("reason", sa.String(length=64), server_default=sa.text("'QUESTION_SOLVED'"), nullable=False),
+        sa.Column("attempt_id", sa.String(length=255), nullable=True),
+        sa.Column("question_id", sa.String(length=100), nullable=True),
         sa.Column("description_si", sa.String(length=255), nullable=True),
+        sa.Column("description_en", sa.String(length=255), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
     )
     op.create_index(op.f("ix_xp_transactions_user_id"), "xp_transactions", ["user_id"], unique=False)
