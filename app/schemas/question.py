@@ -131,7 +131,8 @@ class DailyChallengePackResponse(BaseModel):
     Adaptable to any number of questions (e.g. 1, 4, or 8 questions for Marathon practice).
     """
 
-    day_number: Optional[int] = None
+    day_number: int = 1
+    challenge_title: str = "Daily Challenge Pack"
     scheduled_date: Optional[date] = None
     total_questions: int = 0
     total_marks: int = 0

@@ -437,8 +437,13 @@ class PostgresQuestionRepository(QuestionRepository):
                 rows = result.mappings().all()
                 if rows:
                     questions = [dict(r) for r in rows]
+                    day_num = day_number or 1
+                    for q in questions:
+                        if q.get("day_number") is None:
+                            q["day_number"] = day_num
                     return {
-                        "day_number": day_number,
+                        "day_number": day_num,
+                        "challenge_title": f"Day {day_num} Combined Maths Challenge",
                         "scheduled_date": questions[0].get("scheduled_date"),
                         "total_questions": len(questions),
                         "total_marks": sum(q.get("allocated_marks", 0) for q in questions),
@@ -462,8 +467,13 @@ class PostgresQuestionRepository(QuestionRepository):
             rows1 = result1.mappings().all()
             if rows1:
                 questions = [dict(r) for r in rows1]
+                day_num = questions[0].get("day_number") or 1
+                for q in questions:
+                    if q.get("day_number") is None:
+                        q["day_number"] = day_num
                 return {
-                    "day_number": questions[0].get("day_number"),
+                    "day_number": day_num,
+                    "challenge_title": f"Day {day_num} Combined Maths Challenge",
                     "scheduled_date": resolved_date,
                     "total_questions": len(questions),
                     "total_marks": sum(q.get("allocated_marks", 0) for q in questions),
@@ -498,8 +508,13 @@ class PostgresQuestionRepository(QuestionRepository):
                 rows2 = result2.mappings().all()
                 if rows2:
                     questions = [dict(r) for r in rows2]
+                    day_num = questions[0].get("day_number") or 1
+                    for q in questions:
+                        if q.get("day_number") is None:
+                            q["day_number"] = day_num
                     return {
-                        "day_number": questions[0].get("day_number"),
+                        "day_number": day_num,
+                        "challenge_title": f"Day {day_num} Combined Maths Challenge",
                         "scheduled_date": latest_date,
                         "total_questions": len(questions),
                         "total_marks": sum(q.get("allocated_marks", 0) for q in questions),

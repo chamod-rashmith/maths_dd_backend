@@ -5,8 +5,7 @@ SQLAlchemy 2.0 ORM model for Marking Schemes.
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, Optional
 import uuid
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -19,7 +18,7 @@ class MarkingScheme(Base):
     __tablename__ = "marking_schemes"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -57,8 +56,6 @@ class MarkingScheme(Base):
     __table_args__ = (
         Index("idx_marking_schemes_question_id", "question_id", "order_index"),
     )
-
-    
 
     def __repr__(self) -> str:
         return f"<MarkingScheme(id='{self.id}', question_id='{self.question_id}', title='{self.title}')>"

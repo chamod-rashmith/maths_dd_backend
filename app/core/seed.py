@@ -151,6 +151,14 @@ LESSONS_SEED = [
         "order_index": 4,
         "description": "Centripetal force, banked tracks, and conical pendulum.",
     },
+    {
+        "id": "lesson_amat_kinematics",
+        "subject_id": "subj_amat",
+        "title": "Relative Velocity & Kinematics",
+        "sinhala_title": "සාපේක්ෂ ප්‍රවේගය සහ චාලක විද්‍යාව",
+        "order_index": 5,
+        "description": "Relative motion, shortest distance, wind-plane problems and collisions.",
+    },
 ]
 
 STUDY_NOTES_SEED = [
@@ -421,6 +429,175 @@ Time: $t = 12:00 + \frac{40\cos	heta}{|\mathbf{v}_{B/A}|} \approx 1:19	ext{ PM}$
         "use_today_scheduled_date": True,
         "day_number": 1,
     },
+    # --- DAY 2 CHALLENGE QUESTIONS (Tomorrow) ---
+    {
+        "id": "q_pmat_trig_daily_02",
+        "title": "Trigonometric Equations & General Solutions",
+        "description": "Find all general solutions in radians satisfying cos(3x) + cos(x) = 0.",
+        "subject_id": "subj_pmat",
+        "lesson_id": "lesson_pmat_trig",
+        "content_text": r"""# Trigonometric Equations & General Solutions
+
+Find all real values of $\theta \in [0, 2\pi)$ satisfying the equation:
+$$ \cos(3\theta) + \cos(\theta) = 0 $$
+
+1. Express $\cos(3\theta) + \cos(\theta)$ as a product of trigonometric functions.
+2. Hence, determine the general solution for $\theta \in \mathbb{R}$.
+3. State the exact solutions in the interval $[0, 2\pi)$.
+""",
+        "solution_text": r"""# Official Marking Scheme (25 Marks)
+
+### Step 1: Sum-to-Product Identity (10 Marks)
+Using $\cos A + \cos B = 2\cos\left(\frac{A+B}{2}\right)\cos\left(\frac{A-B}{2}\right)$:
+$$ \cos(3\theta) + \cos(\theta) = 2\cos(2\theta)\cos(\theta) = 0 $$
+
+### Step 2: General Solutions (10 Marks)
+Either $\cos(2\theta) = 0$ or $\cos(\theta) = 0$:
+* $\cos(2\theta) = 0 \implies 2\theta = (2n + 1)\frac{\pi}{2} \implies \theta = (2n + 1)\frac{\pi}{4}, \quad n \in \mathbb{Z}$
+* $\cos(\theta) = 0 \implies \theta = (2k + 1)\frac{\pi}{2}, \quad k \in \mathbb{Z}$
+
+### Step 3: Interval $[0, 2\pi)$ (05 Marks)
+$$ \theta \in \left\{ \frac{\pi}{4}, \frac{3\pi}{4}, \frac{\pi}{2}, \frac{5\pi}{4}, \frac{7\pi}{4}, \frac{3\pi}{2} \right\} $$
+""",
+        "solution_id": "11111111-1111-4111-8111-111111111105",
+        "type": "SHORT",
+        "difficulty": "MEDIUM",
+        "schedule": "DAILY",
+        "source": "PAST_PAPER",
+        "source_details": "G.C.E. A/L Combined Maths (Part A)",
+        "allocated_marks": 25,
+        "is_premium": False,
+        "is_published": True,
+        "scheduled_date_offset_days": 1,
+        "day_number": 2,
+    },
+    {
+        "id": "q_amat_newton_daily_02",
+        "title": "Connected Particles on an Inclined Plane",
+        "description": "Calculate system acceleration and string tension for connected blocks on a rough incline.",
+        "subject_id": "subj_amat",
+        "lesson_id": "lesson_amat_newton",
+        "content_text": r"""# Connected Particles on an Inclined Plane
+
+A block $A$ of mass $3m$ lies on a rough plane inclined at an angle $\alpha$ to the horizontal, where $\tan\alpha = \frac{3}{4}$. The coefficient of friction between $A$ and the plane is $\mu = \frac{1}{4}$.
+A light inextensible string attached to $A$ passes over a smooth pulley at the top of the plane and supports a hanging particle $B$ of mass $2m$.
+
+1. Assuming the system is released from rest with $B$ descending, mark all forces acting on each particle.
+2. Find the acceleration $a$ of the system in terms of $g$.
+3. Calculate the tension $T$ in the string.
+""",
+        "solution_text": r"""# Official Marking Scheme (25 Marks)
+
+### Step 1: Equations of Motion (15 Marks)
+From $\tan\alpha = 3/4 \implies \sin\alpha = 3/5, \cos\alpha = 4/5$.
+* Normal reaction on $A$: $R = 3mg\cos\alpha = 3mg(4/5) = \frac{12}{5}mg$
+* Friction: $F = \mu R = \frac{1}{4}\left(\frac{12}{5}mg\right) = \frac{3}{5}mg$
+
+Equations along motion:
+* For $B$ (downwards): $2mg - T = 2ma$
+* For $A$ (up the incline): $T - 3mg\sin\alpha - F = 3ma \implies T - \frac{9}{5}mg - \frac{3}{5}mg = 3ma \implies T - \frac{12}{5}mg = 3ma$
+
+### Step 2: Solve for Acceleration and Tension (10 Marks)
+Adding the two equations:
+$$ 2mg - \frac{12}{5}mg = 5ma \implies -\frac{2}{5}mg = 5ma \implies a = -\frac{2}{25}g $$
+Since $a < 0$, the assumed downward motion of $B$ does not occur; the system remains in static equilibrium or accelerates downwards along the incline if friction allows.
+Limiting equilibrium check: $2mg < 3mg\sin\alpha + \mu R = \frac{12}{5}mg \implies$ The system remains in **equilibrium** ($a = 0, T = 2mg$).
+""",
+        "solution_id": "11111111-1111-4111-8111-111111111106",
+        "type": "SHORT",
+        "difficulty": "HARD",
+        "schedule": "DAILY",
+        "source": "MODEL_PAPER",
+        "source_details": "Ananda College Term Test Paper",
+        "allocated_marks": 25,
+        "is_premium": False,
+        "is_published": True,
+        "scheduled_date_offset_days": 1,
+        "day_number": 2,
+    },
+    # --- DAY 3 CHALLENGE QUESTIONS (Day after tomorrow) ---
+    {
+        "id": "q_pmat_int_daily_03",
+        "title": "Integration by Substitution & Definite Integrals",
+        "description": "Evaluate the definite integral using standard algebraic substitution.",
+        "subject_id": "subj_pmat",
+        "lesson_id": "lesson_pmat_int",
+        "content_text": r"""# Integration by Substitution
+
+Evaluate the definite integral:
+$$ I = \int_{0}^{1} \frac{x}{\sqrt{4 - x^2}} \, dx $$
+
+1. Use the substitution $u = 4 - x^2$ to transform the integral.
+2. Find the new limits of integration.
+3. Compute the exact value of $I$.
+""",
+        "solution_text": r"""# Official Marking Scheme (25 Marks)
+
+### Step 1: Substitution (10 Marks)
+Let $u = 4 - x^2 \implies du = -2x\,dx \implies x\,dx = -\frac{1}{2}du$.
+
+### Step 2: Change Limits (05 Marks)
+* When $x = 0 \implies u = 4$
+* When $x = 1 \implies u = 3$
+
+### Step 3: Evaluation (10 Marks)
+$$ I = \int_{4}^{3} \frac{-\frac{1}{2}du}{\sqrt{u}} = \frac{1}{2} \int_{3}^{4} u^{-1/2} du = \left[ u^{1/2} \right]_{3}^{4} = \sqrt{4} - \sqrt{3} = 2 - \sqrt{3} $$
+""",
+        "solution_id": "11111111-1111-4111-8111-111111111107",
+        "type": "SHORT",
+        "difficulty": "MEDIUM",
+        "schedule": "DAILY",
+        "source": "PAST_PAPER",
+        "source_details": "G.C.E. A/L Combined Maths (Part A)",
+        "allocated_marks": 25,
+        "is_premium": False,
+        "is_published": True,
+        "scheduled_date_offset_days": 2,
+        "day_number": 3,
+    },
+    {
+        "id": "q_amat_straight_daily_03",
+        "title": "Velocity-Time Graph for Train Motion Between Two Stations",
+        "description": "Analyze two-stage acceleration and deceleration profile on a straight track.",
+        "subject_id": "subj_amat",
+        "lesson_id": "lesson_amat_straight_line",
+        "content_text": r"""# Rectilinear Motion: $(v-t)$ Graph
+
+A train starts from rest at station $A$ and accelerates uniformly at rate $f$ for time $t_1$ until reaching maximum speed $V$.
+It then immediately decelerates uniformly at rate $2f$ until coming to rest at station $B$.
+The total time taken for the journey is $T$, and the total distance between the stations is $S$.
+
+1. Sketch the velocity-time $(v-t)$ graph for the journey.
+2. Show that the maximum speed is $V = \frac{2S}{T}$.
+3. Express $T$ in terms of $S$ and $f$.
+""",
+        "solution_text": r"""# Official Marking Scheme (25 Marks)
+
+### Step 1: Velocity-Time Graph (08 Marks)
+Triangular graph with peak $(t_1, V)$ and base $[0, T]$.
+* Area under graph = Distance: $\frac{1}{2} V T = S \implies V = \frac{2S}{T}$ (Proven).
+
+### Step 2: Time components in terms of $f$ (10 Marks)
+* Acceleration phase: $V = f t_1 \implies t_1 = \frac{V}{f}$
+* Deceleration phase: $V = 2f t_2 \implies t_2 = \frac{V}{2f}$
+* Total time: $T = t_1 + t_2 = \frac{V}{f} + \frac{V}{2f} = \frac{3V}{2f}$
+
+### Step 3: Eliminate $V$ (07 Marks)
+Substitute $V = \frac{2S}{T}$:
+$$ T = \frac{3}{2f} \left(\frac{2S}{T}\right) = \frac{3S}{fT} \implies T^2 = \frac{3S}{f} \implies T = \sqrt{\frac{3S}{f}} $$
+""",
+        "solution_id": "11111111-1111-4111-8111-111111111108",
+        "type": "SHORT",
+        "difficulty": "MEDIUM",
+        "schedule": "DAILY",
+        "source": "MODEL_PAPER",
+        "source_details": "Royal College Term Test",
+        "allocated_marks": 25,
+        "is_premium": False,
+        "is_published": True,
+        "scheduled_date_offset_days": 2,
+        "day_number": 3,
+    },
 ]
 
 
@@ -615,7 +792,12 @@ async def seed_database(session: AsyncSession) -> None:
             if q.get("lesson_id")
             else None
         )
-        sched_date = today_colombo if q.get("use_today_scheduled_date") else None
+        if q.get("use_today_scheduled_date"):
+            sched_date = today_colombo
+        elif q.get("scheduled_date_offset_days") is not None:
+            sched_date = today_colombo + datetime.timedelta(days=q["scheduled_date_offset_days"])
+        else:
+            sched_date = None
 
         existing_q = (
             await session.execute(select(Question).where(Question.id == q["id"]))
@@ -637,8 +819,8 @@ async def seed_database(session: AsyncSession) -> None:
             existing_q.is_published = q["is_published"]
             if sched_date:
                 existing_q.scheduled_date = sched_date
-            if q.get("day_number") is not None:
-                existing_q.day_number = q["day_number"]
+            # Ensure day_number is ALWAYS populated (never null)
+            existing_q.day_number = q.get("day_number", 1)
         else:
             session.add(
                 Question(
@@ -657,7 +839,7 @@ async def seed_database(session: AsyncSession) -> None:
                     is_premium=q["is_premium"],
                     is_published=q["is_published"],
                     scheduled_date=sched_date,
-                    day_number=q.get("day_number"),
+                    day_number=q.get("day_number", 1),
                 )
             )
         await session.flush()
