@@ -1,7 +1,7 @@
 """
 SQLAlchemy 2.0 ORM model for Questions.
 Includes soft-delete support (`is_deleted`) to preserve student historical attempts,
-and `day_number` for sequential dynamic daily challenge series (Day 1, Day 2...).
+`day_number` for sequential daily challenge series, and `exam_paper_id` for past-paper categorization.
 """
 
 from datetime import date, datetime, timezone
@@ -15,13 +15,14 @@ if TYPE_CHECKING:
     from app.models.subject import Subject
     from app.models.lesson import SyllabusLesson
     from app.models.marking_scheme import MarkingScheme
+    from app.models.exam_paper import ExamPaper
 
 
 class Question(Base):
     """
     Core mathematical question entity.
     Stores problem statement in LaTeX/Markdown, metadata, curriculum relations,
-    and optional day_number / scheduled_date for daily challenge workouts.
+    optional day_number for daily workouts, and links to exam papers and marking schemes.
     """
     __tablename__ = "questions"
 
@@ -37,6 +38,13 @@ class Question(Base):
         ForeignKey("syllabus_lessons.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    exam_paper_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("exam_papers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="අදාළ විභාග ප්‍රශ්න පත්‍රය (FK to exam_papers.id)",
     )
     content_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
     content_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -66,6 +74,7 @@ class Question(Base):
     # Relationships
     subject: Mapped["Subject"] = relationship("Subject", back_populates="questions")
     lesson: Mapped[Optional["SyllabusLesson"]] = relationship("SyllabusLesson", back_populates="questions")
+    exam_paper: Mapped[Optional["ExamPaper"]] = relationship("ExamPaper", back_populates="questions")
     marking_schemes: Mapped[List["MarkingScheme"]] = relationship(
         "MarkingScheme",
         back_populates="question",
@@ -77,6 +86,7 @@ class Question(Base):
         Index("idx_questions_subject_lesson", "subject_id", "lesson_id", "is_published", "is_deleted"),
         Index("idx_questions_scheduled_date", "scheduled_date"),
         Index("idx_questions_day_scheduled", "day_number", "scheduled_date", "is_published", "is_deleted"),
+        Index("idx_questions_exam_paper", "exam_paper_id"),
         Index("idx_questions_is_deleted", "is_deleted"),
     )
 

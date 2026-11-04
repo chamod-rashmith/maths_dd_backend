@@ -1,6 +1,6 @@
 """
 Unit tests for modern SQLAlchemy 2.0 ORM models and clean Pydantic serialization.
-Verifies model properties, constraints, relationships, and DTO validations.
+Verifies model properties, constraints, relationships, and DTO validations across all academic domains.
 """
 
 import datetime
@@ -12,7 +12,9 @@ from app.models import (
     SyllabusLesson,
     Question,
     MarkingScheme,
+    MarkingSchemeStep,
     StudyNote,
+    ExamPaper,
     District,
     User,
     UserStats,
@@ -20,7 +22,12 @@ from app.models import (
     ProcessedWebhookEvent,
 )
 from app.schemas.curriculum import SubjectResponse, LessonResponse
-from app.schemas.question import QuestionDetailResponse, MarkingSchemeResponse
+from app.schemas.question import (
+    ExamPaperResponse,
+    MarkingSchemeResponse,
+    MarkingSchemeStepResponse,
+    QuestionDetailResponse,
+)
 from app.schemas.study_note import StudyNoteDetailResponse
 from app.schemas.user import UserProfileResponse
 from app.schemas.subscription import UserSubscriptionResponse
@@ -79,7 +86,8 @@ class TestSqlAlchemyModels(unittest.TestCase):
             description="Standard calculus problem",
             subject_id="subj_pmat",
             lesson_id="lesson_001",
-            content_text="Evaluate $\\int x^2 dx$",
+            exam_paper_id="paper_2023_01",
+            content_text=r"Evaluate $\int x^2 dx$",
             content_url="https://example.com/q.pdf",
             type="SHORT",
             difficulty="EASY",
@@ -92,6 +100,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
         )
         self.assertEqual(question.id, "q_100")
         self.assertEqual(question.title, "Integrate x^2")
+        self.assertEqual(question.exam_paper_id, "paper_2023_01")
         self.assertFalse(question.is_premium)
         self.assertFalse(question.is_deleted)
         self.assertEqual(question.allocated_marks, 25)
@@ -100,41 +109,81 @@ class TestSqlAlchemyModels(unittest.TestCase):
         dto = QuestionDetailResponse.model_validate(question, from_attributes=True)
         self.assertEqual(dto.id, "q_100")
         self.assertEqual(dto.title, "Integrate x^2")
+        self.assertEqual(dto.exam_paper_id, "paper_2023_01")
         self.assertFalse(dto.is_premium)
 
-    def test_marking_scheme_model_serialization(self) -> None:
-        import uuid
-        scheme_id = uuid.uuid4()
+    def test_exam_paper_model_and_dto(self) -> None:
+        """Verify ExamPaper model and DTO serialization."""
+        paper = ExamPaper(
+            id="paper_2023_01",
+            subject_id="subj_pmat",
+            type="AL_GOVT",
+            year=2023,
+            part="PART_I",
+            title_si="2023 අ.පො.ස. උසස් පෙළ සංයුක්ත ගණිතය I",
+            title_en="2023 G.C.E. A/L Combined Mathematics I",
+            source_pdf_url="https://storage.googleapis.com/papers/2023_al_pmat_1.pdf",
+            is_published=True,
+        )
+        self.assertEqual(paper.id, "paper_2023_01")
+        self.assertEqual(paper.year, 2023)
+        self.assertEqual(paper.part, "PART_I")
+        self.assertIn("ExamPaper", repr(paper))
+
+        dto = ExamPaperResponse.model_validate(paper, from_attributes=True)
+        self.assertEqual(dto.id, "paper_2023_01")
+        self.assertEqual(dto.year, 2023)
+        self.assertEqual(dto.title_si, "2023 අ.පො.ස. උසස් පෙළ සංයුක්ත ගණිතය I")
+
+    def test_marking_scheme_and_steps_model_serialization(self) -> None:
+        """Verify MarkingScheme and child MarkingSchemeStep rubrics serialization."""
         scheme = MarkingScheme(
-            id=scheme_id,
+            id="scheme_01",
             question_id="q_100",
             title="Official Marking Scheme",
+            description_si="කලනය මූලික ලකුණු පටිපාටිය",
             total_marks=25,
-            content_text="Use power rule $\\int x^n dx = \\frac{x^{n+1}}{n+1} + C$",
+            content_text=r"Use power rule $\int x^n dx = \frac{x^{n+1}}{n+1} + C$",
             pdf_url="https://example.com/ms.pdf",
             is_official=True,
             is_premium_only=False,
             order_index=1,
         )
-        self.assertEqual(scheme.id, scheme_id)
-        self.assertEqual(scheme.question_id, "q_100")
-        self.assertEqual(scheme.total_marks, 25)
-        self.assertFalse(scheme.is_premium_only)
-        self.assertIn("MarkingScheme", repr(scheme))
-
-        dto = MarkingSchemeResponse(
-            id=str(scheme.id),
-            question_id=scheme.question_id,
-            title=scheme.title,
-            content_text=scheme.content_text,
-            pdf_url=scheme.pdf_url,
-            total_marks=scheme.total_marks,
-            is_official=scheme.is_official,
-            is_premium_only=scheme.is_premium_only,
-            order_index=scheme.order_index,
+        step1 = MarkingSchemeStep(
+            id="step_01",
+            marking_scheme_id="scheme_01",
+            step_number=1,
+            step_type="METHOD",
+            description_si=r"$\int x^2 dx$ සඳහා ආදේශ කිරීම",
+            allocated_marks=2,
+            annotation="M1 - ක්‍රමයට ලකුණු",
+            order_index=1,
         )
-        self.assertEqual(dto.id, str(scheme_id))
+        step2 = MarkingSchemeStep(
+            id="step_02",
+            marking_scheme_id="scheme_01",
+            step_number=2,
+            step_type="ACCURACY",
+            description_si=r"$\frac{x^3}{3} + C$ ලබා ගැනීම",
+            allocated_marks=3,
+            annotation="A1 - නිවැරදි අගය",
+            order_index=2,
+        )
+        scheme.steps = [step1, step2]
+
+        self.assertEqual(scheme.id, "scheme_01")
+        self.assertEqual(len(scheme.steps), 2)
+        self.assertEqual(scheme.steps[0].allocated_marks, 2)
+        self.assertEqual(scheme.steps[1].allocated_marks, 3)
+        self.assertIn("MarkingScheme", repr(scheme))
+        self.assertIn("MarkingSchemeStep", repr(step1))
+
+        dto = MarkingSchemeResponse.model_validate(scheme, from_attributes=True)
+        self.assertEqual(dto.id, "scheme_01")
         self.assertEqual(dto.total_marks, 25)
+        self.assertEqual(len(dto.steps), 2)
+        self.assertEqual(dto.steps[0].step_type, "METHOD")
+        self.assertEqual(dto.steps[1].step_type, "ACCURACY")
 
     def test_study_note_model_serialization(self) -> None:
         note = StudyNote(

@@ -1,8 +1,7 @@
 """
 Pydantic DTO schemas for Study Notes.
-Enforces lightweight Summary for listings and mutually exclusive Content for detail view.
-Supports cloud storage paths with on-demand short-lived signed URLs.
-Omits internal database timestamps for security and minimal bandwidth payload.
+Enforces lightweight Summary for listings, mutually exclusive Content for detail view,
+and strict server-side Premium Gating (`is_locked`) without leaking full notes to free users.
 """
 
 from typing import Optional
@@ -14,7 +13,7 @@ from app.domain.exceptions import ValidationDomainError
 class StudyNoteCreateOrUpdate(BaseModel):
     """
     Request schema for creating or updating a study note.
-    Supports either storage path/url (pdf_path / pdf_url) OR markdown (content_text).
+    Supports either storage path/url (pdf_url) OR markdown (content_text).
     """
 
     id: Optional[str] = None
@@ -23,7 +22,6 @@ class StudyNoteCreateOrUpdate(BaseModel):
     lesson_id: Optional[str] = None
     content_text: Optional[str] = None
     description: Optional[str] = ""
-    # Can accept either storage relative path (e.g. 'notes/pure/induction.pdf') or full url
     pdf_url: Optional[str] = None
     is_premium: bool = False
     order_index: int = 0
@@ -49,6 +47,7 @@ class StudyNoteSummaryResponse(BaseModel):
     """
     Lightweight summary for Study Notes Catalog / List view.
     Excludes heavy content_text and pdf_url payloads and internal timestamps.
+    `is_locked` indicates whether this note is gated behind premium subscription for the current user.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -60,6 +59,7 @@ class StudyNoteSummaryResponse(BaseModel):
     lesson_id: Optional[str] = None
     content_type: str = "markdown"  # 'pdf' or 'markdown'
     is_premium: bool = False
+    is_locked: bool = False
     order_index: int = 0
     author: Optional[str] = None
     subject_name: Optional[str] = None
@@ -73,6 +73,7 @@ class StudyNoteDetailResponse(BaseModel):
     Detailed representation of a single Study Note.
     Loaded on-demand when user opens the note.
     Guarantees ONLY signed pdf_url OR content_text (never both).
+    Delivered ONLY to authenticated users with valid permissions.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -86,6 +87,7 @@ class StudyNoteDetailResponse(BaseModel):
     pdf_url: Optional[str] = None
     content_type: str = "markdown"  # 'pdf' or 'markdown'
     is_premium: bool = False
+    is_locked: bool = False
     order_index: int = 0
     author: Optional[str] = None
     subject_name: Optional[str] = None
@@ -98,16 +100,13 @@ class StudyNoteDetailResponse(BaseModel):
     def enforce_single_content(cls, data: dict) -> dict:
         """Enforces that detail payload contains ONLY signed pdf_url OR content_text (never both)."""
         if isinstance(data, dict):
-            item = dict(data)
-            has_pdf = bool(item.get("pdf_url") and str(item.get("pdf_url")).strip())
+            raw_pdf = data.get("pdf_url")
+            raw_text = data.get("content_text")
+            has_pdf = bool(raw_pdf and str(raw_pdf).strip())
+            has_text = bool(raw_text and str(raw_text).strip())
 
             if has_pdf:
-                item["pdf_url"] = str(item["pdf_url"]).strip()
-                item["content_text"] = None
-                item["content_type"] = "pdf"
-            else:
-                item["pdf_url"] = None
-                item["content_text"] = item.get("content_text") or ""
-                item["content_type"] = "markdown"
-            return item
+                data["content_text"] = None
+            elif not has_text:
+                data["content_text"] = None
         return data

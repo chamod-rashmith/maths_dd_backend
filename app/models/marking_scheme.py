@@ -1,11 +1,13 @@
 """
-SQLAlchemy 2.0 ORM model for Marking Schemes.
+SQLAlchemy 2.0 ORM model for Marking Schemes and Marking Scheme Steps.
+මෙම මොඩියුලය මඟින් විභාග ප්‍රශ්න සඳහා වන නිල ලකුණු දීමේ පටිපාටි (Marking Schemes)
+සහ එක් එක් පියවරට ලකුණු බෙදී යන ආකාරය (Step-by-step marking rubrics) පූර්ණ සාමාන්‍යකරණයෙන් (3NF) කළමනාකරණය කරයි.
 """
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, List, Optional
 import uuid
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -15,43 +17,111 @@ if TYPE_CHECKING:
 
 
 class MarkingScheme(Base):
+    """
+    ප්‍රශ්නයක නිල ලකුණු දීමේ පටිපාටිය (Official Marking Scheme Header).
+    සම්පූර්ණ ලකුණු ප්‍රමාණය, විවරණය, සහ පියවරෙන් පියවර විග්‍රහය (MarkingSchemeStep) සමඟ සම්බන්ධ වේ.
+    """
+
     __tablename__ = "marking_schemes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+    id: Mapped[str] = mapped_column(
+        String(36),
         primary_key=True,
-        default=uuid.uuid4,
+        default=lambda: str(uuid.uuid4()),
+        comment="ලකුණු දීමේ පටිපාටියේ අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
+
     question_id: Mapped[str] = mapped_column(
+        String(100),
         ForeignKey("questions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+        comment="අදාළ ප්‍රශ්නයේ හැඳුනුම් අංකය (FK to questions.id)",
     )
+
     title: Mapped[str] = mapped_column(
         String(255),
         default="Official Marking Scheme",
+        server_default=text("'Official Marking Scheme'"),
         nullable=False,
+        comment="මාතෘකාව (e.g. 'නිල ලකුණු දීමේ පටිපාටිය')",
     )
-    content_text: Mapped[str] = mapped_column(Text, default="", nullable=False)
-    pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    total_marks: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
-    is_official: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_premium_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    order_index: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    description_si: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="ලකුණු දීමේ ක්‍රමවේදය පිළිබඳ කෙටි හැඳින්වීම (Sinhala Description)",
+    )
+
+    content_text: Mapped[str] = mapped_column(
+        Text,
+        default="",
+        server_default=text("''"),
+        nullable=False,
+        comment="සමස්ත විසඳුම් සටහන (LaTeX / Markdown Overview)",
+    )
+
+    pdf_url: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="නිල ලකුණු දීමේ පටිපාටියේ PDF ලේඛනයේ URL එක",
+    )
+
+    total_marks: Mapped[int] = mapped_column(
+        Integer,
+        default=25,
+        server_default=text("25"),
+        nullable=False,
+        comment="ප්‍රශ්නය සඳහා වෙන් කළ මුළු ලකුණු ගණන",
+    )
+
+    is_official: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+        comment="විභාග දෙපාර්තමේන්තුවේ නිල පටිපාටියක්ද යන්න",
+    )
+
+    is_premium_only: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+        comment="Premium සාමාජිකයන්ට පමණක් සීමා වේද යන්න",
+    )
+
+    order_index: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default=text("1"),
+        nullable=False,
+        comment="ප්‍රදර්ශනය කරන අනුපිළිවෙල",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+        server_default=text("NOW()"),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+        server_default=text("NOW()"),
         nullable=False,
     )
 
     # Relationships
     question: Mapped["Question"] = relationship("Question", back_populates="marking_schemes")
+    steps: Mapped[List["MarkingSchemeStep"]] = relationship(
+        "MarkingSchemeStep",
+        back_populates="marking_scheme",
+        cascade="all, delete-orphan",
+        order_by="MarkingSchemeStep.order_index",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("idx_marking_schemes_question_id", "question_id", "order_index"),
@@ -59,3 +129,99 @@ class MarkingScheme(Base):
 
     def __repr__(self) -> str:
         return f"<MarkingScheme(id='{self.id}', question_id='{self.question_id}', title='{self.title}')>"
+
+
+class MarkingSchemeStep(Base):
+    """
+    ලකුණු දීමේ පටිපාටියේ තනි පියවරක් (Step-by-Step Marking Rubric Entity - 3NF).
+    උසස් පෙළ විභාග වල ක්‍රමයට අනුව ක්‍රමයට ලකුණු (Method Marks - M1),
+    නිවැරදි අගයට ලකුණු (Accuracy Marks - A1), සහ අවසන් පිළිතුරට ලකුණු (B1) වෙන් වෙන්ව නිරූපණය කරයි.
+    """
+
+    __tablename__ = "marking_scheme_steps"
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        comment="පියවරේ අනන්‍ය හැඳුනුම් අංකය (UUID)",
+    )
+
+    marking_scheme_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("marking_schemes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="අදාළ Marking Scheme එකෙහි ID (FK to marking_schemes.id)",
+    )
+
+    step_number: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default=text("1"),
+        nullable=False,
+        comment="පියවර අංකය (e.g. 1, 2, 3...)",
+    )
+
+    # Step type: METHOD (M1), ACCURACY (A1), FINAL (B1), BONUS
+    step_type: Mapped[str] = mapped_column(
+        String(32),
+        default="METHOD",
+        server_default=text("'METHOD'"),
+        nullable=False,
+        comment="ලකුණු වර්ගය (METHOD - ක්‍රමයට, ACCURACY - නිවැරදි අගයට, FINAL - අවසන් පිළිතුරට)",
+    )
+
+    # Detailed solution step in Sinhala + LaTeX
+    description_si: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="පියවරේ ගණිතමය විසඳුම (Sinhala + LaTeX math expression)",
+    )
+
+    # Marks allocated for this step
+    allocated_marks: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default=text("1"),
+        nullable=False,
+        comment="මෙම පියවර සඳහා හිමිවන ලකුණු ප්‍රමාණය",
+    )
+
+    # Examiner guidance or alternative solution note
+    annotation: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="පරීක්ෂක සටහන් හෝ විකල්ප ක්‍රම (Examiner Notes / Alternatives)",
+    )
+
+    order_index: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default=text("1"),
+        nullable=False,
+        comment="ප්‍රදර්ශනය කරන අනුපිළිවෙල",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    marking_scheme: Mapped["MarkingScheme"] = relationship(
+        "MarkingScheme",
+        back_populates="steps",
+    )
+
+    __table_args__ = (
+        Index("idx_marking_steps_scheme_order", "marking_scheme_id", "order_index"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<MarkingSchemeStep(id='{self.id}', step_no={self.step_number}, "
+            f"type='{self.step_type}', marks={self.allocated_marks})>"
+        )

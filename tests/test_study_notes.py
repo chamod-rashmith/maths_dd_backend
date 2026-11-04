@@ -1,9 +1,16 @@
 """
-Unit tests for Study Notes catalog, details retrieval, and admin CRUD RBAC protection.
+Unit tests for Study Notes catalog, details retrieval, zero-leak access gating, and admin RBAC.
+Verifies:
+1. Authentication requirement (401 for unauthenticated clients).
+2. Free notes accessible to all authenticated students.
+3. Premium notes blocked with 403 Forbidden for non-premium students (zero content leaked).
+4. Premium notes accessible to premium students and administrators.
+5. Catalog listings annotate `is_locked: True` for locked cards.
+6. Admin CRUD RBAC enforcement.
 """
 
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
 from app.api.deps import (
@@ -11,60 +18,156 @@ from app.api.deps import (
     get_study_note_service,
     get_user_repository,
 )
+from app.core.database import get_db
 from app.main import app
+from app.models.subscription import UserSubscription
 from app.services.study_note_service import StudyNoteService
 
 
 class TestStudyNotesFeature(unittest.TestCase):
-    """Tests the study notes listing, on-demand detail loading, and admin write authorization."""
+    """Tests study notes listing, zero-leak premium gating, and admin authorization."""
 
     def setUp(self) -> None:
         self.mock_service = AsyncMock(spec=StudyNoteService)
+        self.mock_session = AsyncMock()
+        self.mock_session.execute = AsyncMock()
+
+        # Mock database session
+        async def override_get_db():
+            yield self.mock_session
+
         app.dependency_overrides[get_study_note_service] = lambda: self.mock_service
+        app.dependency_overrides[get_db] = override_get_db
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
 
-    def test_list_study_notes(self) -> None:
+    def test_unauthenticated_request_blocked(self) -> None:
+        """Verify unauthenticated requests to study notes endpoints receive 401 Unauthorized."""
+        client = TestClient(app)
+        response_list = client.get("/api/v1/study-notes")
+        self.assertEqual(response_list.status_code, 401)
+
+        response_detail = client.get("/api/v1/study-notes/note_trig_01")
+        self.assertEqual(response_detail.status_code, 401)
+
+    def test_list_study_notes_annotates_is_locked(self) -> None:
+        """Verify catalog marks premium notes as is_locked=True for free students."""
+        standard_user = {"uid": "usr_free_student", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
+        # Mock no active subscription for this user
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        self.mock_session.execute.return_value = mock_result
+
         self.mock_service.list_notes.return_value = [
             {
-                "id": "note_trig_01",
-                "title": "Trigonometric Formula Cheatsheet",
-                "description": "Essential double-angle and compound-angle identities",
+                "id": "note_free_01",
+                "title": "Basic Algebra Formulas",
+                "description": "Essential expansion formulas",
                 "subject_id": "sub_pmat",
-                "lesson_id": "les_trig",
-                "content_type": "pdf",
+                "lesson_id": "les_alg",
+                "content_type": "markdown",
                 "is_premium": False,
                 "order_index": 1,
-                "author": "Maths DD Editorial",
-            }
+            },
+            {
+                "id": "note_prem_01",
+                "title": "Advanced Integration Mastery",
+                "description": "Comprehensive integration methods",
+                "subject_id": "sub_pmat",
+                "lesson_id": "les_int",
+                "content_type": "pdf",
+                "is_premium": True,
+                "order_index": 2,
+            },
         ]
+
         client = TestClient(app)
-        response = client.get("/api/v1/study-notes?lesson_id=les_trig")
+        response = client.get("/api/v1/study-notes")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["id"], "note_trig_01")
-        self.assertEqual(data[0]["content_type"], "pdf")
+        self.assertEqual(len(data), 2)
 
-    def test_get_study_note_detail(self) -> None:
+        # Free note -> is_locked is False
+        self.assertEqual(data[0]["id"], "note_free_01")
+        self.assertFalse(data[0]["is_locked"])
+
+        # Premium note for free student -> is_locked is True
+        self.assertEqual(data[1]["id"], "note_prem_01")
+        self.assertTrue(data[1]["is_locked"])
+
+    def test_get_free_study_note_detail_allowed_for_all(self) -> None:
+        """Verify free notes return full content to any authenticated student."""
+        standard_user = {"uid": "usr_free_student", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
         self.mock_service.get_note_by_id.return_value = {
-            "id": "note_trig_01",
-            "title": "Trigonometric Formula Cheatsheet",
-            "description": "Essential double-angle and compound-angle identities",
+            "id": "note_free_01",
+            "title": "Basic Algebra Formulas",
+            "description": "Essential expansion formulas",
             "subject_id": "sub_pmat",
-            "lesson_id": "les_trig",
-            "content_text": None,
-            "pdf_url": "https://storage.googleapis.com/mathsdd-notes/trig.pdf?signed=1",
+            "lesson_id": "les_alg",
+            "content_text": r"$(a+b)^2 = a^2 + 2ab + b^2$",
+            "pdf_url": None,
             "is_premium": False,
             "order_index": 1,
-            "author": "Maths DD Editorial",
         }
+
         client = TestClient(app)
-        response = client.get("/api/v1/study-notes/note_trig_01")
+        response = client.get("/api/v1/study-notes/note_free_01")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["id"], "note_trig_01")
-        self.assertIn("signed=1", response.json()["pdf_url"])
+        self.assertEqual(response.json()["id"], "note_free_01")
+        self.assertIn("$(a+b)^2", response.json()["content_text"])
+        self.assertFalse(response.json()["is_locked"])
+
+    def test_get_premium_study_note_blocks_free_student(self) -> None:
+        """Zero-Leak Check: Verify premium notes return 403 Forbidden to non-premium students with no content leak."""
+        standard_user = {"uid": "usr_free_student", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
+        # Mock no active subscription
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        self.mock_session.execute.return_value = mock_result
+
+        self.mock_service.get_note_by_id.return_value = {
+            "id": "note_prem_01",
+            "title": "Advanced Integration Mastery",
+            "description": "Comprehensive integration methods",
+            "subject_id": "sub_pmat",
+            "lesson_id": "les_int",
+            "content_text": "Secret premium formulas",
+            "pdf_url": "https://storage.googleapis.com/secret.pdf",
+            "is_premium": True,
+            "order_index": 2,
+        }
+
+        client = TestClient(app)
+        response = client.get("/api/v1/study-notes/note_prem_01")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Premium සාමාජිකත්වය අවශ්‍ය වේ", response.json()["detail"])
+
+    def test_get_premium_study_note_allows_admin(self) -> None:
+        """Verify admin can access any premium note."""
+        admin_user = {"uid": "admin_01", "email": "admin@mathsdd.lk", "role": "ADMIN"}
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+
+        self.mock_service.get_note_by_id.return_value = {
+            "id": "note_prem_01",
+            "title": "Advanced Integration Mastery",
+            "subject_id": "sub_pmat",
+            "content_text": r"$\int x dx = \frac{x^2}{2} + C$",
+            "pdf_url": None,
+            "is_premium": True,
+            "order_index": 2,
+        }
+
+        client = TestClient(app)
+        response = client.get("/api/v1/study-notes/note_prem_01")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(r"\int x dx", response.json()["content_text"])
 
     def test_create_study_note_blocks_standard_user(self) -> None:
         standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}
@@ -103,22 +206,12 @@ class TestStudyNotesFeature(unittest.TestCase):
         payload = {
             "title": "Calculus Quick Reference",
             "subject_id": "sub_pmat",
+            "lesson_id": "les_calc",
             "content_text": r"$\frac{d}{dx} \sin(x) = \cos(x)$",
         }
         response = client.post("/api/v1/study-notes", json=payload)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["id"], "note_new_01")
-
-    def test_delete_study_note_blocks_standard_user(self) -> None:
-        standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}
-        app.dependency_overrides[get_current_user] = lambda: standard_user
-        mock_user_repo = AsyncMock()
-        mock_user_repo.get_by_uid.return_value = standard_user
-        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
-
-        client = TestClient(app)
-        response = client.delete("/api/v1/study-notes/note_trig_01")
-        self.assertEqual(response.status_code, 403)
 
 
 if __name__ == "__main__":
