@@ -48,7 +48,14 @@ def upgrade() -> None:
 
     # 2. Add exam_paper_id to questions
     with op.batch_alter_table("questions") as batch_op:
-        batch_op.add_column(sa.Column("exam_paper_id", sa.String(length=36), nullable=True))
+        batch_op.add_column(
+            sa.Column(
+                "exam_paper_id",
+                sa.String(length=36),
+                nullable=True,
+                comment="FK linking to source examination paper if past/model paper",
+            )
+        )
         batch_op.create_foreign_key(
             "fk_questions_exam_paper_id",
             "exam_papers",
@@ -66,7 +73,7 @@ def upgrade() -> None:
     op.create_table(
         "marking_scheme_steps",
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
-        sa.Column("marking_scheme_id", sa.String(length=36), sa.ForeignKey("marking_schemes.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("marking_scheme_id", sa.Uuid(), sa.ForeignKey("marking_schemes.id", ondelete="CASCADE"), nullable=False),
         sa.Column("step_number", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.Column("step_type", sa.String(length=32), server_default=sa.text("'METHOD'"), nullable=False),
         sa.Column("description_si", sa.Text(), nullable=False),
@@ -85,7 +92,7 @@ def downgrade() -> None:
     with op.batch_alter_table("marking_schemes") as batch_op:
         batch_op.drop_column("description_si")
     with op.batch_alter_table("questions") as batch_op:
-        batch_op.drop_constraint("fk_questions_exam_paper_id", type_="foreignkey")
         batch_op.drop_index("ix_questions_exam_paper_id")
+        batch_op.drop_constraint("fk_questions_exam_paper_id", type_="foreignkey")
         batch_op.drop_column("exam_paper_id")
     op.drop_table("exam_papers")

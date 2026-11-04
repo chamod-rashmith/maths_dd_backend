@@ -1,13 +1,25 @@
 """
 SQLAlchemy 2.0 ORM model for Marking Schemes and Marking Scheme Steps.
-මෙම මොඩියුලය මඟින් විභාග ප්‍රශ්න සඳහා වන නිල ලකුණු දීමේ පටිපාටි (Marking Schemes)
-සහ එක් එක් පියවරට ලකුණු බෙදී යන ආකාරය (Step-by-step marking rubrics) පූර්ණ සාමාන්‍යකරණයෙන් (3NF) කළමනාකරණය කරයි.
+
+===============================================================================
+විභාග ලකුණු දීමේ පටිපාටිය සහ පියවර සාමාන්‍යකරණය (Marking Schemes & Rubric Steps):
+-------------------------------------------------------------------------------
+1. `MarkingScheme`: Header entity representing the marking scheme for a question.
+   Uses UUID primary key aligned with native PostgreSQL UUID type.
+2. `MarkingSchemeStep`: 3NF Step-by-Step marking rubric item:
+   - `marking_scheme_id`: Foreign key (UUID) to `marking_schemes.id` (CASCADE delete).
+   - `step_number`: Sequence number of the step (1, 2, 3...).
+   - `step_type`: METHOD (M1), ACCURACY (A1), FINAL (B1), BONUS.
+   - `description_si`: Step solution in Sinhala + LaTeX mathematical notations.
+   - `allocated_marks`: Marks granted for this specific step.
+   - `annotation`: Examiner guidance or alternative method notes.
+===============================================================================
 """
 
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
 import uuid
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -24,10 +36,10 @@ class MarkingScheme(Base):
 
     __tablename__ = "marking_schemes"
 
-    id: Mapped[str] = mapped_column(
-        String(36),
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         comment="ලකුණු දීමේ පටිපාටියේ අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
 
@@ -58,13 +70,13 @@ class MarkingScheme(Base):
         default="",
         server_default=text("''"),
         nullable=False,
-        comment="සමස්ත විසඳුම් සටහන (LaTeX / Markdown Overview)",
+        comment="සම්පූර්ණ ලකුණු දීමේ පටිපාටියේ Markdown/LaTeX පෙළ",
     )
 
     pdf_url: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        comment="නිල ලකුණු දීමේ පටිපාටියේ PDF ලේඛනයේ URL එක",
+        comment="PDF ලේඛනයක් ඇත්නම් ඒ සඳහා වන URL එක",
     )
 
     total_marks: Mapped[int] = mapped_column(
@@ -72,7 +84,7 @@ class MarkingScheme(Base):
         default=25,
         server_default=text("25"),
         nullable=False,
-        comment="ප්‍රශ්නය සඳහා වෙන් කළ මුළු ලකුණු ගණන",
+        comment="ප්‍රශ්නයට හිමි මුළු ලකුණු ප්‍රමාණය",
     )
 
     is_official: Mapped[bool] = mapped_column(
@@ -147,8 +159,8 @@ class MarkingSchemeStep(Base):
         comment="පියවරේ අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
 
-    marking_scheme_id: Mapped[str] = mapped_column(
-        String(36),
+    marking_scheme_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("marking_schemes.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

@@ -103,6 +103,10 @@ class Settings:
     DB_POOL_MAX_SIZE: int = _env_int("DB_POOL_MAX_SIZE", 10)
     DB_MAX_OVERFLOW: int = _env_int("DB_MAX_OVERFLOW", 10)
     DB_POOL_PRE_PING: bool = True
+    DATABASE_POOL_SIZE: int = _env_int("DATABASE_POOL_SIZE", 10)
+    DATABASE_MAX_OVERFLOW: int = _env_int("DATABASE_MAX_OVERFLOW", 10)
+    DATABASE_POOL_TIMEOUT: int = _env_int("DATABASE_POOL_TIMEOUT", 30)
+    DATABASE_POOL_RECYCLE: int = _env_int("DATABASE_POOL_RECYCLE", 1800)
 
     # Firebase & Google Cloud Storage
     FIREBASE_PROJECT_ID: str = _env_str("FIREBASE_PROJECT_ID", "math-master-981fe")
