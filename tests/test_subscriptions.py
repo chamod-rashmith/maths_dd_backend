@@ -1,9 +1,12 @@
 """
-Unit tests for Subscription models, DTO schemas, repository methods, and REST API endpoints.
+Unit tests for Subscription, Plans, Pricing, Bank Slips, and Monetization API endpoints.
 Verifies:
-1. Bank slip submission, pre-signed upload URL generation, and admin approval/rejection workflows.
-2. RevenueCat Webhook idempotency, event deduplication, signature token verification, and lifecycle mapping.
-3. Subscription status calculation for student paywall gating.
+1. Normalized Table Registration in SQLAlchemy Metadata (Domain 7).
+2. Minor-Unit Pricing and Financial Precision (amount_minor in cents, amount_lkr helper).
+3. Bank slip submission, pre-signed upload URL generation, and admin approval/rejection workflows.
+4. RevenueCat Webhook idempotency, event deduplication, and lifecycle state mapping.
+5. Subscription status calculation for student paywall gating (PENDING_APPROVAL gates premium access).
+6. Stripping of internal database timestamps from public plan responses.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -12,20 +15,29 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
-from app.api.deps import require_admin_or_editor
+from app.api.deps import get_user_repository, require_admin_or_editor
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.main import app
-from app.models.subscription import ProcessedWebhookEvent, UserSubscription
+from app.models.subscription import (
+    BankTransferSlip,
+    Payment,
+    PlanPrice,
+    ProcessedWebhookEvent,
+    SubscriptionPlan,
+    UserSubscription,
+)
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.subscription import (
     AdminApprovalRequest,
     AdminRejectionRequest,
     BankSlipUploadRequest,
     CurrentSubscriptionStatusResponse,
+    PlanPriceResponse,
     RevenueCatEventPayload,
     RevenueCatWebhookPayload,
     SignedUploadUrlResponse,
+    SubscriptionPlanResponse,
     UserSubscriptionResponse,
 )
 
@@ -38,19 +50,60 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         app.dependency_overrides.clear()
 
     def test_tables_registered_in_metadata(self) -> None:
+        """Verify that all normalized Domain 7 tables are registered in Base.metadata."""
         table_names = set(Base.metadata.tables.keys())
+        self.assertIn("subscription_plans", table_names)
+        self.assertIn("plan_prices", table_names)
         self.assertIn("user_subscriptions", table_names)
+        self.assertIn("payments", table_names)
+        self.assertIn("bank_transfer_slips", table_names)
         self.assertIn("processed_webhook_events", table_names)
 
+    def test_minor_unit_pricing_and_payment_models(self) -> None:
+        """Verify integer minor-unit arithmetic prevents floating-point inaccuracies."""
+        price = PlanPrice(
+            id="prc_01",
+            plan_id="plan_01",
+            currency="LKR",
+            amount_minor=250000,  # Rs. 2,500.00
+            is_active=True,
+        )
+        self.assertEqual(price.amount_minor, 250000)
+        self.assertEqual(price.amount_lkr, 2500.0)
+
+        payment = Payment(
+            id="pay_01",
+            subscription_id="sub_01",
+            user_id="usr_01",
+            method="BANK_TRANSFER",
+            status="PENDING",
+            currency="LKR",
+            amount_minor=2400000,  # Rs. 24,000.00
+        )
+        self.assertEqual(payment.amount_minor, 2400000)
+        self.assertEqual(payment.amount_lkr, 24000.0)
+
     def test_bank_slip_request_validation(self) -> None:
-        req = BankSlipUploadRequest(
+        """Verify BankSlipUploadRequest harmonizes amount_lkr and amount_minor."""
+        # 1. Given amount_lkr, auto-compute amount_minor
+        req1 = BankSlipUploadRequest(
             plan_id="COMBINED_PRO_MONTHLY",
             slip_image_url="https://storage.googleapis.com/mathsdd-slips/sample.jpg",
             amount_lkr=2500.0,
             reference_note="CDM Colombo 07 Ref: 987654",
         )
-        self.assertEqual(req.plan_id, "COMBINED_PRO_MONTHLY")
-        self.assertEqual(req.amount_lkr, 2500.0)
+        self.assertEqual(req1.plan_id, "COMBINED_PRO_MONTHLY")
+        self.assertEqual(req1.amount_lkr, 2500.0)
+        self.assertEqual(req1.amount_minor, 250000)
+
+        # 2. Given amount_minor, auto-compute amount_lkr
+        req2 = BankSlipUploadRequest(
+            plan_id="COMBINED_PRO_ANNUAL",
+            slip_image_url="https://storage.googleapis.com/mathsdd-slips/sample2.jpg",
+            amount_minor=2400000,
+        )
+        self.assertEqual(req2.amount_minor, 2400000)
+        self.assertEqual(req2.amount_lkr, 24000.0)
 
     def test_admin_approval_and_rejection_requests(self) -> None:
         approval = AdminApprovalRequest(duration_days=30, admin_notes="Bank receipt verified with BOC statement")
@@ -80,30 +133,116 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         sub.expires_at = None
         self.assertTrue(sub.is_currently_active())
 
-        # Cancelled or Pending subscription
+        # Pending approval subscription -> strictly NOT active!
         sub.status = "PENDING_APPROVAL"
         self.assertFalse(sub.is_currently_active())
 
         sub.status = "CANCELLED"
         self.assertFalse(sub.is_currently_active())
 
-    async def test_repository_bank_slip_and_approval_flow(self) -> None:
+    async def test_repository_bank_slip_creation_creates_normalized_entities(self) -> None:
+        """Verify repository atomically creates UserSubscription, Payment, and BankTransferSlip."""
         mock_session = AsyncMock()
         mock_session.add = unittest.mock.MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
         repo = SubscriptionRepository(mock_session)
 
-        # 1. Create bank slip
         sub = await repo.create_bank_slip_subscription(
             user_id="user_123",
             plan_id="COMBINED_PRO_MONTHLY",
             slip_image_url="https://storage.googleapis.com/slips/slip.jpg",
             amount_lkr=2500.0,
-            reference_note="CDM Bambalapitiya",
+            amount_minor=250000,
+            bank_name="Bank of Ceylon",
+            deposit_reference="CDM-998877",
+            reference_note="Colombo 07 branch",
         )
+
         self.assertEqual(sub.status, "PENDING_APPROVAL")
         self.assertEqual(sub.provider, "BANK_TRANSFER")
         self.assertEqual(sub.amount_lkr, 2500.0)
-        self.assertTrue(mock_session.add.called)
+        self.assertFalse(sub.is_currently_active())
+
+        # Verify payments and bank slip are attached
+        self.assertEqual(len(sub.payments), 1)
+        payment = sub.payments[0]
+        self.assertEqual(payment.status, "PENDING")
+        self.assertEqual(payment.amount_minor, 250000)
+        self.assertIsNotNone(payment.bank_slip)
+        self.assertEqual(payment.bank_slip.review_status, "PENDING")
+        self.assertEqual(payment.bank_slip.bank_name, "Bank of Ceylon")
+        self.assertEqual(payment.bank_slip.deposit_reference, "CDM-998877")
+
+    async def test_repository_approval_and_rejection_updates_linked_payment(self) -> None:
+        """Verify approve/reject updates UserSubscription, Payment, and BankTransferSlip."""
+        mock_session = AsyncMock()
+        now = datetime.now(timezone.utc)
+
+        # Build existing mock hierarchy
+        sub = UserSubscription(
+            id="sub_test_approval",
+            user_id="user_123",
+            plan_id="COMBINED_PRO_MONTHLY",
+            status="PENDING_APPROVAL",
+            provider="BANK_TRANSFER",
+            starts_at=now,
+        )
+        payment = Payment(
+            id="pay_test_01",
+            subscription_id="sub_test_approval",
+            user_id="user_123",
+            method="BANK_TRANSFER",
+            status="PENDING",
+            amount_minor=250000,
+        )
+        slip = BankTransferSlip(
+            payment_id="pay_test_01",
+            slip_image_url="https://storage/slip.jpg",
+            review_status="PENDING",
+        )
+        payment.bank_slip = slip
+        sub.payments = [payment]
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = sub
+        mock_session.execute.return_value = mock_result
+
+        repo = SubscriptionRepository(mock_session)
+
+        # 1. Test Approval
+        approved_sub = await repo.approve_subscription(
+            subscription_id="sub_test_approval",
+            admin_uid="admin_01",
+            duration_days=30,
+            admin_notes="BOC slip verified with bank statement",
+        )
+        self.assertIsNotNone(approved_sub)
+        self.assertEqual(approved_sub.status, "ACTIVE")
+        self.assertTrue(approved_sub.is_currently_active())
+        self.assertEqual(payment.status, "COMPLETED")
+        self.assertEqual(slip.review_status, "APPROVED")
+        self.assertEqual(slip.reviewed_by, "admin_01")
+        self.assertEqual(slip.admin_feedback, "BOC slip verified with bank statement")
+
+        # 2. Test Rejection
+        sub.status = "PENDING_APPROVAL"
+        payment.status = "PENDING"
+        slip.review_status = "PENDING"
+
+        rejected_sub = await repo.reject_subscription(
+            subscription_id="sub_test_approval",
+            admin_uid="admin_01",
+            rejection_reason="Unclear photo, please upload again",
+        )
+        self.assertIsNotNone(rejected_sub)
+        self.assertEqual(rejected_sub.status, "REJECTED")
+        self.assertFalse(rejected_sub.is_currently_active())
+        self.assertEqual(payment.status, "FAILED")
+        self.assertEqual(slip.review_status, "REJECTED")
+        self.assertEqual(slip.admin_feedback, "Unclear photo, please upload again")
 
     async def test_repository_revenuecat_event_mapping(self) -> None:
         mock_session = AsyncMock()
@@ -172,6 +311,61 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mock_session.execute.called)
         self.assertTrue(mock_session.flush.called)
 
+    def test_list_plans_endpoint_strips_internal_timestamps(self) -> None:
+        """Verify GET /api/v1/subscriptions/plans returns clean models without audit fields."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+
+        plan1 = SubscriptionPlan(
+            id="plan_01",
+            code="COMBINED_PRO_MONTHLY",
+            name_si="සංයුක්ත ගණිතය මාසික සාමාජිකත්වය",
+            name_en="Combined Maths Pro Monthly",
+            description_si="දින 30ක පූර්ණ ප්‍රවේශය",
+            interval="MONTH",
+            duration_days=30,
+            display_order=1,
+            is_active=True,
+            features_si="සියලුම සටහන් සහ අභ්‍යාස",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        price1 = PlanPrice(
+            id="prc_01",
+            plan_id="plan_01",
+            currency="LKR",
+            amount_minor=250000,
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        plan1.prices = [price1]
+
+        mock_result.scalars.return_value.all.return_value = [plan1]
+        mock_session.execute.return_value = mock_result
+
+        async def override_get_db():
+            yield mock_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        client = TestClient(app)
+        response = client.get("/api/v1/subscriptions/plans")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 1)
+
+        first_plan = data[0]
+        self.assertEqual(first_plan["code"], "COMBINED_PRO_MONTHLY")
+        self.assertEqual(first_plan["name_si"], "සංයුක්ත ගණිතය මාසික සාමාජිකත්වය")
+        self.assertEqual(len(first_plan["prices"]), 1)
+        self.assertEqual(first_plan["prices"][0]["amount_minor"], 250000)
+        self.assertEqual(first_plan["prices"][0]["amount_lkr"], 2500.0)
+
+        # Verify internal database audit timestamps are NOT exposed to the client
+        self.assertNotIn("created_at", first_plan)
+        self.assertNotIn("updated_at", first_plan)
+        self.assertNotIn("created_at", first_plan["prices"][0])
+
     def test_upload_url_endpoint(self) -> None:
         mock_user = {"uid": "usr_test_student", "email": "student@mathsdd.lk", "role": "USER"}
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -234,7 +428,6 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_dup.json()["status"], "already_processed")
 
     def test_admin_endpoints_block_standard_users(self) -> None:
-        from app.api.deps import get_user_repository
         standard_user = {"uid": "usr_student", "email": "student@mathsdd.lk", "role": "USER"}
         app.dependency_overrides[get_current_user] = lambda: standard_user
         mock_user_repo = AsyncMock()

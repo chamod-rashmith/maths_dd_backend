@@ -1,10 +1,22 @@
 """
-Repository for Subscription and Billing operations using modern SQLAlchemy 2.0.
-Handles:
-1. Active entitlement lookups for users.
-2. Direct Bank Slip upload & Admin approval/rejection workflows.
-3. RevenueCat Webhook idempotency and state synchronization.
-4. Maintenance routine for expiring stale subscriptions.
+Repository for Subscription, Billing, Plans, and Bank Slip operations using modern SQLAlchemy 2.0.
+මෙම Repository මඟින් ශිෂ්‍ය සාමාජිකත්ව (Subscriptions), ගෙවීම් (Payments), සහ බැංකු රිසිට්පත්
+පරීක්ෂා කිරීමේ (Bank Slip Approval/Rejection) සියලුම දත්ත මෙහෙයුම් සුරක්ෂිතව ඉටු කරයි.
+
+Core Architectural Capabilities:
+1. Multi-Plan Catalog:
+   - Retrieves active plans with associated minor-unit prices (`list_active_plans`).
+2. Normalized Bank Slip Workflow:
+   - Atomically records `UserSubscription` (PENDING_APPROVAL), `Payment` (PENDING),
+     and `BankTransferSlip` (PENDING).
+   - Strict verification gate: No premium privileges granted until Admin approves.
+3. Admin Approval / Rejection Lifecycle:
+   - On approval: Subscription becomes `ACTIVE`, Payment marked `COMPLETED`, Slip marked `APPROVED`.
+   - On rejection: Subscription becomes `REJECTED`, Payment marked `FAILED`, Slip marked `REJECTED` with reason.
+4. RevenueCat Multi-Store Synchronization:
+   - Normalized webhook handling with event deduplication (`ProcessedWebhookEvent`).
+5. Maintenance Routine:
+   - Automatically expires stale subscriptions whose `expires_at` timestamp has passed.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -14,19 +26,74 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.exceptions import DatabaseOperationError
-from app.models.subscription import ProcessedWebhookEvent, UserSubscription
+from app.models.subscription import (
+    BankTransferSlip,
+    Payment,
+    PlanPrice,
+    ProcessedWebhookEvent,
+    SubscriptionPlan,
+    UserSubscription,
+)
 
 
 class SubscriptionRepository:
+    """SQLAlchemy 2.0 Repository for Subscription and Billing Domain."""
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    # =========================================================================
+    # 1. Plans & Pricing Queries (පැකේජ සහ මිල විමසුම්)
+    # =========================================================================
+
+    async def list_active_plans(self) -> List[SubscriptionPlan]:
+        """
+        සිසුන් සඳහා විවෘතව පවතින සියලුම සක්‍රිය සාමාජිකත්ව පැකේජ (Subscription Plans) ලබා ගැනීම.
+        සෑම පැකේජයකටම අදාළ සක්‍රිය මිල ගණන් (prices) ද සමඟ display_order අනුපිළිවෙලට ලබා දෙයි.
+        """
+        try:
+            stmt = (
+                select(SubscriptionPlan)
+                .options(selectinload(SubscriptionPlan.prices))
+                .where(SubscriptionPlan.is_active.is_(True))
+                .order_by(SubscriptionPlan.display_order.asc())
+            )
+            result = await self._session.execute(stmt)
+            return list(result.scalars().all())
+        except Exception as exc:
+            raise DatabaseOperationError(f"Error fetching active subscription plans: {exc}") from exc
+
+    async def get_plan_by_code(self, plan_code_or_id: str) -> Optional[SubscriptionPlan]:
+        """
+        පැකේජ කේතය (e.g. COMBINED_PRO_MONTHLY) හෝ UUID මඟින් පැකේජයක් සොයා ගැනීම.
+        """
+        try:
+            stmt = (
+                select(SubscriptionPlan)
+                .options(selectinload(SubscriptionPlan.prices))
+                .where(
+                    (SubscriptionPlan.code == plan_code_or_id) | (SubscriptionPlan.id == plan_code_or_id)
+                )
+            )
+            result = await self._session.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception as exc:
+            raise DatabaseOperationError(f"Error fetching subscription plan '{plan_code_or_id}': {exc}") from exc
+
+    # =========================================================================
+    # 2. Entitlement & Access Checks (අයිතිවාසිකම් පරීක්ෂාව)
+    # =========================================================================
+
     async def get_active_subscription(self, user_id: str) -> Optional[UserSubscription]:
-        """Fetch the current active and unexpired subscription for a user."""
+        """
+        ශිෂ්‍යයෙකුගේ මේ මොහොතේ වලංගු සහ ක්‍රියාකාරී සාමාජිකත්වය ලබා ගැනීම.
+        PENDING_APPROVAL හෝ EXPIRED වාර්තා මෙහිදී ප්‍රතික්ෂේප වන අතර, ACTIVE / GRACE_PERIOD පමණක් ලබා දේ.
+        """
         try:
             now = datetime.now(timezone.utc)
             stmt = (
                 select(UserSubscription)
+                .options(selectinload(UserSubscription.payments))
                 .where(
                     UserSubscription.user_id == user_id,
                     UserSubscription.status.in_(["ACTIVE", "GRACE_PERIOD"]),
@@ -50,6 +117,7 @@ class SubscriptionRepository:
         try:
             stmt = (
                 select(UserSubscription)
+                .options(selectinload(UserSubscription.payments))
                 .where(UserSubscription.user_id == user_id)
                 .order_by(desc(UserSubscription.created_at))
             )
@@ -58,41 +126,113 @@ class SubscriptionRepository:
         except Exception as exc:
             raise DatabaseOperationError(f"Error fetching user subscriptions: {exc}") from exc
 
+    # =========================================================================
+    # 3. Bank Slip Submission Workflow (බැංකු රිසිට්පත් ඉදිරිපත් කිරීමේ ක්‍රියාවලිය)
+    # =========================================================================
+
     async def create_bank_slip_subscription(
         self,
         user_id: str,
         plan_id: str,
         slip_image_url: str,
-        amount_lkr: float,
+        amount_lkr: Optional[float] = None,
+        amount_minor: Optional[int] = None,
+        bank_name: Optional[str] = None,
+        deposit_reference: Optional[str] = None,
         reference_note: Optional[str] = None,
     ) -> UserSubscription:
-        """Create a new subscription record in PENDING_APPROVAL status from a bank slip upload."""
+        """
+        ශිෂ්‍යයා තැන්පත් කළ බැංකු රිසිට්පත පද්ධතියට ඇතුළත් කිරීම (Normalized Atomic Creation).
+        
+        ක්‍රියාත්මක වන පියවර:
+        1. මුදල් අගය ශත (minor units) සහ රුපියල් අතර නිරවුල් කිරීම (Minor-Unit Integrity).
+        2. අදාළ SubscriptionPlan වාර්තාව සම්බන්ධ කිරීම.
+        3. UserSubscription වාර්තාව 'PENDING_APPROVAL' තත්වයෙන් නිර්මාණය කිරීම (ප්‍රවේශය තවම ලබා නොදේ).
+        4. Payment වාර්තාවක් 'PENDING' තත්වයෙන් නිර්මාණය කිරීම.
+        5. BankTransferSlip වාර්තාවක් සාදා Payment එක සමඟ 1-to-1 සම්බන්ධ කිරීම.
+        """
         try:
             now = datetime.now(timezone.utc)
+
+            # 1. Harmonize minor units (cents) and float rupees
+            if amount_minor is None and amount_lkr is not None:
+                amount_minor = int(round(amount_lkr * 100))
+            elif amount_minor is not None and amount_lkr is None:
+                amount_lkr = amount_minor / 100.0
+            elif amount_minor is None and amount_lkr is None:
+                amount_minor = 250000  # Default fallback: 2,500 LKR
+                amount_lkr = 2500.0
+
+            # 2. Lookup subscription plan if exists
+            plan_obj = await self.get_plan_by_code(plan_id)
+            plan_fk_id = plan_obj.id if plan_obj else None
+
+            # 3. Create UserSubscription header (PENDING_APPROVAL)
             sub = UserSubscription(
                 user_id=user_id,
                 plan_id=plan_id,
+                subscription_plan_id=plan_fk_id,
                 status="PENDING_APPROVAL",
                 provider="BANK_TRANSFER",
                 slip_image_url=slip_image_url,
                 amount_lkr=amount_lkr,
-                reference_note=reference_note,
+                reference_note=reference_note or deposit_reference,
                 starts_at=now,
                 expires_at=None,
                 is_auto_renew=False,
             )
             self._session.add(sub)
             await self._session.flush()
+
+            # 4. Create normalized Payment ledger record
+            payment = Payment(
+                subscription_id=sub.id,
+                user_id=user_id,
+                method="BANK_TRANSFER",
+                status="PENDING",
+                currency="LKR",
+                amount_minor=amount_minor,
+                external_transaction_id=deposit_reference,
+                paid_at=None,
+            )
+            self._session.add(payment)
+            await self._session.flush()
+
+            # 5. Create 1-to-1 BankTransferSlip audit evidence
+            bank_slip = BankTransferSlip(
+                payment_id=payment.id,
+                slip_image_url=slip_image_url,
+                bank_name=bank_name,
+                deposit_reference=deposit_reference,
+                depositor_note=reference_note,
+                review_status="PENDING",
+            )
+            self._session.add(bank_slip)
+            await self._session.flush()
+
+            # Refresh relationships so the returned model has everything loaded
+            sub.payments = [payment]
+            payment.bank_slip = bank_slip
+
             return sub
         except Exception as exc:
             raise DatabaseOperationError(f"Error creating bank slip subscription: {exc}") from exc
 
+    # =========================================================================
+    # 4. Admin Verification & Approval (පරිපාලක අනුමැතිය සහ ප්‍රතික්ෂේප කිරීම්)
+    # =========================================================================
+
     async def get_pending_approvals(self) -> List[UserSubscription]:
-        """Retrieve all pending bank slip submissions for admin review."""
+        """
+        පරිපාලකගේ (Admin) පරීක්ෂාව සඳහා රැඳී ඇති සියලුම බැංකු රිසිට්පත් ලැයිස්තුව ලබා ගැනීම.
+        """
         try:
             stmt = (
                 select(UserSubscription)
-                .options(selectinload(UserSubscription.user))
+                .options(
+                    selectinload(UserSubscription.user),
+                    selectinload(UserSubscription.payments).selectinload(Payment.bank_slip),
+                )
                 .where(UserSubscription.status == "PENDING_APPROVAL")
                 .order_by(UserSubscription.created_at.asc())
             )
@@ -108,9 +248,22 @@ class SubscriptionRepository:
         duration_days: int = 30,
         admin_notes: Optional[str] = None,
     ) -> Optional[UserSubscription]:
-        """Admin approves a pending bank slip, activating access for duration_days."""
+        """
+        පරිපාලක විසින් බැංකු රිසිට්පත නිවැරදි බව තහවුරු කර අනුමත කිරීම (Admin Verification Approval).
+        
+        ක්‍රියාත්මක වන වෙනස්කම්:
+        1. UserSubscription: status = 'ACTIVE', starts_at = now, expires_at = now + duration_days.
+        2. Payment: status = 'COMPLETED', paid_at = now.
+        3. BankTransferSlip: review_status = 'APPROVED', reviewed_by = admin_uid, reviewed_at = now.
+        """
         try:
-            stmt = select(UserSubscription).where(UserSubscription.id == subscription_id)
+            stmt = (
+                select(UserSubscription)
+                .options(
+                    selectinload(UserSubscription.payments).selectinload(Payment.bank_slip)
+                )
+                .where(UserSubscription.id == subscription_id)
+            )
             result = await self._session.execute(stmt)
             sub = result.scalar_one_or_none()
             if not sub:
@@ -124,6 +277,17 @@ class SubscriptionRepository:
             sub.starts_at = now
             sub.expires_at = now + timedelta(days=duration_days)
 
+            # Update associated payments and bank slip evidence
+            for payment in sub.payments:
+                if payment.status == "PENDING":
+                    payment.status = "COMPLETED"
+                    payment.paid_at = now
+                    if payment.bank_slip:
+                        payment.bank_slip.review_status = "APPROVED"
+                        payment.bank_slip.reviewed_by = admin_uid
+                        payment.bank_slip.reviewed_at = now
+                        payment.bank_slip.admin_feedback = admin_notes
+
             await self._session.flush()
             return sub
         except Exception as exc:
@@ -135,9 +299,22 @@ class SubscriptionRepository:
         admin_uid: str,
         rejection_reason: str,
     ) -> Optional[UserSubscription]:
-        """Admin rejects an invalid or fraudulent bank slip submission."""
+        """
+        පරිපාලක විසින් අවලංගු හෝ ව්‍යාජ බැංකු රිසිට්පතක් ප්‍රතික්ෂේප කිරීම (Admin Rejection).
+        
+        ක්‍රියාත්මක වන වෙනස්කම්:
+        1. UserSubscription: status = 'REJECTED', admin_notes = rejection_reason.
+        2. Payment: status = 'FAILED'.
+        3. BankTransferSlip: review_status = 'REJECTED', admin_feedback = rejection_reason.
+        """
         try:
-            stmt = select(UserSubscription).where(UserSubscription.id == subscription_id)
+            stmt = (
+                select(UserSubscription)
+                .options(
+                    selectinload(UserSubscription.payments).selectinload(Payment.bank_slip)
+                )
+                .where(UserSubscription.id == subscription_id)
+            )
             result = await self._session.execute(stmt)
             sub = result.scalar_one_or_none()
             if not sub:
@@ -149,10 +326,24 @@ class SubscriptionRepository:
             sub.approved_at = now
             sub.admin_notes = rejection_reason
 
+            # Update associated payments and bank slip evidence
+            for payment in sub.payments:
+                if payment.status == "PENDING":
+                    payment.status = "FAILED"
+                    if payment.bank_slip:
+                        payment.bank_slip.review_status = "REJECTED"
+                        payment.bank_slip.reviewed_by = admin_uid
+                        payment.bank_slip.reviewed_at = now
+                        payment.bank_slip.admin_feedback = rejection_reason
+
             await self._session.flush()
             return sub
         except Exception as exc:
             raise DatabaseOperationError(f"Error rejecting subscription: {exc}") from exc
+
+    # =========================================================================
+    # 5. RevenueCat Store Webhook Sync (ස්වයංක්‍රීය වෙළඳසැල් ගෙවීම් සම්බන්ධීකරණය)
+    # =========================================================================
 
     async def sync_revenuecat_event(
         self,
@@ -168,20 +359,13 @@ class SubscriptionRepository:
         is_auto_renew: bool = True,
     ) -> UserSubscription:
         """
-        Synchronize an incoming RevenueCat webhook event with industry-standard state mapping.
-
+        RevenueCat webhook event එකක් පද්ධතියේ දත්ත සමඟ සමමුහුර්ත කිරීම (State Synchronization).
+        
         Event Handling Rules (from RevenueCat Handbook):
-        - INITIAL_PURCHASE / RENEWAL / UNCANCELLATION:
-          Grants or extends active entitlement. Status becomes ACTIVE.
-        - CANCELLATION:
-          Intent signal indicating auto-renew was disabled. Does NOT revoke access immediately.
-          Access remains ACTIVE until expires_at, while auto_renew is set to False.
-        - EXPIRATION:
-          Access actually ended. Status becomes EXPIRED.
-        - BILLING_ISSUE:
-          Temporary payment failure (user may be in store grace period). Status is GRACE_PERIOD.
-        - PRODUCT_CHANGE:
-          Plan upgraded or downgraded.
+        - INITIAL_PURCHASE / RENEWAL: status becomes ACTIVE.
+        - CANCELLATION: auto-renew disabled, but user retains access until expires_at!
+        - EXPIRATION: access ended, status becomes EXPIRED.
+        - BILLING_ISSUE: status becomes GRACE_PERIOD.
         """
         try:
             now = datetime.now(timezone.utc)
@@ -197,7 +381,6 @@ class SubscriptionRepository:
             elif event_type == "CANCELLATION":
                 auto_renew = False
                 cancelled_at = now
-                # User retains paid access until expires_at!
                 if expires_at and expires_at > now:
                     status = "ACTIVE"
                 else:
@@ -271,6 +454,10 @@ class SubscriptionRepository:
         except Exception as exc:
             raise DatabaseOperationError(f"Error synchronizing RevenueCat event: {exc}") from exc
 
+    # =========================================================================
+    # 6. Webhook Idempotency (අනුපිටපත් ඉවෙන්ට් වැළැක්වීම)
+    # =========================================================================
+
     async def is_webhook_event_processed(self, event_id: str) -> bool:
         """Check whether a RevenueCat webhook event has already been recorded."""
         try:
@@ -292,6 +479,10 @@ class SubscriptionRepository:
             await self._session.flush()
         except Exception as exc:
             raise DatabaseOperationError(f"Error recording webhook event: {exc}") from exc
+
+    # =========================================================================
+    # 7. Expiration Maintenance (කල් ඉකුත් වූ සාමාජිකත්ව යාවත්කාලීන කිරීම)
+    # =========================================================================
 
     async def expire_stale_subscriptions(self) -> int:
         """Maintenance worker: marks active subscriptions whose expires_at < now as EXPIRED."""

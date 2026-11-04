@@ -1,10 +1,24 @@
 """
 Subscriptions & Monetization REST API Endpoints.
-Supports:
-1. Automated store purchases via RevenueCat Webhook (Google Play & Apple App Store).
-2. Sri Lankan Direct Bank Deposit Slip Upload + Admin Verification Workflow.
-3. Pre-signed GCS Upload URLs for direct-to-cloud image uploads.
-4. Admin slip approval, rejection, and subscription expiration maintenance.
+මෙම API මොඩියුලය මඟින් සාමාජිකත්ව (Subscriptions), පැකේජ විස්තර (Plans), සහ බැංකු රිසිට්පත්
+පරීක්ෂා කිරීමේ (Bank Slip Approval) සියලුම HTTP Endpoints කළමනාකරණය කරයි.
+
+Supported Capabilities:
+1. Public / Student Catalog:
+   - `GET /subscriptions/plans`: Returns active educational subscription plans with minor-unit pricing.
+2. Sri Lankan Direct Bank Deposit Slip Workflow:
+   - `GET /subscriptions/upload-url`: Generates pre-signed Cloud Storage PUT URLs for client-direct uploads.
+   - `POST /subscriptions/bank-slip`: Student uploads deposit slip for admin verification (PENDING_APPROVAL).
+3. Access & Paywall Gating:
+   - `GET /subscriptions/status`: Real-time premium check and expiry countdown for mobile paywalls.
+   - `GET /subscriptions/history`: Student's historical subscription records.
+4. Automated In-App Purchases (RevenueCat):
+   - `POST /subscriptions/webhook/revenuecat`: Server-to-server webhook receiver with idempotency deduplication.
+5. Human Admin Verification Operations:
+   - `GET /subscriptions/admin/pending`: List all pending bank slips awaiting verification.
+   - `POST /subscriptions/admin/{subscription_id}/approve`: Admin approves deposit, activating premium access.
+   - `POST /subscriptions/admin/{subscription_id}/reject`: Admin rejects invalid slip with reason.
+   - `POST /subscriptions/admin/maintenance/expire-stale`: Scheduled worker for expiring overdue subscriptions.
 """
 
 from datetime import datetime, timezone
@@ -28,6 +42,7 @@ from app.schemas.subscription import (
     CurrentSubscriptionStatusResponse,
     RevenueCatWebhookPayload,
     SignedUploadUrlResponse,
+    SubscriptionPlanResponse,
     UserSubscriptionResponse,
 )
 
@@ -37,8 +52,28 @@ router = APIRouter(prefix="/subscriptions", tags=["Subscriptions & Billing"])
 
 
 # =============================================================================
-# 1. Student / User Endpoints
+# 1. Public & Student Catalog Endpoints (පැකේජ සහ මිල ගණන්)
 # =============================================================================
+
+@router.get(
+    "/plans",
+    response_model=List[SubscriptionPlanResponse],
+    summary="Get Active Subscription Plans & Pricing",
+    description=(
+        "Returns all currently active educational subscription plans with localized Sinhala titles, "
+        "descriptions, duration days, feature lists, and prices. Internal database audit timestamps are stripped."
+    ),
+)
+async def list_subscription_plans(
+    session: AsyncSession = Depends(get_db),
+) -> List[SubscriptionPlanResponse]:
+    """
+    ශිෂ්‍යයන්ට සහ සාමාන්‍ය පරිශීලකයින්ට පෙන්වීම සඳහා සක්‍රිය සාමාජිකත්ව පැකේජ (Plans) ලැයිස්තුව ලබා දීම.
+    """
+    repo = SubscriptionRepository(session)
+    plans = await repo.list_active_plans()
+    return [SubscriptionPlanResponse.model_validate(p) for p in plans]
+
 
 @router.get(
     "/upload-url",
@@ -89,7 +124,8 @@ async def get_slip_upload_url(
     summary="Submit Bank Deposit Slip for Approval",
     description=(
         "Student submits details of a physical bank deposit or CDM transfer with the uploaded slip URL. "
-        "Creates a subscription record with PENDING_APPROVAL status for admin review."
+        "Creates a subscription record with PENDING_APPROVAL status and a linked pending payment. "
+        "Zero premium access is granted until an admin approves the submission."
     ),
 )
 async def submit_bank_slip(
@@ -108,6 +144,9 @@ async def submit_bank_slip(
         plan_id=payload.plan_id,
         slip_image_url=payload.slip_image_url,
         amount_lkr=payload.amount_lkr,
+        amount_minor=payload.amount_minor,
+        bank_name=payload.bank_name,
+        deposit_reference=payload.deposit_reference,
         reference_note=payload.reference_note,
     )
     return UserSubscriptionResponse.model_validate(sub)
@@ -282,7 +321,7 @@ async def handle_revenuecat_webhook(
 
 
 # =============================================================================
-# 3. Admin Verification & Management Endpoints
+# 3. Admin Verification & Management Endpoints (පරිපාලක මෙහෙයුම්)
 # =============================================================================
 
 @router.get(
@@ -305,7 +344,10 @@ async def list_pending_subscriptions(
     "/admin/{subscription_id}/approve",
     response_model=UserSubscriptionResponse,
     summary="Approve a Bank Slip Subscription",
-    description="Admin approves a valid deposit slip, activating premium access for the specified duration.",
+    description=(
+        "Admin approves a valid deposit slip, activating premium access for the specified duration "
+        "and marking associated payment records as COMPLETED."
+    ),
 )
 async def approve_subscription(
     subscription_id: str,
@@ -334,7 +376,10 @@ async def approve_subscription(
     "/admin/{subscription_id}/reject",
     response_model=UserSubscriptionResponse,
     summary="Reject an Invalid or Fraudulent Bank Slip",
-    description="Admin marks a bank slip submission as REJECTED with a required reason displayed to the student.",
+    description=(
+        "Admin marks a bank slip submission as REJECTED with a required reason displayed to the student "
+        "and marks associated payment records as FAILED."
+    ),
 )
 async def reject_subscription(
     subscription_id: str,
