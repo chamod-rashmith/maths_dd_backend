@@ -1,5 +1,12 @@
 """
 Abstract Repository Contract for User Profile persistence.
+
+===============================================================================
+පරිශීලක සහ ශාස්ත්‍රීය පැතිකඩ Repository අතුරුමුහුණත (User Repository Contract):
+-------------------------------------------------------------------------------
+Auth credentials සහ normalized `StudentProfile` (Target A/L year, attempt,
+Z-score exam district) දත්ත කළමනාකරණය සඳහා interface එක.
+===============================================================================
 """
 
 from abc import ABC, abstractmethod
@@ -28,6 +35,10 @@ class UserRepository(ABC):
         stream: Optional[str] = None,
         grade: Optional[str] = None,
         attempt: Optional[str] = None,
+        exam_year: Optional[int] = None,
+        attempt_number: Optional[int] = None,
+        exam_district_id: Optional[Union[int, str]] = None,
+        medium: Optional[str] = "SINHALA",
     ) -> Dict[str, Any]:
-        """Idempotently creates or updates a user profile upon authentication sync."""
+        """Idempotently creates or updates a user profile and student_profile upon authentication sync."""
         raise NotImplementedError

@@ -11,6 +11,7 @@ from app.models.study_note import StudyNote
 from app.models.exam_paper import ExamPaper
 from app.models.district import District
 from app.models.user import User
+from app.models.student_profile import StudentProfile
 from app.models.user_stats import UserStats
 from app.models.subscription import (
     SubscriptionPlan,
@@ -33,6 +34,7 @@ __all__ = [
     "ExamPaper",
     "District",
     "User",
+    "StudentProfile",
     "UserStats",
     "SubscriptionPlan",
     "PlanPrice",

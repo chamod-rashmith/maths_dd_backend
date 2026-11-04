@@ -1,5 +1,12 @@
 """
 Application Service for User Profile business logic.
+
+===============================================================================
+User Application Service:
+-------------------------------------------------------------------------------
+Auth token එකෙන් uid සහ email තහවුරු කර, User Profile සහ Domain 1 ශාස්ත්‍රීය දත්ත
+(Target A/L year, Attempt, Z-score district) repository වෙත යොමු කරයි.
+===============================================================================
 """
 
 from typing import Any, Dict
@@ -16,6 +23,7 @@ class UserService:
         self._repo = repo
 
     async def get_my_profile(self, current_user: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetches profile of the currently authenticated user."""
         uid = current_user.get("uid")
         if not uid:
             raise ValidationDomainError("Authenticated token payload is missing 'uid'.")
@@ -30,6 +38,7 @@ class UserService:
     async def sync_profile(
         self, current_user: Dict[str, Any], payload: UserProfileSyncRequest
     ) -> Dict[str, Any]:
+        """Synchronizes user profile and normalized StudentProfile from request payload."""
         uid = current_user.get("uid")
         email = current_user.get("email")
 
@@ -53,4 +62,8 @@ class UserService:
             stream=payload.stream.value if payload.stream else None,
             grade=payload.grade.value if payload.grade else None,
             attempt=payload.attempt.value if payload.attempt else None,
+            exam_year=payload.exam_year,
+            attempt_number=payload.attempt_number,
+            exam_district_id=payload.exam_district_id,
+            medium=payload.medium or "SINHALA",
         )

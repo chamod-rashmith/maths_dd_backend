@@ -1,5 +1,6 @@
 """
 Unit tests for User Profile and Demographic Authentication Sync endpoints.
+Verifies normalized StudentProfile fields (exam_year, attempt_number, exam_district_id).
 """
 
 from datetime import datetime, timezone
@@ -52,6 +53,10 @@ class TestUserFeature(unittest.TestCase):
                 "province": "WESTERN",
                 "display_order": 1,
             },
+            "exam_district_id": 1,
+            "exam_year": 2026,
+            "attempt_number": 1,
+            "medium": "SINHALA",
             "stream": "PHYSICAL_SCIENCE",
             "grade": "GRADE_13",
             "attempt": "FIRST",
@@ -78,6 +83,10 @@ class TestUserFeature(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["uid"], "usr_student_001")
         self.assertEqual(data["district_id"], 1)
+        self.assertEqual(data["exam_district_id"], 1)
+        self.assertEqual(data["exam_year"], 2026)
+        self.assertEqual(data["attempt_number"], 1)
+        self.assertEqual(data["medium"], "SINHALA")
         self.assertEqual(data["stream"], "PHYSICAL_SCIENCE")
         self.assertEqual(data["xp"], 150)
         self.assertTrue(data["is_premium"])
@@ -97,6 +106,10 @@ class TestUserFeature(unittest.TestCase):
             "school_name": "Ananda College",
             "district_id": 1,
             "district": None,
+            "exam_district_id": 1,
+            "exam_year": 2026,
+            "attempt_number": 1,
+            "medium": "SINHALA",
             "stream": "PHYSICAL_SCIENCE",
             "grade": "GRADE_12",
             "attempt": "FIRST",
@@ -115,6 +128,9 @@ class TestUserFeature(unittest.TestCase):
             "stream": "PHYSICAL_SCIENCE",
             "grade": "GRADE_12",
             "attempt": "FIRST",
+            "exam_year": 2026,
+            "attempt_number": 1,
+            "exam_district_id": 1,
         }
 
         client = TestClient(app)
@@ -127,6 +143,9 @@ class TestUserFeature(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["school_name"], "Ananda College")
         self.assertEqual(data["district_id"], 1)
+        self.assertEqual(data["exam_district_id"], 1)
+        self.assertEqual(data["exam_year"], 2026)
+        self.assertEqual(data["attempt_number"], 1)
         self.assertEqual(data["grade"], "GRADE_12")
 
 

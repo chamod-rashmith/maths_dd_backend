@@ -17,6 +17,7 @@ from app.models import (
     ExamPaper,
     District,
     User,
+    StudentProfile,
     UserStats,
     UserSubscription,
     ProcessedWebhookEvent,
@@ -278,6 +279,22 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertIn("UserStats", repr(stats))
         self.assertIn("District", repr(district))
 
+        profile = StudentProfile(
+            user_id="usr_007",
+            exam_year=2026,
+            attempt_number=1,
+            exam_district_id=1,
+            school_name="Ananda College",
+            stream="PHYSICAL_SCIENCE",
+            medium="SINHALA",
+        )
+        user.student_profile = profile
+
+        self.assertEqual(user.exam_year, 2026)
+        self.assertEqual(user.attempt_number, 1)
+        self.assertEqual(user.exam_district_id, 1)
+        self.assertIn("StudentProfile", repr(profile))
+
         dto = UserProfileResponse(
             uid=user.uid,
             email=user.email,
@@ -285,6 +302,10 @@ class TestSqlAlchemyModels(unittest.TestCase):
             role=user.role,
             school_name=user.school_name,
             district_id=user.district_id,
+            exam_district_id=user.exam_district_id,
+            exam_year=user.exam_year,
+            attempt_number=user.attempt_number,
+            medium="SINHALA",
             stream=user.stream,
             grade=user.grade,
             attempt=user.attempt,
@@ -297,6 +318,9 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.uid, "usr_007")
         self.assertEqual(dto.email, "student@mathsdd.lk")
         self.assertEqual(dto.district_id, 1)
+        self.assertEqual(dto.exam_district_id, 1)
+        self.assertEqual(dto.exam_year, 2026)
+        self.assertEqual(dto.attempt_number, 1)
         self.assertEqual(dto.xp, 150)
         self.assertEqual(dto.streak_count, 5)
         self.assertEqual(dto.questions_solved, 20)
