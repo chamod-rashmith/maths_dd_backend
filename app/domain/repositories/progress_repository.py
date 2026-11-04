@@ -1,13 +1,14 @@
 """
-Abstract Repository Contract for Student Progress, Attempts, and Heatmap telemetry.
+Abstract Repository Contract for Student Progress, Attempts, Heatmap telemetry, and XP Ledger.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.schemas.progress import (
     MarkQuestionCompletedRequest,
     UserProgressSummaryResponse,
+    XpTransactionResponse,
 )
 
 
@@ -40,4 +41,11 @@ class ProgressRepository(ABC):
         self, user_id: str, question_id: str, is_bookmarked: bool
     ) -> bool:
         """Toggles the bookmark status for a question attempt."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_user_xp_history(
+        self, user_id: str, limit: int = 50
+    ) -> List[Any]:
+        """Retrieves immutable XP transaction audit records for a user ordered newest first."""
         raise NotImplementedError

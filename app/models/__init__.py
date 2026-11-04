@@ -19,7 +19,7 @@ from app.models.subscription import (
     BankTransferSlip,
     ProcessedWebhookEvent,
 )
-from app.models.progress import UserQuestionAttempt, UserDailyActivity
+from app.models.progress import UserQuestionAttempt, UserDailyActivity, XpTransaction
 from app.models.daily_challenge import DailyChallenge, DailyChallengeQuestion
 
 __all__ = [
@@ -39,6 +39,7 @@ __all__ = [
     "ProcessedWebhookEvent",
     "UserQuestionAttempt",
     "UserDailyActivity",
+    "XpTransaction",
     "DailyChallenge",
     "DailyChallengeQuestion",
 ]
