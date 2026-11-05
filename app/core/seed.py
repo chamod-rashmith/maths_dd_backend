@@ -19,7 +19,7 @@ Marking Schemes (with steps), Subscription Plans (with prices), Daily Challenges
 
 import datetime
 import logging
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 import uuid
 from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
@@ -463,6 +463,18 @@ $$ v_{\text{bottom}} \ge \sqrt{5gr} $$
     },
 ]
 
+# Fixed series anchor date: Day 1 of the Combined Maths Challenge started on 2026-11-04.
+# All subsequent challenge days advance sequentially by 1 calendar day per day_number.
+SERIES_START_DATE = datetime.date(2026, 11, 4)
+
+
+def _compute_challenge_date(day_number: Optional[int]) -> Optional[datetime.date]:
+    """Computes fixed calendar date for a given sequential daily challenge day."""
+    if day_number is not None and day_number >= 1:
+        return SERIES_START_DATE + datetime.timedelta(days=day_number - 1)
+    return None
+
+
 QUESTIONS_SEED = [
     {
         "id": "q_pmat_poly_daily_01",
@@ -511,7 +523,6 @@ Required equation is $x^2 - Sx + P = 0 \implies 16x^2 - 5x + 32 = 0$.
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": True,
         "day_number": 1,
     },
     {
@@ -557,7 +568,6 @@ $$ = \lim_{h \to 0} \frac{2\cos(2x + h)\sin(h)}{h} = 2\cos(2x) $$
         "allocated_marks": 150,
         "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": True,
         "day_number": 1,
     },
     {
@@ -602,7 +612,6 @@ $$ T - mg\cos\theta = \frac{mv^2}{l} \implies T = mg(4 + 3\cos\theta) $$
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": True,
         "day_number": 1,
     },
     {
@@ -648,7 +657,6 @@ Time: $t = 12:00 + \frac{40\cos\theta}{|\mathbf{v}_{B/A}|} \approx 1:19\text{ PM
         "allocated_marks": 50,
         "is_premium": False,
         "is_published": True,
-        "use_today_scheduled_date": True,
         "day_number": 1,
     },
 
@@ -697,7 +705,6 @@ $$ \theta \in \left\{ \frac{\pi}{4}, \frac{3\pi}{4}, \frac{\pi}{2}, \frac{5\pi}{
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "scheduled_date_offset_days": 1,
         "day_number": 2,
     },
     {
@@ -747,7 +754,6 @@ Limiting equilibrium check: $2mg < 3mg\sin\alpha + \mu R = \frac{12}{5}mg \impli
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "scheduled_date_offset_days": 1,
         "day_number": 2,
     },
 
@@ -794,7 +800,6 @@ $$ I = \int_{4}^{3} \frac{-\frac{1}{2}du}{\sqrt{u}} = \frac{1}{2} \int_{3}^{4} u
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "scheduled_date_offset_days": 2,
         "day_number": 3,
     },
     {
@@ -843,7 +848,6 @@ $$ T = \frac{3}{2f} \left(\frac{2S}{T}\right) = \frac{3S}{fT} \implies T^2 = \fr
         "allocated_marks": 25,
         "is_premium": False,
         "is_published": True,
-        "scheduled_date_offset_days": 2,
         "day_number": 3,
     },
 ]
@@ -1221,10 +1225,10 @@ async def seed_database(session: AsyncSession) -> None:
             if q.get("lesson_id")
             else None
         )
-        if q.get("use_today_scheduled_date"):
-            sched_date = today_colombo
-        elif q.get("scheduled_date_offset_days") is not None:
-            sched_date = today_colombo + datetime.timedelta(days=q["scheduled_date_offset_days"])
+        if q.get("day_number"):
+            sched_date = _compute_challenge_date(q["day_number"])
+        elif q.get("scheduled_date"):
+            sched_date = q["scheduled_date"]
         else:
             sched_date = None
 
@@ -1328,7 +1332,7 @@ async def seed_database(session: AsyncSession) -> None:
 
     # 8. Seed Daily Challenges & Junction Questions
     for dc in DAILY_CHALLENGES_SEED:
-        dc_sched_date = today_colombo + datetime.timedelta(days=dc["offset_days"])
+        dc_sched_date = _compute_challenge_date(dc.get("day_number"))
         existing_dc = (
             await session.execute(
                 select(DailyChallenge).where(
@@ -1396,6 +1400,13 @@ async def seed_database(session: AsyncSession) -> None:
 
     await session.commit()
     logger.info("Database seeding completed successfully via SQLAlchemy across all domains.")
+    try:
+        from app.core.cache import questions_cache
+        questions_cache.invalidate_prefix("daily_pack")
+        questions_cache.invalidate_prefix("daily_series")
+        questions_cache.invalidate_prefix("daily_question")
+    except Exception as cache_err:
+        logger.warning("Failed to invalidate daily cache after seeding: %s", cache_err)
 
 
 async def run_seed() -> None:
