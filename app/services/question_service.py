@@ -91,12 +91,62 @@ class QuestionService:
         items = result["items"] if isinstance(result, dict) else result
         return [self._hydrate_question_signed_url(q) for q in items]
 
-    async def get_question_by_id(self, question_id: str) -> Dict[str, Any]:
+    @staticmethod
+    def _is_privileged_user(current_user: Optional[Dict[str, Any]]) -> bool:
+        role = str((current_user or {}).get("role", "")).upper()
+        return role in ("ADMIN", "EDITOR")
+
+    @staticmethod
+    def _question_date(question: Dict[str, Any]) -> Optional[date]:
+        scheduled_date = question.get("scheduled_date")
+        if isinstance(scheduled_date, date):
+            return scheduled_date
+        if scheduled_date:
+            try:
+                return date.fromisoformat(str(scheduled_date)[:10])
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def _enforce_question_access(
+        self,
+        question: Dict[str, Any],
+        current_user: Optional[Dict[str, Any]],
+        is_premium: bool,
+    ) -> None:
+        """Block unreleased and premium question content at the service boundary."""
+        if self._is_privileged_user(current_user):
+            return
+
+        if not question.get("is_published", False):
+            raise PermissionDeniedError(
+                "This question has not been published yet."
+            )
+
+        scheduled_date = self._question_date(question)
+        today_colombo = datetime.now(_COLOMBO_TZ).date()
+        if scheduled_date and scheduled_date > today_colombo:
+            raise PermissionDeniedError(
+                f"This question is locked until {scheduled_date.isoformat()}."
+            )
+
+        if question.get("is_premium", False) and not is_premium:
+            raise PermissionDeniedError(
+                "An active premium subscription is required to view this question."
+            )
+
+    async def get_question_by_id(
+        self,
+        question_id: str,
+        current_user: Optional[Dict[str, Any]] = None,
+        is_premium: bool = False,
+    ) -> Dict[str, Any]:
         question = await self._repo.get_by_id(question_id)
         if not question:
             raise EntityNotFoundError(
                 f"Question with ID '{question_id}' was not found in database."
             )
+        self._enforce_question_access(question, current_user, is_premium)
         return self._hydrate_question_signed_url(question)
 
     async def get_daily_question(
@@ -122,6 +172,7 @@ class QuestionService:
         target_date: Optional[str] = None,
         day_number: Optional[int] = None,
         current_user: Optional[Dict[str, Any]] = None,
+        is_premium: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Retrieves the complete dynamic multi-question daily challenge pack for a target date or day number.
@@ -132,11 +183,7 @@ class QuestionService:
           compared to Asia/Colombo time, a PermissionDeniedError (HTTP 403) is raised.
         - Privileged roles (ADMIN, EDITOR) can preview future packs.
         """
-        is_privileged = False
-        if current_user:
-            role = str(current_user.get("role", "")).upper()
-            if role in ("ADMIN", "EDITOR"):
-                is_privileged = True
+        is_privileged = self._is_privileged_user(current_user)
 
         today_colombo = datetime.now(_COLOMBO_TZ).date()
 
@@ -172,6 +219,8 @@ class QuestionService:
                         f"Day {cached.get('day_number', day_number)} Challenge Pack is locked until {pack_date} 00:00 AM Sri Lanka Time."
                     )
             result = dict(cached)
+            for question in result.get("questions", []):
+                self._enforce_question_access(question, current_user, is_premium)
             result["questions"] = [
                 self._hydrate_question_signed_url(q) for q in result.get("questions", [])
             ]
@@ -194,6 +243,9 @@ class QuestionService:
                 raise PermissionDeniedError(
                     f"Day {pack.get('day_number', day_number)} Challenge Pack is locked until {pack_date} 00:00 AM Sri Lanka Time."
                 )
+
+        for question in pack.get("questions", []):
+            self._enforce_question_access(question, current_user, is_premium)
 
         # 3. Store raw pack in cache (without pre-signed URLs) with 24-hour TTL
         questions_cache.set(cache_key, pack, ttl_seconds=86400)
