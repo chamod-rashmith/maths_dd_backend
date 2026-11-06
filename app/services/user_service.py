@@ -11,7 +11,11 @@ Auth token එකෙන් uid සහ email තහවුරු කර, User Prof
 
 from typing import Any, Dict
 
-from app.domain.exceptions import EntityNotFoundError, ValidationDomainError
+from app.domain.exceptions import (
+    EntityNotFoundError,
+    PermissionDeniedError,
+    ValidationDomainError,
+)
 from app.domain.repositories.user_repository import UserRepository
 from app.schemas.user import UserProfileSyncRequest
 
@@ -44,6 +48,11 @@ class UserService:
 
         if not uid or not email:
             raise ValidationDomainError("Token must include both 'uid' and 'email'.")
+
+        if not current_user.get("email_verified", False):
+            raise PermissionDeniedError(
+                "A verified email address is required to synchronize a user profile."
+            )
 
         display_name = (
             payload.name or current_user.get("name") or email.split("@")[0]
