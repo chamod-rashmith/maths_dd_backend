@@ -23,7 +23,7 @@ router = APIRouter(prefix="/progress", tags=["Student Progress v1"])
 @router.get(
     "/summary",
     response_model=UserProgressSummaryResponse,
-    response_model_by_alias=True,
+    response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
     summary="Get Complete Student Progress & Heatmap Summary",
     description=(
@@ -42,7 +42,7 @@ async def get_progress_summary(
 @router.post(
     "/completed-questions",
     response_model=UserProgressSummaryResponse,
-    response_model_by_alias=True,
+    response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
     summary="Mark Question as Completed / Practice",
     description=(
@@ -62,7 +62,7 @@ async def mark_question_completed(
 @router.delete(
     "/completed-questions/{question_id}",
     response_model=UserProgressSummaryResponse,
-    response_model_by_alias=True,
+    response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
     summary="Unmark Completed Question",
     description=(
@@ -98,7 +98,7 @@ async def toggle_bookmark(
 @router.get(
     "/xp-history",
     response_model=XpHistoryResponse,
-    response_model_by_alias=True,
+    response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
     summary="Get Student XP Transaction Audit Trail",
     description=(

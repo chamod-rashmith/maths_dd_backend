@@ -7,16 +7,14 @@ Pydantic v2 schemas for Student Progress Tracking, Question Attempts, Activity H
 from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic.alias_generators import to_camel
 
 
 class BaseProgressSchema(BaseModel):
-    """Base schema configuring camelCase alias serialization and ORM mode for Flutter client compatibility."""
+    """Base schema configuring snake_case serialization and ORM mode."""
 
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
-        alias_generator=to_camel,
     )
 
 

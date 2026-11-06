@@ -161,14 +161,14 @@ class TestProgressFeature(unittest.TestCase):
             response = client.get("/api/v1/progress/summary")
             self.assertEqual(response.status_code, 200)
             data = response.json()
-            self.assertIn("completedQuestions", data)
-            self.assertIn("q_001", data["completedQuestions"])
-            self.assertEqual(data["completedQuestions"]["q_001"]["timeSpentSeconds"], 210)
-            self.assertEqual(data["completedQuestions"]["q_001"]["lastAttemptDurationSeconds"], 90)
-            self.assertEqual(data["totalTimeSpentSeconds"], 210)
+            self.assertIn("completed_questions", data)
+            self.assertIn("q_001", data["completed_questions"])
+            self.assertEqual(data["completed_questions"]["q_001"]["time_spent_seconds"], 210)
+            self.assertEqual(data["completed_questions"]["q_001"]["last_attempt_duration_seconds"], 90)
+            self.assertEqual(data["total_time_spent_seconds"], 210)
             self.assertEqual(data["xp"], 35)
-            self.assertIn("recentXpTransactions", data)
-            self.assertEqual(len(data["recentXpTransactions"]), 1)
+            self.assertIn("recent_xp_transactions", data)
+            self.assertEqual(len(data["recent_xp_transactions"]), 1)
         finally:
             app.dependency_overrides.clear()
 
@@ -209,17 +209,17 @@ class TestProgressFeature(unittest.TestCase):
         client = TestClient(app)
         try:
             payload = {
-                "questionId": "q_002",
-                "timeSpentSeconds": 180,
-                "targetDurationSeconds": 300,
-                "wasOvertime": False,
-                "isDailyQuestion": True,
+                "question_id": "q_002",
+                "time_spent_seconds": 180,
+                "target_duration_seconds": 300,
+                "was_overtime": False,
+                "is_daily_question": True,
             }
             response = client.post("/api/v1/progress/completed-questions", json=payload)
             self.assertEqual(response.status_code, 200)
             data = response.json()
-            self.assertEqual(data["totalQuestionsSolved"], 1)
-            self.assertEqual(data["totalTimeSpentSeconds"], 180)
+            self.assertEqual(data["total_questions_solved"], 1)
+            self.assertEqual(data["total_time_spent_seconds"], 180)
             self.assertEqual(data["xp"], 60)
         finally:
             app.dependency_overrides.clear()
@@ -259,7 +259,7 @@ class TestProgressFeature(unittest.TestCase):
             response = client.get("/api/v1/progress/xp-history?limit=10")
             self.assertEqual(response.status_code, 200)
             data = response.json()
-            self.assertEqual(data["totalXp"], 60)
+            self.assertEqual(data["total_xp"], 60)
             self.assertEqual(len(data["transactions"]), 2)
             self.assertEqual(data["transactions"][0]["reason"], "DAILY_CHALLENGE_BONUS")
             self.assertEqual(data["transactions"][0]["amount"], 50)
