@@ -304,12 +304,16 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
                     "title": "Question 1 with Image",
                     "content_url": "questions/diagram.png",
                     "allocated_marks": 25,
+                    "is_published": True,
+                    "is_premium": False,
                 },
                 {
                     "id": "q_pack_2",
                     "title": "Question 2 plain",
                     "content_url": None,
                     "allocated_marks": 25,
+                    "is_published": True,
+                    "is_premium": False,
                 },
             ],
         }
@@ -358,6 +362,30 @@ class TestQuestionServiceCaching(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(pack)
         self.assertEqual(pack["day_number"], 99)
+
+    async def test_get_question_blocks_unpublished_content(self) -> None:
+        self.mock_repo.get_by_id.return_value = {
+            "id": "q_draft",
+            "is_published": False,
+            "is_premium": False,
+        }
+        with self.assertRaises(PermissionDeniedError):
+            await self.service.get_question_by_id(
+                "q_draft",
+                current_user={"uid": "usr_student", "role": "USER"},
+            )
+
+    async def test_get_question_blocks_premium_content_for_free_user(self) -> None:
+        self.mock_repo.get_by_id.return_value = {
+            "id": "q_premium",
+            "is_published": True,
+            "is_premium": True,
+        }
+        with self.assertRaises(PermissionDeniedError):
+            await self.service.get_question_by_id(
+                "q_premium",
+                current_user={"uid": "usr_student", "role": "USER"},
+            )
 
     async def test_list_daily_series_caching(self) -> None:
         from app.core.cache import questions_cache

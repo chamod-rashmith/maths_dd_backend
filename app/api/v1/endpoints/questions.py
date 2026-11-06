@@ -31,6 +31,27 @@ from app.services.question_service import QuestionService
 router = APIRouter(prefix="/questions", tags=["Questions v1"])
 
 
+async def _has_premium_access(
+    current_user: Dict[str, Any], user_repo: UserRepository
+) -> bool:
+    """Resolve premium access server-side; never trust a client-supplied flag."""
+    role = str(current_user.get("role", "")).upper()
+    if role in ("ADMIN", "EDITOR"):
+        return True
+
+    uid = current_user.get("uid")
+    if not uid:
+        return False
+    db_user = await user_repo.get_by_uid(uid)
+    return bool(
+        db_user
+        and (
+            db_user.get("is_premium", False)
+            or str(db_user.get("role", "")).upper() in ("ADMIN", "EDITOR")
+        )
+    )
+
+
 @router.get(
     "",
     response_model=Union[
@@ -113,6 +134,7 @@ async def get_daily_challenge_pack(
         description="Sequential target day number (e.g. 1 for Day 1 challenge pack)",
     ),
     current_user: Dict[str, Any] = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Optional[Dict[str, Any]]:
     """
@@ -127,6 +149,7 @@ async def get_daily_challenge_pack(
         target_date=date,
         day_number=day,
         current_user=current_user,
+        is_premium=await _has_premium_access(current_user, user_repo),
     )
 
 
@@ -169,13 +192,18 @@ async def list_recent_questions(
 async def get_question_by_id(
     question_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Dict[str, Any]:
     """
     Fetches a single question with its full LaTeX/Markdown problem statement or signed asset URL.
     Requires an authenticated user session.
     """
-    return await service.get_question_by_id(question_id)
+    return await service.get_question_by_id(
+        question_id=question_id,
+        current_user=current_user,
+        is_premium=await _has_premium_access(current_user, user_repo),
+    )
 
 
 @router.get("/{question_id}/solution", response_model=MarkingSchemeResponse)

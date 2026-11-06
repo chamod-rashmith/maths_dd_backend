@@ -357,7 +357,11 @@ class PostgresQuestionRepository(QuestionRepository):
             raise DatabaseOperationError(str(exc)) from exc
 
     async def get_recent(self, limit: int = 15) -> Dict[str, Any]:
-        return await self.list_questions(include_unpublished=True, limit=limit, offset=0)
+        # This endpoint is used by authenticated students, so "recent" must
+        # still mean publicly released content. Admin/editor preview tools
+        # should use an explicitly privileged repository query instead of
+        # weakening this default.
+        return await self.list_questions(include_unpublished=False, limit=limit, offset=0)
 
     async def get_by_id(self, question_id: str) -> Optional[Dict[str, Any]]:
         try:
