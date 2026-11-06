@@ -117,6 +117,8 @@ class Settings:
         "STORAGE_BUCKET_NAME",
         "math-master-981fe.firebasestorage.app",
     )
+    # Fernet key used for application-level encryption of sensitive fields.
+    DATA_ENCRYPTION_KEY: str = os.environ.get("DATA_ENCRYPTION_KEY", "").strip()
 
     # Upstash Serverless Redis
     UPSTASH_REDIS_REST_URL: str = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip()

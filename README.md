@@ -58,6 +58,16 @@ cp .env.example .env
 
 Fill in the required PostgreSQL, Firebase, Google Cloud Storage, and Redis values in `.env`.
 
+For sensitive database fields such as phone numbers, configure a stable Fernet
+key through `DATA_ENCRYPTION_KEY`. Generate one with:
+
+```bash
+uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Store this key in Secret Manager or the deployment environment. Never commit it
+to the repository, and do not rotate it without a data migration plan.
+
 ### 2. Install dependencies
 
 Using `uv`:

@@ -23,6 +23,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.domain.exceptions import DatabaseOperationError
 from app.domain.repositories.user_repository import UserRepository
+from app.core.field_encryption import decrypt_field, encrypt_field
 from app.models.district import District
 from app.models.student_profile import StudentProfile
 from app.models.user import User
@@ -84,7 +85,7 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "uid": user.uid,
         "email": user.email,
         "name": user.name,
-        "telephone_no": user.telephone_no,
+        "telephone_no": decrypt_field(user.telephone_no),
         "role": user.role,
         "avatar_url": user.avatar_url,
         "school_name": profile.school_name if (profile and profile.school_name) else user.school_name,
@@ -226,7 +227,7 @@ class PostgresUserRepository(UserRepository):
                 if avatar_url is not None:
                     user.avatar_url = avatar_url
                 if telephone_no is not None:
-                    user.telephone_no = telephone_no
+                    user.telephone_no = encrypt_field(telephone_no)
                 if school_name is not None:
                     user.school_name = school_name
                 if raw_district is not None:
@@ -243,7 +244,7 @@ class PostgresUserRepository(UserRepository):
                     email=email,
                     name=name,
                     avatar_url=avatar_url,
-                    telephone_no=telephone_no,
+                    telephone_no=encrypt_field(telephone_no),
                     school_name=school_name,
                     district_id=resolved_district_id,
                     stream=str(stream) if stream else None,
