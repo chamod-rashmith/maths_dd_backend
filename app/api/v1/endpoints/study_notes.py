@@ -16,7 +16,7 @@ Security & Zero-Leak Principles:
      without transmitting heavy text or signed PDF download URLs.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from app.api.deps import get_study_note_service, require_admin_or_editor
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.schemas.pagination import PaginatedResponse
 from app.schemas.study_note import (
     StudyNoteCreateOrUpdate,
     StudyNoteDetailResponse,
@@ -36,7 +37,9 @@ router = APIRouter(prefix="/study-notes", tags=["Study Notes v1"])
 
 @router.get(
     "",
-    response_model=List[StudyNoteSummaryResponse],
+    response_model=Union[
+        PaginatedResponse[StudyNoteSummaryResponse], List[StudyNoteSummaryResponse]
+    ],
     summary="List Study Notes Summaries",
     description=(
         "Returns lightweight catalog card summaries for study notes matching filters. "
@@ -53,7 +56,7 @@ async def list_study_notes(
     current_user: Dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     ශිෂ්‍යයාට බැලීම සඳහා සටහන් ලැයිස්තුව ලබා දීම.
     ශිෂ්‍යයා සතුව Premium access නොමැති නම්, premium සටහන් සඳහා `is_locked = True` ලෙස ලකුණු කර එවයි.
@@ -76,13 +79,31 @@ async def list_study_notes(
     )
 
     # Attach is_locked badge state per card
-    results = []
-    for note in raw_notes:
+    if isinstance(raw_notes, list):
+        notes = raw_notes
+        results = []
+    else:
+        notes = raw_notes["items"]
+        results = []
+
+    for note in notes:
         note_dict = dict(note)
         note_dict["is_locked"] = bool(note_dict.get("is_premium") and not is_premium_user)
         results.append(note_dict)
 
-    return results
+    if isinstance(raw_notes, list):
+        return results
+
+    page = (offset // limit) + 1
+    return {
+        "items": results,
+        "pagination": {
+            "page": page,
+            "page_size": limit,
+            "total": raw_notes["total"],
+            "has_next": offset + len(results) < raw_notes["total"],
+        },
+    }
 
 
 @router.get(

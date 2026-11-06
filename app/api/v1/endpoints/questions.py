@@ -6,7 +6,7 @@ Removes deprecated single-question /daily endpoint in favor of dynamic multi-que
 Provides reverse-chronological daily series catalog with safe teaser metadata for tomorrow.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import (
@@ -16,6 +16,7 @@ from app.api.deps import (
 )
 from app.core.security import get_current_user, get_optional_current_user
 from app.domain.repositories.user_repository import UserRepository
+from app.schemas.pagination import PaginatedResponse
 from app.schemas.question import (
     DailyChallengePackResponse,
     DailySeriesDaySummaryResponse,
@@ -30,7 +31,12 @@ from app.services.question_service import QuestionService
 router = APIRouter(prefix="/questions", tags=["Questions v1"])
 
 
-@router.get("", response_model=List[QuestionSummaryResponse])
+@router.get(
+    "",
+    response_model=Union[
+        PaginatedResponse[QuestionSummaryResponse], List[QuestionSummaryResponse]
+    ],
+)
 async def list_questions(
     subject_id: Optional[str] = Query(
         None,
@@ -61,13 +67,13 @@ async def list_questions(
     offset: int = Query(0, ge=0),
     current_user: Dict[str, Any] = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service),
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     Lists published and active questions as lightweight summaries for catalog and lesson views.
     Security: Requires an authenticated user session (Bearer token).
     Data minimization: Excludes heavy problem content and internal database timestamps.
     """
-    return await service.list_questions(
+    result = await service.list_questions(
         subject_id=subject_id,
         lesson_id=lesson_id,
         question_type=type,
@@ -80,6 +86,20 @@ async def list_questions(
         limit=limit,
         offset=offset,
     )
+    if isinstance(result, list):
+        return result
+
+    page_size = limit
+    page = (offset // page_size) + 1
+    return {
+        "items": result["items"],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": result["total"],
+            "has_next": offset + len(result["items"]) < result["total"],
+        },
+    }
 
 
 @router.get("/daily/pack", response_model=Optional[DailyChallengePackResponse])

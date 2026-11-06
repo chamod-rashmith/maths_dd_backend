@@ -17,8 +17,8 @@ class StudyNoteRepository(ABC):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        """Lists study notes filtered by subject, lesson, or search query."""
+    ) -> Dict[str, Any]:
+        """Lists study notes with filtered items and a total count."""
         raise NotImplementedError
 
     @abstractmethod

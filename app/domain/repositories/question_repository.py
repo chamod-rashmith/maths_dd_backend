@@ -52,13 +52,13 @@ class QuestionRepository(ABC):
         day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        """Lists filtered and paginated question summaries."""
+    ) -> Dict[str, Any]:
+        """Lists filtered and paginated question summaries with total count."""
         raise NotImplementedError
 
     @abstractmethod
-    async def get_recent(self, limit: int = 15) -> List[Dict[str, Any]]:
-        """Returns the most recently created questions."""
+    async def get_recent(self, limit: int = 15) -> Dict[str, Any]:
+        """Returns the most recently created questions with a total count."""
         raise NotImplementedError
 
     @abstractmethod

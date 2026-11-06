@@ -40,21 +40,21 @@ class StudyNoteService:
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         cache_key = self._build_list_cache_key(subject_id, lesson_id, search, limit, offset)
         cached = study_notes_cache.get(cache_key)
         if cached is not None:
             return cached
 
-        notes = await self._repo.list_notes(
+        result = await self._repo.list_notes(
             subject_id=subject_id,
             lesson_id=lesson_id,
             search=search,
             limit=limit,
             offset=offset,
         )
-        study_notes_cache.set(cache_key, notes)
-        return notes
+        study_notes_cache.set(cache_key, result)
+        return result
 
     async def get_note_by_id(self, note_id: str) -> Dict[str, Any]:
         cache_key = f"{_STUDY_NOTES_DETAIL_PREFIX}{note_id.strip()}"

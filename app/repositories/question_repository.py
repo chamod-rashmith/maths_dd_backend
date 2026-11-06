@@ -281,7 +281,7 @@ class PostgresQuestionRepository(QuestionRepository):
         day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """Lists filtered and paginated question summaries."""
         try:
             today_colombo = datetime.datetime.now(_SL_TZ).date()
@@ -334,6 +334,11 @@ class PostgresQuestionRepository(QuestionRepository):
             if day_number is not None:
                 stmt = stmt.where(Question.day_number == day_number)
 
+            count_stmt = select(func.count()).select_from(
+                stmt.order_by(None).subquery()
+            )
+            total = int((await self._session.execute(count_stmt)).scalar_one())
+
             stmt = (
                 stmt.order_by(
                     func.coalesce(Question.scheduled_date, cast(Question.created_at, Date)).desc(),
@@ -344,11 +349,14 @@ class PostgresQuestionRepository(QuestionRepository):
             )
 
             result = await self._session.execute(stmt)
-            return [dict(row) for row in result.mappings().all()]
+            return {
+                "items": [dict(row) for row in result.mappings().all()],
+                "total": total,
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
-    async def get_recent(self, limit: int = 15) -> List[Dict[str, Any]]:
+    async def get_recent(self, limit: int = 15) -> Dict[str, Any]:
         return await self.list_questions(include_unpublished=True, limit=limit, offset=0)
 
     async def get_by_id(self, question_id: str) -> Optional[Dict[str, Any]]:

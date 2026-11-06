@@ -65,8 +65,8 @@ class QuestionService:
         day_number: Optional[int] = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        questions = await self._repo.list_questions(
+    ) -> Dict[str, Any]:
+        result = await self._repo.list_questions(
             subject_id=subject_id,
             lesson_id=lesson_id,
             question_type=question_type,
@@ -79,13 +79,17 @@ class QuestionService:
             limit=limit,
             offset=offset,
         )
-        return [self._hydrate_question_signed_url(q) for q in questions]
+        result["items"] = [
+            self._hydrate_question_signed_url(q) for q in result["items"]
+        ]
+        return result
 
     async def list_recent_questions(
         self, limit: int = 15
     ) -> List[Dict[str, Any]]:
-        questions = await self._repo.list_recent_questions(limit=limit)
-        return [self._hydrate_question_signed_url(q) for q in questions]
+        result = await self._repo.get_recent(limit=limit)
+        items = result["items"] if isinstance(result, dict) else result
+        return [self._hydrate_question_signed_url(q) for q in items]
 
     async def get_question_by_id(self, question_id: str) -> Dict[str, Any]:
         question = await self._repo.get_by_id(question_id)
@@ -206,7 +210,7 @@ class QuestionService:
         limit: int = 30,
         offset: int = 0,
         current_user: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Retrieves the catalog list of daily challenge series summaries in reverse-chronological order.
         Includes safe teaser metadata for tomorrow's challenge (without leaking question bodies).

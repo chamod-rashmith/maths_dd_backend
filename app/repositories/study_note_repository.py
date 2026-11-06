@@ -28,7 +28,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         try:
             content_type_case = case(
                 (and_(StudyNote.pdf_url.isnot(None), StudyNote.pdf_url != ""), "pdf"),
@@ -86,6 +86,11 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     )
                 )
 
+            count_stmt = select(func.count()).select_from(
+                stmt.order_by(None).subquery()
+            )
+            total = int((await self._session.execute(count_stmt)).scalar_one())
+
             stmt = (
                 stmt.order_by(StudyNote.order_index.asc(), StudyNote.created_at.desc())
                 .limit(limit)
@@ -93,7 +98,10 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             )
 
             result = await self._session.execute(stmt)
-            return [dict(row) for row in result.mappings().all()]
+            return {
+                "items": [dict(row) for row in result.mappings().all()],
+                "total": total,
+            }
         except Exception as exc:
             raise DatabaseOperationError(str(exc)) from exc
 
