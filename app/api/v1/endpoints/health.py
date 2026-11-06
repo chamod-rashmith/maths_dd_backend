@@ -30,6 +30,13 @@ def health_check() -> Dict[str, str]:
     }
 
 
+# ==============================================================================
+# 🚨 TODO(PRODUCTION-CLEANUP) / REMOVE BEFORE PRODUCTION 🚨
+# පහත `/db-test`, `POST /db-seed`, සහ `GET /db-seed` endpoints යොදා ඇත්තේ
+# Development අවධියේදී Database tables පරීක්ෂා කිරීමට සහ sample data seed කිරීමට පමණි.
+# Production යැවීමට පෙර `/db-test` සහ `/db-seed` endpoints සම්පූර්ණයෙන්ම ඉවත් කර
+# Cloud Run liveness probe එක සඳහා `/health` පමණක් ඉතිරි කරන්න!
+# ==============================================================================
 @router.get("/db-test")
 async def test_database(
     _admin: Dict[str, Any] = Depends(require_admin),
@@ -89,6 +96,7 @@ async def _execute_seed_operation() -> Any:
         )
 
 
+# 🚨 TODO(PRODUCTION-CLEANUP): Remove `/db-seed` endpoints before production deployment!
 @router.post("/db-seed", operation_id="post_trigger_db_seed")
 async def post_trigger_seed_database(
     _admin: Dict[str, Any] = Depends(require_admin),
@@ -100,6 +108,7 @@ async def post_trigger_seed_database(
     return await _execute_seed_operation()
 
 
+# 🚨 TODO(PRODUCTION-CLEANUP): Remove `/db-seed` endpoints before production deployment!
 @router.get("/db-seed", operation_id="get_trigger_db_seed")
 async def get_trigger_seed_database(
     _admin: Dict[str, Any] = Depends(require_admin),

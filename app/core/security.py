@@ -22,11 +22,19 @@ bearer_scheme = HTTPBearer(
     scheme_name="FirebaseBearerAuth",
     description=(
         "Firebase ID Token (`Bearer <token>`). "
+        # ⚠️ TODO(PRODUCTION-CLEANUP): Remove dev shortcut token description before production release.
         "In local development (`ENVIRONMENT=development`), shortcut tokens "
         "`dev-student`, `dev-admin`, `dev-editor`, and `dev-auditor` are also supported."
     ),
 )
 
+# ==============================================================================
+# 🚨 TODO(PRODUCTION-CLEANUP) / REMOVE BEFORE PRODUCTION 🚨
+# පහත `_DEV_SHORTCUT_TOKENS` යොදා ඇත්තේ Development අවධියේදී (Swagger UI / Postman)
+# පහසුවෙන් API පරීක්ෂා කිරීම සඳහා පමණි.
+# Production යැවීමට පෙර මෙම `_DEV_SHORTCUT_TOKENS` dictionary එක සහ `get_current_user`
+# තුළ ඇති `is_dev_mode` bypass කොටස සම්පූර්ණයෙන්ම ඉවත් කරන්න!
+# ==============================================================================
 _DEV_SHORTCUT_TOKENS: Dict[str, Dict[str, Any]] = {
     "dev-admin": {
         "uid": "admin_master_001",
@@ -133,6 +141,8 @@ async def get_current_user(
 
     id_token = parts[1]
 
+    # 🚨 TODO(PRODUCTION-CLEANUP): Remove this dev-mode token bypass block before production deployment!
+    # Production යැවීමට පෙර මෙම `is_dev_mode` සහ `_DEV_SHORTCUT_TOKENS` කොටස ඉවත් කරන්න.
     is_dev_mode = (
         settings.ENVIRONMENT.lower() in ("development", "dev", "local", "test")
         or settings.ALLOW_DEV_AUTH_BYPASS

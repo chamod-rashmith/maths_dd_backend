@@ -158,6 +158,8 @@ def _enforce_sudo_token_if_required(
     In local development (`ADMIN_REQUIRE_TOTP_SUDO=false`), omitting the header is permitted
     so normal development workflows are unblocked, while still validating the token whenever provided.
     """
+    # 🚨 TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර `ADMIN_REQUIRE_TOTP_SUDO` අනිවාර්ය කරන්න
+    # (හෝ `x_elevated_token` සෑම විටම අනිවාර්ය වන පරිදි `elif` කොන්දේසිය ඉවත් කරන්න).
     uid = str(current_user.get("uid", ""))
     if x_elevated_token is not None:
         if not verify_elevated_session_token(x_elevated_token, expected_uid=uid):

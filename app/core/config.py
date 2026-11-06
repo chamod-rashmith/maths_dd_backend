@@ -75,6 +75,13 @@ class Settings:
     VERSION: str = _env_str("API_VERSION", "1.0.0")
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = _env_str("ENVIRONMENT", "production")
+
+    # ==========================================================================
+    # 🚨 TODO(PRODUCTION-CLEANUP) / REMOVE OR DISABLE BEFORE PRODUCTION 🚨
+    # Development පහසුව සඳහා පහත flags දමා ඇත:
+    # 1. `ENABLE_DOCS`: Production යැවීමට පෙර default අගය "false" කරන්න (Swagger `/docs` hide කිරීමට).
+    # 2. `ALLOW_DEV_AUTH_BYPASS`: Production යැවීමට පෙර මෙම flag එක සම්පූර්ණයෙන්ම ඉවත් කරන්න!
+    # ==========================================================================
     ENABLE_DOCS: bool = os.environ.get("ENABLE_DOCS", "true").strip().lower() in (
         "1",
         "true",
@@ -89,6 +96,7 @@ class Settings:
     PORT: int = _env_int("PORT", 8080)
 
     # CORS
+    # ⚠️ TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර wildcard "*" වෙනුවට නිල Frontend domain එක පමණක් ලබා දෙන්න.
     CORS_ORIGINS: List[str] = field(
         default_factory=lambda: _parse_cors_origins(
             os.environ.get("CORS_ORIGINS", "*")
@@ -128,7 +136,8 @@ class Settings:
     # Fernet key used for application-level encryption of sensitive fields.
     DATA_ENCRYPTION_KEY: str = os.environ.get("DATA_ENCRYPTION_KEY", "").strip()
 
-    # Admin Step-Up TOTP Sudo Enforcement (False by default in development; can be set to "true" in production)
+    # 🚨 TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර `ADMIN_REQUIRE_TOTP_SUDO` default අගය "true" කරන්න
+    # (එවිට සෑම Admin/Editor/Auditor mutation එකකටම Google Authenticator `X-Elevated-Token` අනිවාර්ය වේ).
     ADMIN_REQUIRE_TOTP_SUDO: bool = os.environ.get(
         "ADMIN_REQUIRE_TOTP_SUDO", "false"
     ).strip().lower() in ("1", "true", "yes")
