@@ -41,6 +41,7 @@ from app.schemas.common import (
     WebhookAckResponse,
 )
 from app.schemas.subscription import (
+    ActiveSubscriptionSummaryResponse,
     AdminApprovalRequest,
     AdminRejectionRequest,
     BankSlipUploadRequest,
@@ -215,7 +216,7 @@ async def get_subscription_status(
         provider=active_sub.provider,
         expires_at=active_sub.expires_at,
         days_remaining=days_remaining,
-        active_subscription=UserSubscriptionResponse.model_validate(active_sub),
+        active_subscription=ActiveSubscriptionSummaryResponse.model_validate(active_sub),
     )
 
 

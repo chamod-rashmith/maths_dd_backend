@@ -24,6 +24,7 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     ශිෂ්‍යයෙකු විසඳූ ප්‍රශ්නයක සාරාංශ වාර්තාව (Completed Question Record DTO).
     `time_spent_seconds` මඟින් මෙම ප්‍රශ්නය පුහුණු වීමට වැය කළ සමස්ත කාලයත් (Cumulative Seconds),
     `last_attempt_duration_seconds` මඟින් අවසන් වරට වැය කළ කාලයත් නියෝජනය වේ.
+    Omits redundant `completed_date_key` (derivable from `completed_at`).
     """
 
     question_id: str = Field(..., description="ප්‍රශ්නයේ හැඳුනුම් අංකය")
@@ -37,7 +38,6 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     target_duration_seconds: int = Field(0, description="නිර්දේශිත කාලය")
     was_overtime: bool = Field(False, description="කාලය ඉක්මවා ගියේද යන්න")
     attempt_count: int = Field(1, description="විසඳූ වාර ගණන")
-    completed_date_key: str = Field(..., description="විසඳූ දිනය (YYYY-MM-DD)")
     completed_at: datetime = Field(..., description="විසඳූ නිශ්චිත වේලාව (UTC)")
     is_bookmarked: bool = Field(False, description="Bookmark කර ඇත්ද යන්න")
     confidence: ConfidenceLevel | str | None = Field(None, description="විශ්වාසනීයත්ව මට්ටම (LOW, MEDIUM, HIGH)")
@@ -48,13 +48,13 @@ class DailyActivityBucketSchema(BaseProgressSchema):
     """
     දිනපතා අධ්‍යයන දත්ත (Daily Activity Heatmap Bucket DTO).
     GitHub-style Heatmap එකක් ජනනය කිරීම සඳහා අවශ්‍ය දිනපතා සංඛ්‍යාලේඛන.
+    Omits `question_ids` array to keep the 365-day heatmap payload lightweight.
     """
 
     date_key: str = Field(..., description="දිනය (YYYY-MM-DD Asia/Colombo)")
     questions_solved_count: int = Field(0, description="අදාළ දිනයේ විසඳූ ප්‍රශ්න ගණන")
     total_time_spent_seconds: int = Field(0, description="අදාළ දිනයේ වැය කළ මුළු කාලය (තත්පර වලින්)")
     daily_challenge_completed: bool = Field(False, description="Daily Challenge සම්පූර්ණ කළේද යන්න")
-    question_ids: list[str] = Field(default_factory=list, description="එදින විසඳූ ප්‍රශ්න ලැයිස්තුව")
 
 
 class XpTransactionResponse(BaseProgressSchema):
@@ -68,7 +68,6 @@ class XpTransactionResponse(BaseProgressSchema):
     reason: str = Field(..., description="හේතු කේතය (QUESTION_SOLVED, DAILY_CHALLENGE_BONUS, etc.)")
     question_id: str | None = Field(None, description="අදාළ ප්‍රශ්නයේ ID")
     description_si: str | None = Field(None, description="සිංහල විස්තරය (e.g. 'කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)')")
-    description_en: str | None = Field(None, description="ඉංග්‍රීසි විස්තරය")
     created_at: datetime = Field(..., description="XP හිමි වූ දිනය සහ වේලාව")
 
 

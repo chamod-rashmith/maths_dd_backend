@@ -34,7 +34,7 @@ class SubjectCreate(BaseModel):
 class SubjectResponse(BaseModel):
     """
     Clean lightweight response schema for a curriculum subject.
-    Client වෙත විෂය විස්තර ලබාදෙන සැහැල්ලු response schema එක.
+    Client වෙත විෂය විස්තර ලබාදෙන සැහැල්ලු response schema එක (omits internal order_index).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -43,7 +43,6 @@ class SubjectResponse(BaseModel):
     name: str
     sinhala_name: str | None = None
     code: str
-    order_index: int
     description: str | None = None
 
 
@@ -68,7 +67,7 @@ class LessonCreate(BaseModel):
 class LessonResponse(BaseModel):
     """
     Clean lightweight response schema for a syllabus lesson.
-    පාඩම් විස්තර සහ ඒ යටතේ ඇති ප්‍රශ්න ප්‍රමාණයන් පෙන්වන response schema එක.
+    පාඩම් විස්තර සහ ඒ යටතේ ඇති ප්‍රශ්න ප්‍රමාණයන් පෙන්වන response schema එක (omits internal order_index).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -83,7 +82,6 @@ class LessonResponse(BaseModel):
     subject_name: str | None = None
     title: str
     sinhala_title: str | None = None
-    order_index: int
     description: str | None = None
     question_count: int = 0
     premium_count: int = 0
@@ -92,3 +90,4 @@ class LessonResponse(BaseModel):
     @classmethod
     def _coerce_none_counts(cls, v: Any) -> int:
         return 0 if v is None else int(v)
+

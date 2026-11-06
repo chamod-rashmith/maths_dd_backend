@@ -620,7 +620,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     MarkingScheme.total_marks,
                     MarkingScheme.is_official,
                     MarkingScheme.is_premium_only,
-                    MarkingScheme.order_index,
                 )
                 .where(MarkingScheme.question_id == question_id.strip())
                 .order_by(MarkingScheme.order_index.asc())

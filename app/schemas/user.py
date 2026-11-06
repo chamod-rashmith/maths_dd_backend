@@ -26,7 +26,7 @@ from app.domain.enums import (
     UserRole,
 )
 from app.schemas.district import DistrictResponse
-from app.schemas.subscription import UserSubscriptionResponse
+from app.schemas.subscription import ActiveSubscriptionSummaryResponse
 
 
 class UserProfileSyncRequest(BaseModel):
@@ -136,7 +136,10 @@ class UserProfileSyncRequest(BaseModel):
 
 
 class UserProfileResponse(BaseModel):
-    """Clean lightweight response model representing a student's profile, academic status, and telemetry stats."""
+    """
+    Clean lightweight response model representing a student's profile, academic status, and telemetry stats.
+    Optimized to omit duplicate district objects, legacy duplicate attempt strings, and heavy payment/slip arrays.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -152,7 +155,6 @@ class UserProfileResponse(BaseModel):
     district_id: int | None = None
     district: DistrictResponse | None = None
     exam_district_id: int | None = None
-    exam_district: DistrictResponse | None = None
 
     # Academic Syllabus & Target Exam
     exam_year: int | None = None
@@ -160,7 +162,6 @@ class UserProfileResponse(BaseModel):
     medium: ExamMedium | str | None = ExamMedium.SINHALA
     stream: StudyStream | str | None = None
     grade: StudentGrade | str | None = None
-    attempt: ExamAttempt | str | None = None
 
     # Gamification & Telemetry stats
     xp: int = 0
@@ -168,6 +169,7 @@ class UserProfileResponse(BaseModel):
     accuracy_rate: float = 0.0
     questions_solved: int = 0
 
-    # Subscription state
+    # Subscription state (lightweight summary only)
     is_premium: bool = False
-    active_subscription: UserSubscriptionResponse | None = None
+    active_subscription: ActiveSubscriptionSummaryResponse | None = None
+

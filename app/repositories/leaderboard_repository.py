@@ -91,7 +91,6 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                     effective_streak.label("current_streak_days"),
                     effective_solved.label("total_solved_count"),
                     District.code.label("district_code"),
-                    District.name_en.label("district_name_en"),
                     District.name_si.label("district_name_si"),
                 )
                 .outerjoin(UserStats, UserStats.user_id == User.uid)
@@ -111,7 +110,6 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                 my_streak = int(me_row.current_streak_days or 0)
                 my_solved = int(me_row.total_solved_count or 0)
                 my_district_code = me_row.district_code
-                my_district_name_en = me_row.district_name_en
                 my_district_name_si = me_row.district_name_si
                 user_in_db = True
             else:
@@ -127,7 +125,6 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                 my_streak = 0
                 my_solved = 0
                 my_district_code = None
-                my_district_name_en = None
                 my_district_name_si = None
                 user_in_db = False
 
@@ -136,7 +133,6 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                     if d_info:
                         my_district_id = int(d_info["id"])
                         my_district_code = d_info.get("code")
-                        my_district_name_en = d_info.get("name_en")
                         my_district_name_si = d_info.get("name_si")
 
             ahead_cond = _ahead_of_user_condition(
@@ -222,7 +218,6 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                 "school_name": my_school,
                 "district_id": my_district_id,
                 "district_code": my_district_code,
-                "district_name_en": my_district_name_en,
                 "district_name_si": my_district_name_si,
                 "exam_year": my_exam_year,
                 "xp": my_xp,
@@ -304,13 +299,11 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                     User.name,
                     User.avatar_url,
                     effective_school.label("school_name"),
-                    effective_district_id.label("district_id"),
                     StudentProfile.exam_year.label("exam_year"),
                     effective_xp.label("xp"),
                     effective_streak.label("current_streak_days"),
                     effective_solved.label("total_solved_count"),
                     District.code.label("district_code"),
-                    District.name_en.label("district_name_en"),
                     District.name_si.label("district_name_si"),
                 )
                 .outerjoin(UserStats, UserStats.user_id == User.uid)
@@ -338,9 +331,7 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                         "name": row.name,
                         "avatar_url": row.avatar_url,
                         "school_name": row.school_name,
-                        "district_id": row.district_id,
                         "district_code": row.district_code,
-                        "district_name_en": row.district_name_en,
                         "district_name_si": row.district_name_si,
                         "exam_year": row.exam_year,
                         "xp": int(row.xp or 0),

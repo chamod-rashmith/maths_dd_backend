@@ -1,0 +1,416 @@
+"""
+Unit & Integration tests verifying response payload optimizations across all student-facing endpoints.
+Ensures redundant/server-side fields (`display_order`, `order_index`, `is_published`, `question_ids`,
+`completed_date_key`, `description_en`, `exam_district`, `attempt`, `district_name_en`, and heavy nested
+`payments`/`bank_slip` audit fields on profile/status endpoints) are stripped from HTTP JSON responses.
+"""
+
+from datetime import date, datetime, timezone
+import unittest
+import uuid
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.core.cache import curriculum_cache, districts_cache, questions_cache, study_notes_cache
+from app.core.database import Base, get_db
+from app.core.security import get_current_user
+from app.main import app
+from app.models.district import District
+from app.models.lesson import SyllabusLesson
+from app.models.marking_scheme import MarkingScheme, MarkingSchemeStep
+from app.models.progress import UserDailyActivity, UserQuestionAttempt, XpTransaction
+from app.models.question import Question
+from app.models.student_profile import StudentProfile
+from app.models.study_note import StudyNote
+from app.models.subject import Subject
+from app.models.subscription import (
+    BankTransferSlip,
+    Payment,
+    PlanPrice,
+    SubscriptionPlan,
+    UserSubscription,
+)
+from app.models.user import User
+from app.models.user_stats import UserStats
+
+
+class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
+    """End-to-end verification that all response payloads exclude server-only and duplicate fields."""
+
+    async def asyncSetUp(self) -> None:
+        app.dependency_overrides.clear()
+        districts_cache.clear()
+        curriculum_cache.clear()
+        study_notes_cache.clear()
+        questions_cache.clear()
+
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        self.session_factory = async_sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+        now = datetime.now(timezone.utc)
+        today = date.today()
+        today_key = today.isoformat()
+        ms_uuid = uuid.uuid4()
+
+        async with self.session_factory() as session:
+            # 1. Seed District
+            session.add(
+                District(
+                    id=1,
+                    code="COLOMBO",
+                    name_en="Colombo",
+                    name_si="කොළඹ",
+                    name_ta="கொழும்பு",
+                    province="WESTERN",
+                    display_order=1,
+                )
+            )
+
+            # 2. Seed User, StudentProfile, UserStats
+            session.add(
+                User(
+                    uid="stu_opt_1",
+                    email="opt@mathsdd.lk",
+                    name="Optimization Tester",
+                    role="USER",
+                    district_id=1,
+                    grade="GRADE_13",
+                )
+            )
+            session.add(
+                StudentProfile(
+                    user_id="stu_opt_1",
+                    exam_district_id=1,
+                    school_name="Royal College",
+                    exam_year=2026,
+                    attempt_number=1,
+                    medium="SINHALA",
+                    stream="PHYSICAL_SCIENCE",
+                )
+            )
+            session.add(
+                UserStats(
+                    user_id="stu_opt_1",
+                    xp=500,
+                    current_streak_days=5,
+                    longest_streak_days=10,
+                    total_solved_count=25,
+                )
+            )
+
+            # 3. Seed Subscription Plan, PlanPrice, Active Subscription, Payment, BankTransferSlip
+            session.add(
+                SubscriptionPlan(
+                    id="COMBINED_PRO_MONTHLY",
+                    code="COMBINED_PRO_MONTHLY",
+                    name_en="Combined Maths Pro Monthly",
+                    name_si="සංයුක්ත ගණිතය මාසික",
+                    description_si="සියලුම පාඩම් සඳහා ප්‍රවේශය",
+                    interval="MONTH",
+                    duration_days=30,
+                    features_si="සියලුම ප්‍රශ්න",
+                    is_active=True,
+                    display_order=1,
+                )
+            )
+            session.add(
+                PlanPrice(
+                    id="prc_opt_1",
+                    plan_id="COMBINED_PRO_MONTHLY",
+                    currency="LKR",
+                    amount_minor=150000,
+                    is_active=True,
+                )
+            )
+            session.add(
+                UserSubscription(
+                    id="sub_opt_1",
+                    user_id="stu_opt_1",
+                    plan_id="COMBINED_PRO_MONTHLY",
+                    status="ACTIVE",
+                    provider="BANK_TRANSFER",
+                    starts_at=now,
+                    expires_at=None,
+                )
+            )
+            session.add(
+                Payment(
+                    id="pay_opt_1",
+                    subscription_id="sub_opt_1",
+                    user_id="stu_opt_1",
+                    amount_minor=150000,
+                    currency="LKR",
+                    status="COMPLETED",
+                    method="BANK_TRANSFER",
+                )
+            )
+            session.add(
+                BankTransferSlip(
+                    payment_id="pay_opt_1",
+                    slip_image_url="https://cdn.mathsdd.lk/slips/slip1.jpg",
+                    deposit_reference="BOC-12345",
+                    admin_feedback="Verified",
+                    review_status="APPROVED",
+                    reviewed_by="admin_1",
+                    reviewed_at=now,
+                )
+            )
+
+            # 4. Seed Curriculum (Subject, SyllabusLesson, Question, MarkingScheme, StudyNote)
+            session.add(
+                Subject(
+                    id="sub_pmat",
+                    name="Pure Mathematics",
+                    sinhala_name="ශුද්ධ ගණිතය",
+                    code="PMAT",
+                    order_index=1,
+                    description="ශුද්ධ ගණිතය පාඩම් මාලාව",
+                )
+            )
+            session.add(
+                SyllabusLesson(
+                    id="les_trig",
+                    subject_id="sub_pmat",
+                    title="Trigonometry",
+                    sinhala_title="ත්‍රිකෝණමිතිය",
+                    description="ත්‍රිකෝණමිතිය මූලිකාංග",
+                    order_index=1,
+                    question_count=1,
+                    premium_count=0,
+                )
+            )
+            session.add(
+                Question(
+                    id="q_trig_1",
+                    title="2023 A/L Combined Mathematics Paper I - Q1",
+                    subject_id="sub_pmat",
+                    lesson_id="les_trig",
+                    type="SHORT",
+                    difficulty="MEDIUM",
+                    schedule="REGULAR",
+                    source="PAST_PAPER",
+                    allocated_marks=25,
+                    is_premium=False,
+                    is_published=True,
+                    content_text="\\sin(A+B) = \\sin A \\cos B + \\cos A \\sin B",
+                )
+            )
+            session.add(
+                MarkingScheme(
+                    id=ms_uuid,
+                    question_id="q_trig_1",
+                    title="Official Marking Scheme",
+                    total_marks=25,
+                    order_index=1,
+                )
+            )
+            session.add(
+                MarkingSchemeStep(
+                    id="mss_trig_1",
+                    marking_scheme_id=ms_uuid,
+                    step_number=1,
+                    order_index=1,
+                    step_type="METHOD",
+                    description_si="සූත්‍රය ආදේශ කරන්න",
+                    allocated_marks=10,
+                )
+            )
+            session.add(
+                StudyNote(
+                    id="note_trig_1",
+                    subject_id="sub_pmat",
+                    lesson_id="les_trig",
+                    title="Trigonometric Identities",
+                    description="මූලික සූත්‍ර සාරාංශය",
+                    content_text="$$\\sin^2 x + \\cos^2 x = 1$$",
+                    is_premium=False,
+                    order_index=1,
+                )
+            )
+
+            # 5. Seed Progress (UserDailyActivity, UserQuestionAttempt, XpTransaction)
+            session.add(
+                UserDailyActivity(
+                    id=f"stu_opt_1_{today_key}",
+                    user_id="stu_opt_1",
+                    date_key=today_key,
+                    questions_solved_count=2,
+                    total_time_spent_seconds=300,
+                    daily_challenge_completed=True,
+                )
+            )
+            session.add(
+                UserQuestionAttempt(
+                    id="stu_opt_1_q_trig_1",
+                    user_id="stu_opt_1",
+                    question_id="q_trig_1",
+                    time_spent_seconds=300,
+                    last_attempt_duration_seconds=300,
+                    target_duration_seconds=300,
+                    attempt_count=1,
+                    completed_date=today,
+                    completed_at=now,
+                )
+            )
+            session.add(
+                XpTransaction(
+                    id="xpt_opt_1",
+                    user_id="stu_opt_1",
+                    amount=20,
+                    reason="QUESTION_SOLVED",
+                    question_id="q_trig_1",
+                    description_si="q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්",
+                    created_at=now,
+                )
+            )
+            await session.commit()
+
+        async def override_get_db():
+            async with self.session_factory() as session:
+                yield session
+
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "stu_opt_1",
+            "email": "opt@mathsdd.lk",
+            "name": "Optimization Tester",
+            "role": "USER",
+        }
+        self.client = TestClient(app)
+
+    async def asyncTearDown(self) -> None:
+        app.dependency_overrides.clear()
+        districts_cache.clear()
+        curriculum_cache.clear()
+        study_notes_cache.clear()
+        questions_cache.clear()
+        await self.engine.dispose()
+
+    def test_districts_payload_excludes_display_order(self) -> None:
+        res = self.client.get("/api/v1/districts")
+        self.assertEqual(res.status_code, 200)
+        districts = res.json()
+        self.assertEqual(len(districts), 1)
+        self.assertNotIn("display_order", districts[0])
+        self.assertEqual(districts[0]["code"], "COLOMBO")
+
+    def test_user_profile_excludes_duplicate_and_heavy_subscription_fields(self) -> None:
+        res = self.client.get("/api/v1/users/me")
+        self.assertEqual(res.status_code, 200)
+        profile = res.json()
+        self.assertNotIn("exam_district", profile)
+        self.assertNotIn("attempt", profile)
+        self.assertNotIn("display_order", profile["district"])
+        # Active subscription on /users/me uses lightweight ActiveSubscriptionSummaryResponse
+        active_sub = profile["active_subscription"]
+        self.assertIsNotNone(active_sub)
+        self.assertEqual(active_sub["id"], "sub_opt_1")
+        self.assertNotIn("payments", active_sub)
+        self.assertNotIn("slip_image_url", active_sub)
+        self.assertNotIn("reference_note", active_sub)
+        self.assertNotIn("admin_notes", active_sub)
+        self.assertNotIn("amount_minor", active_sub)
+
+    def test_subscriptions_plans_status_and_history_payloads(self) -> None:
+        # 1. Plans exclude display_order
+        plans_res = self.client.get("/api/v1/subscriptions/plans")
+        self.assertEqual(plans_res.status_code, 200)
+        plan = plans_res.json()[0]
+        self.assertNotIn("display_order", plan)
+
+        # 2. Status uses lightweight ActiveSubscriptionSummaryResponse
+        status_res = self.client.get("/api/v1/subscriptions/status")
+        self.assertEqual(status_res.status_code, 200)
+        active_sub = status_res.json()["active_subscription"]
+        self.assertNotIn("payments", active_sub)
+        self.assertNotIn("slip_image_url", active_sub)
+
+        # 3. History includes payments + bank_slip without parent ID duplication
+        hist_res = self.client.get("/api/v1/subscriptions/history")
+        self.assertEqual(hist_res.status_code, 200)
+        sub_item = hist_res.json()[0]
+        self.assertNotIn("slip_image_url", sub_item)
+        self.assertNotIn("amount_minor", sub_item)
+        payment = sub_item["payments"][0]
+        self.assertNotIn("subscription_id", payment)
+        self.assertNotIn("payment_id", payment["bank_slip"])
+        self.assertEqual(payment["bank_slip"]["deposit_reference"], "BOC-12345")
+
+    def test_curriculum_questions_and_notes_exclude_order_index_and_is_published(self) -> None:
+        subj_res = self.client.get("/api/v1/curriculum/subjects")
+        self.assertEqual(subj_res.status_code, 200)
+        self.assertNotIn("order_index", subj_res.json()[0])
+
+        les_res = self.client.get("/api/v1/curriculum/lessons")
+        self.assertEqual(les_res.status_code, 200)
+        self.assertNotIn("order_index", les_res.json()[0])
+
+        q_list_res = self.client.get("/api/v1/questions")
+        self.assertEqual(q_list_res.status_code, 200)
+        q_summary = q_list_res.json()["items"][0]
+        self.assertNotIn("is_published", q_summary)
+
+        q_detail_res = self.client.get("/api/v1/questions/q_trig_1")
+        self.assertEqual(q_detail_res.status_code, 200)
+        q_detail = q_detail_res.json()
+        self.assertNotIn("is_published", q_detail)
+
+        ms_res = self.client.get("/api/v1/questions/q_trig_1/solution")
+        self.assertEqual(ms_res.status_code, 200)
+        ms_data = ms_res.json()
+        self.assertNotIn("order_index", ms_data)
+
+        from app.schemas.question import MarkingSchemeStepResponse
+
+        step_dump = MarkingSchemeStepResponse.model_validate(
+            {
+                "id": "mss_trig_1",
+                "step_number": 1,
+                "step_type": "METHOD",
+                "description_si": "සූත්‍රය ආදේශ කරන්න",
+                "allocated_marks": 10,
+                "order_index": 1,
+            }
+        ).model_dump()
+        self.assertNotIn("order_index", step_dump)
+
+        notes_res = self.client.get("/api/v1/study-notes")
+        self.assertEqual(notes_res.status_code, 200)
+        self.assertNotIn("order_index", notes_res.json()["items"][0])
+
+    def test_progress_heatmap_and_xp_history_exclude_redundant_fields(self) -> None:
+        prog_res = self.client.get("/api/v1/progress/summary")
+        self.assertEqual(prog_res.status_code, 200)
+        prog_data = prog_res.json()
+        # Find active day in heatmap
+        active_days = [
+            d for d in prog_data["daily_activity"].values() if d["questions_solved_count"] > 0
+        ]
+        self.assertEqual(len(active_days), 1)
+        self.assertNotIn("question_ids", active_days[0])
+
+        comp_items = list(prog_data["completed_questions"].values())
+        self.assertEqual(len(comp_items), 1)
+        self.assertNotIn("completed_date_key", comp_items[0])
+
+        xp_res = self.client.get("/api/v1/progress/xp-history")
+        self.assertEqual(xp_res.status_code, 200)
+        tx = xp_res.json()["transactions"][0]
+        self.assertNotIn("description_en", tx)
+        self.assertEqual(tx["description_si"], "q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්")
+
+    def test_leaderboard_excludes_redundant_district_fields(self) -> None:
+        lb_res = self.client.get("/api/v1/leaderboard")
+        self.assertEqual(lb_res.status_code, 200)
+        lb_data = lb_res.json()
+        entry = lb_data["items"][0]
+        self.assertNotIn("district_id", entry)
+        self.assertNotIn("district_name_en", entry)
+        self.assertEqual(entry["district_code"], "COLOMBO")
+        self.assertEqual(entry["district_name_si"], "කොළඹ")
+        self.assertNotIn("district_name_en", lb_data["my_rank"])
