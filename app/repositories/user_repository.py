@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.domain.exceptions import DatabaseOperationError
+from app.domain.exceptions import DatabaseOperationError, PermissionDeniedError
 from app.domain.repositories.user_repository import UserRepository
 from app.core.field_encryption import decrypt_field, encrypt_field
 from app.models.district import District
@@ -204,7 +204,8 @@ class PostgresUserRepository(UserRepository):
             )
             user = result.scalar_one_or_none()
 
-            # 4. If not found by uid, fallback query by email
+            # 4. Never rebind an existing account to a different Firebase UID.
+            # Email matching alone does not prove ownership of the existing account.
             if not user:
                 result_email = await self._session.execute(
                     select(User)
@@ -218,7 +219,10 @@ class PostgresUserRepository(UserRepository):
                 )
                 user = result_email.scalar_one_or_none()
                 if user:
-                    user.uid = uid
+                    raise PermissionDeniedError(
+                        "A user profile already exists for this email with a different "
+                        "authentication identity. Use the account-linking or recovery flow."
+                    )
 
             # 5. Update or insert User record
             if user:

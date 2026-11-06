@@ -96,6 +96,7 @@ class TestUserFeature(unittest.TestCase):
             "uid": "usr_student_002",
             "email": "nimal@mathsdd.lk",
             "name": "Nimal Silva",
+            "email_verified": True,
         }
         self.mock_service.sync_profile.return_value = {
             "uid": "usr_student_002",
