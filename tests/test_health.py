@@ -34,7 +34,9 @@ class _InMemoryStudyNoteRepository(StudyNoteRepository):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+        user_id: Optional[str] = None,
+        bookmarked_only: bool = False,
+    ) -> Dict[str, Any]:
         # Summary view: exclude content_text and pdf_url
         summaries = []
         for n in self.notes.values():
@@ -42,10 +44,53 @@ class _InMemoryStudyNoteRepository(StudyNoteRepository):
             s.pop("content_text", None)
             s.pop("pdf_url", None)
             summaries.append(s)
-        return summaries
+        return {"items": summaries, "total": len(summaries)}
 
-    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
+    async def get_by_id(
+        self,
+        note_id: str,
+        user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         return self.notes.get(note_id)
+
+    async def get_user_note_states(
+        self,
+        user_id: str,
+        note_ids: List[str],
+    ) -> Dict[str, Dict[str, Any]]:
+        return {nid: {"user_vote": 0, "is_bookmarked": False} for nid in note_ids}
+
+    async def vote_note(
+        self,
+        note_id: str,
+        user_id: str,
+        vote: int,
+    ) -> Optional[Dict[str, Any]]:
+        note = self.notes.get(note_id)
+        if not note:
+            return None
+        return {
+            "status": "success",
+            "note_id": note_id,
+            "user_vote": vote,
+            "upvote_count": 1 if vote == 1 else 0,
+            "downvote_count": 1 if vote == -1 else 0,
+        }
+
+    async def toggle_bookmark(
+        self,
+        note_id: str,
+        user_id: str,
+        is_bookmarked: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        note = self.notes.get(note_id)
+        if not note:
+            return None
+        return {
+            "status": "success",
+            "note_id": note_id,
+            "is_bookmarked": True if is_bookmarked is None else bool(is_bookmarked),
+        }
 
     async def upsert(
         self,
