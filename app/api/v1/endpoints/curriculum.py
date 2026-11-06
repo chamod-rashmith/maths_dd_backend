@@ -15,9 +15,14 @@ Curriculum API Endpoints (v1):
 """
 
 from typing import Any
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.deps import get_curriculum_service, require_admin_or_editor
+from app.api.deps import (
+    get_admin_audit_service,
+    get_curriculum_service,
+    require_admin_or_editor,
+)
+from app.domain.enums import AuditAction, AuditResourceType
 from app.schemas.common import DeleteResponse
 from app.schemas.curriculum import (
     LessonCreate,
@@ -25,6 +30,7 @@ from app.schemas.curriculum import (
     SubjectCreate,
     SubjectResponse,
 )
+from app.services.admin_audit_service import AdminAuditService
 from app.services.curriculum_service import CurriculumService
 
 router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
@@ -45,11 +51,23 @@ async def list_subjects(
 )
 async def add_subject(
     sub: SubjectCreate,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Creates or updates a syllabus subject with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
-    return await service.upsert_subject(sub)
+    result = await service.upsert_subject(sub)
+    sub_id = (result.get("id") if isinstance(result, dict) else None) or sub.id
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.SUBJECT_UPSERTED.value,
+        resource_type=AuditResourceType.SUBJECT.value,
+        resource_id=str(sub_id) if sub_id else None,
+        request=request,
+        details={"name": sub.name, "code": sub.code},
+    )
+    return result
 
 
 @router.delete(
@@ -58,11 +76,21 @@ async def add_subject(
 )
 async def remove_subject(
     subject_id: str,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Deletes a syllabus subject by ID (requires ADMIN or EDITOR role)."""
-    return await service.delete_subject(subject_id)
+    result = await service.delete_subject(subject_id)
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.SUBJECT_DELETED.value,
+        resource_type=AuditResourceType.SUBJECT.value,
+        resource_id=subject_id,
+        request=request,
+    )
+    return result
 
 
 @router.get("/lessons", response_model=list[LessonResponse])
@@ -105,11 +133,23 @@ async def list_lessons(
 )
 async def add_lesson(
     les: LessonCreate,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Creates or updates a syllabus lesson/sub-lesson with auto UUIDv4 generation (requires ADMIN or EDITOR role)."""
-    return await service.upsert_lesson(les)
+    result = await service.upsert_lesson(les)
+    les_id = (result.get("id") if isinstance(result, dict) else None) or les.id
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.LESSON_UPSERTED.value,
+        resource_type=AuditResourceType.LESSON.value,
+        resource_id=str(les_id) if les_id else None,
+        request=request,
+        details={"title": les.title, "subject_id": les.subject_id},
+    )
+    return result
 
 
 @router.delete(
@@ -118,8 +158,18 @@ async def add_lesson(
 )
 async def remove_lesson(
     lesson_id: str,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: CurriculumService = Depends(get_curriculum_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Deletes a syllabus lesson by ID (requires ADMIN or EDITOR role)."""
-    return await service.delete_lesson(lesson_id)
+    result = await service.delete_lesson(lesson_id)
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.LESSON_DELETED.value,
+        resource_type=AuditResourceType.LESSON.value,
+        resource_id=lesson_id,
+        request=request,
+    )
+    return result

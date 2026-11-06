@@ -281,6 +281,9 @@ class TestBackendCleanArchitecture(unittest.TestCase):
             "/api/v1/questions",
             "/api/v1/study-notes",
             "/api/v1/study-notes/{note_id}",
+            "/api/v1/leaderboard",
+            "/api/v1/leaderboard/me",
+            "/api/v1/admin/security/audit-logs",
         }
         self.assertTrue(expected_paths.issubset(openapi_paths))
 

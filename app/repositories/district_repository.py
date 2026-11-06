@@ -15,7 +15,63 @@ from app.models.district import District
 
 logger = logging.getLogger("maths_dd.district_repo")
 
-DISTRICTS_CACHE_KEY = "districts:all"
+DISTRICT_CACHE_KEY = "districts:all"
+DISTRICTS_CACHE_KEY = DISTRICT_CACHE_KEY
+
+# Standard 3-letter Sri Lankan district abbreviations -> canonical District.code
+DISTRICT_CODE_ALIASES: Dict[str, str] = {
+    "CMB": "COLOMBO",
+    "COL": "COLOMBO",
+    "GMP": "GAMPAHA",
+    "GAM": "GAMPAHA",
+    "KLT": "KALUTARA",
+    "KAL": "KALUTARA",
+    "KDY": "KANDY",
+    "KAN": "KANDY",
+    "MTL": "MATALE",
+    "NWE": "NUWARA_ELIYA",
+    "NUW": "NUWARA_ELIYA",
+    "NUWARAELIYA": "NUWARA_ELIYA",
+    "NUWARA ELIYA": "NUWARA_ELIYA",
+    "GLE": "GALLE",
+    "GAL": "GALLE",
+    "MTR": "MATARA",
+    "MAT": "MATARA",
+    "HMB": "HAMBANTOTA",
+    "HAM": "HAMBANTOTA",
+    "JFN": "JAFFNA",
+    "JAF": "JAFFNA",
+    "KLN": "KILINOCHCHI",
+    "KIL": "KILINOCHCHI",
+    "MNR": "MANNAR",
+    "MAN": "MANNAR",
+    "VAV": "VAVUNIYA",
+    "VNI": "VAVUNIYA",
+    "MUL": "MULLAITIVU",
+    "MLT": "MULLAITIVU",
+    "BTC": "BATTICALOA",
+    "BAT": "BATTICALOA",
+    "AMP": "AMPARA",
+    "APR": "AMPARA",
+    "TRN": "TRINCOMALEE",
+    "TRI": "TRINCOMALEE",
+    "KUR": "KURUNEGALA",
+    "KRN": "KURUNEGALA",
+    "PUT": "PUTTALAM",
+    "PTL": "PUTTALAM",
+    "ANU": "ANURADHAPURA",
+    "ADP": "ANURADHAPURA",
+    "POL": "POLONNARUWA",
+    "PLN": "POLONNARUWA",
+    "BAD": "BADULLA",
+    "BDL": "BADULLA",
+    "MON": "MONARAGALA",
+    "MNRG": "MONARAGALA",
+    "RAT": "RATNAPURA",
+    "RTP": "RATNAPURA",
+    "KEG": "KEGALLE",
+    "KGL": "KEGALLE",
+}
 
 
 class DistrictRepository:
@@ -82,26 +138,34 @@ class DistrictRepository:
         return None
 
     async def get_by_code(self, code: str) -> Optional[Dict[str, Any]]:
-        """Finds a single district by its string code (e.g. 'COLOMBO')."""
+        """Finds a single district by its string code (e.g. 'COLOMBO') or 3-letter alias (e.g. 'CMB')."""
         all_districts = await self.get_all()
-        target = code.strip().upper()
+        raw_target = code.strip().upper()
+        canonical_target = DISTRICT_CODE_ALIASES.get(raw_target, raw_target)
         for d in all_districts:
-            if d.get("code") == target:
+            if str(d.get("code", "")).upper() in (raw_target, canonical_target):
+                return d
+            if str(d.get("name_en", "")).upper() == raw_target:
                 return d
         return None
 
-    async def resolve_district_id(self, identifier: Union[int, str]) -> Optional[int]:
-        """Resolves an integer ID or string code into a valid district integer ID."""
+    async def resolve_district(self, identifier: Union[int, str]) -> Optional[Dict[str, Any]]:
+        """Resolves an integer ID (1-25), numeric string ('1'), code ('COLOMBO'), or abbreviation ('CMB') to a district dict."""
         if isinstance(identifier, int):
-            d = await self.get_by_id(identifier)
-            return d["id"] if d else None
+            return await self.get_by_id(identifier)
         if isinstance(identifier, str):
-            if identifier.strip().isdigit():
-                d = await self.get_by_id(int(identifier.strip()))
-                return d["id"] if d else None
-            d = await self.get_by_code(identifier)
-            return d["id"] if d else None
+            cleaned = identifier.strip()
+            if not cleaned:
+                return None
+            if cleaned.isdigit():
+                return await self.get_by_id(int(cleaned))
+            return await self.get_by_code(cleaned)
         return None
+
+    async def resolve_district_id(self, identifier: Union[int, str]) -> Optional[int]:
+        """Resolves an integer ID or string code/abbreviation into a valid district integer ID."""
+        d = await self.resolve_district(identifier)
+        return int(d["id"]) if d and d.get("id") is not None else None
 
     @staticmethod
     def invalidate_cache() -> None:

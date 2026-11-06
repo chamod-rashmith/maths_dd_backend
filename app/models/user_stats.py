@@ -12,7 +12,7 @@ Design Principles:
 
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Integer, String, text
+from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -28,6 +28,9 @@ class UserStats(Base):
     """
 
     __tablename__ = "user_stats"
+    __table_args__ = (
+        Index("idx_user_stats_leaderboard_xp", "xp", "total_solved_count", "current_streak_days"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         String(128),
