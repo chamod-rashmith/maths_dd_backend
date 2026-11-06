@@ -40,6 +40,9 @@ def create_app() -> FastAPI:
         description="Production REST API service for Maths DD mobile & web ecosystem.",
         version=settings.VERSION,
         lifespan=lifespan,
+        docs_url="/docs" if settings.ENABLE_DOCS else None,
+        redoc_url="/redoc" if settings.ENABLE_DOCS else None,
+        openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
     )
 
     application.add_middleware(

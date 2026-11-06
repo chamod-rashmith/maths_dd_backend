@@ -351,8 +351,16 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
             yield mock_session
 
         app.dependency_overrides[get_db] = override_get_db
-
         client = TestClient(app)
+
+        # Unauthenticated call must be rejected with 401
+        self.assertEqual(client.get("/api/v1/subscriptions/plans").status_code, 401)
+
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "stu_01",
+            "email": "student@mathsdd.lk",
+            "role": "USER",
+        }
         response = client.get("/api/v1/subscriptions/plans")
         self.assertEqual(response.status_code, 200)
         data = response.json()

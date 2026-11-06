@@ -22,6 +22,7 @@ from app.api.deps import (
     get_curriculum_service,
     require_admin_or_editor,
 )
+from app.core.security import get_current_user
 from app.domain.enums import AuditAction, AuditResourceType
 from app.schemas.common import DeleteResponse
 from app.schemas.curriculum import (
@@ -38,9 +39,10 @@ router = APIRouter(prefix="/curriculum", tags=["Curriculum v1"])
 
 @router.get("/subjects", response_model=list[SubjectResponse])
 async def list_subjects(
+    _current_user: dict[str, Any] = Depends(get_current_user),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> list[dict[str, Any]]:
-    """Fetches syllabus subjects (cached via Redis/TTL cache)."""
+    """Fetches syllabus subjects (requires authenticated user; cached via Redis/TTL cache)."""
     return await service.list_subjects()
 
 
@@ -111,10 +113,11 @@ async def list_lessons(
         False,
         description="If True, returns only top-level units (parent_lesson_id IS NULL)",
     ),
+    _current_user: dict[str, Any] = Depends(get_current_user),
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> list[dict[str, Any]]:
     """
-    Fetches syllabus lessons.
+    Fetches syllabus lessons (requires authenticated user).
     Supports filtering by subject (`?subject_code=PMAT`), parent unit (`?parent_lesson_id=les_trig`),
     or top-level units only (`?root_only=true`).
     """

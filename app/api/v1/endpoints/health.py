@@ -4,9 +4,10 @@ System health and Cloud SQL readiness probes for Google Cloud Run.
 
 import logging
 from typing import Any, Dict
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
+from app.api.deps import require_admin
 from app.core.config import settings
 from app.core.database import (
     async_session_factory,
@@ -30,10 +31,12 @@ def health_check() -> Dict[str, str]:
 
 
 @router.get("/db-test")
-async def test_database() -> Any:
+async def test_database(
+    _admin: Dict[str, Any] = Depends(require_admin),
+) -> Any:
     """
     Readiness probe verifying live connectivity to Google Cloud SQL (PostgreSQL).
-    Executes a fast ping and reports table availability without running dangerous DDL operations.
+    Restricted to ADMIN role so database schema table names are never exposed publicly.
     """
     try:
         is_healthy = await check_db_health()
@@ -87,15 +90,19 @@ async def _execute_seed_operation() -> Any:
 
 
 @router.post("/db-seed", operation_id="post_trigger_db_seed")
-async def post_trigger_seed_database() -> Any:
+async def post_trigger_seed_database(
+    _admin: Dict[str, Any] = Depends(require_admin),
+) -> Any:
     """
-    Triggers idempotent reference data seeding across all 7 architectural domains.
+    Triggers idempotent reference data seeding across all 7 architectural domains (requires ADMIN role).
     Populates subjects, syllabus lessons, exam papers, subscription plans, questions, and marking rubrics.
     """
     return await _execute_seed_operation()
 
 
 @router.get("/db-seed", operation_id="get_trigger_db_seed")
-async def get_trigger_seed_database() -> Any:
-    """Convenience GET endpoint to trigger database seeding directly from browser."""
+async def get_trigger_seed_database(
+    _admin: Dict[str, Any] = Depends(require_admin),
+) -> Any:
+    """Convenience GET endpoint to trigger database seeding (requires ADMIN role)."""
     return await _execute_seed_operation()

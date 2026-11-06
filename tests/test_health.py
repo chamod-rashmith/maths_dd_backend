@@ -290,6 +290,11 @@ class TestBackendCleanArchitecture(unittest.TestCase):
     def test_curriculum_ttl_cache_and_invalidation(self) -> None:
         fake_repo = _InMemoryCurriculumRepository()
         app.dependency_overrides[get_curriculum_repository] = lambda: fake_repo
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "uid_123",
+            "email": "student@mathsdd.lk",
+            "role": "USER",
+        }
 
         res1 = self.client.get("/api/v1/curriculum/subjects")
         self.assertEqual(res1.status_code, 200)
@@ -298,6 +303,32 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         res2 = self.client.get("/api/v1/curriculum/subjects")
         self.assertEqual(res2.status_code, 200)
         self.assertEqual(fake_repo.call_count, 1)
+
+    def test_sensitive_and_catalog_endpoints_block_unauthenticated_public_access(self) -> None:
+        """Verifies /db-test, /db-seed, /districts, /curriculum, and /subscriptions/plans are locked down."""
+        app.dependency_overrides.clear()
+        for path in (
+            "/db-test",
+            "/db-seed",
+            "/api/v1/districts",
+            "/api/v1/curriculum/subjects",
+            "/api/v1/curriculum/lessons",
+            "/api/v1/subscriptions/plans",
+        ):
+            res = self.client.get(path)
+            self.assertEqual(res.status_code, 401, f"Expected 401 on {path}, got {res.status_code}")
+
+        self.assertEqual(self.client.post("/db-seed").status_code, 401)
+
+        # Standard USER must also be blocked from /db-test and /db-seed with 403 Forbidden
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "uid_123",
+            "email": "student@mathsdd.lk",
+            "role": "USER",
+        }
+        app.dependency_overrides[get_user_repository] = lambda: _InMemoryUserRepository(role="USER")
+        self.assertEqual(self.client.get("/db-test").status_code, 403)
+        self.assertEqual(self.client.post("/db-seed").status_code, 403)
 
     def test_user_not_found_maps_to_404_via_global_exception_handler(self) -> None:
         app.dependency_overrides[get_current_user] = lambda: {

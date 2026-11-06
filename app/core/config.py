@@ -75,6 +75,14 @@ class Settings:
     VERSION: str = _env_str("API_VERSION", "1.0.0")
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = _env_str("ENVIRONMENT", "production")
+    ENABLE_DOCS: bool = os.environ.get("ENABLE_DOCS", "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    ALLOW_DEV_AUTH_BYPASS: bool = os.environ.get(
+        "ALLOW_DEV_AUTH_BYPASS", "false"
+    ).strip().lower() in ("1", "true", "yes")
 
     # Server (Cloud Run injects PORT, defaults to 8080)
     HOST: str = _env_str("HOST", "0.0.0.0")

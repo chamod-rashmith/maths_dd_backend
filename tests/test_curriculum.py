@@ -22,9 +22,21 @@ class TestCurriculumFeature(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_service = AsyncMock(spec=CurriculumService)
         app.dependency_overrides[get_curriculum_service] = lambda: self.mock_service
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "student_001",
+            "email": "student@mathsdd.lk",
+            "role": "USER",
+        }
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
+
+    def test_unauthenticated_curriculum_requests_blocked(self) -> None:
+        """Verifies unauthenticated requests to /subjects and /lessons return 401 Unauthorized."""
+        app.dependency_overrides.pop(get_current_user, None)
+        client = TestClient(app)
+        self.assertEqual(client.get("/api/v1/curriculum/subjects").status_code, 401)
+        self.assertEqual(client.get("/api/v1/curriculum/lessons").status_code, 401)
 
     def test_list_subjects(self) -> None:
         self.mock_service.list_subjects.return_value = [
