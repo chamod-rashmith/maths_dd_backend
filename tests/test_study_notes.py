@@ -217,6 +217,192 @@ class TestStudyNotesFeature(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["id"], "note_new_01")
 
+    def test_list_study_notes_includes_vote_and_bookmark_state(self) -> None:
+        """Verify catalog summary includes upvote_count, downvote_count, user_vote (1/-1/0), and is_bookmarked."""
+        standard_user = {"uid": "usr_student_01", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        self.mock_session.execute.return_value = mock_result
+
+        self.mock_service.list_notes.return_value = {
+            "items": [
+                {
+                    "id": "note_trig_01",
+                    "title": "Trigonometry Identities",
+                    "subject_id": "sub_pmat",
+                    "content_type": "markdown",
+                    "is_premium": False,
+                    "order_index": 1,
+                    "upvote_count": 25,
+                    "downvote_count": 3,
+                    "user_vote": 1,
+                    "is_bookmarked": True,
+                }
+            ],
+            "total": 1,
+        }
+
+        client = TestClient(app)
+        response = client.get("/api/v1/study-notes?bookmarked_only=true")
+        self.assertEqual(response.status_code, 200)
+        item = response.json()["items"][0]
+        self.assertEqual(item["id"], "note_trig_01")
+        self.assertEqual(item["upvote_count"], 25)
+        self.assertEqual(item["downvote_count"], 3)
+        self.assertEqual(item["user_vote"], 1)
+        self.assertTrue(item["is_bookmarked"])
+        self.mock_service.list_notes.assert_awaited_once_with(
+            subject_id=None,
+            lesson_id=None,
+            search=None,
+            limit=50,
+            offset=0,
+            user_id="usr_student_01",
+            bookmarked_only=True,
+        )
+
+    def test_vote_study_note_endpoint(self) -> None:
+        """Verify POST /api/v1/study-notes/{note_id}/vote accepts 1, -1, 0 and rejects invalid integers."""
+        standard_user = {"uid": "usr_student_01", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
+        self.mock_service.vote_note.return_value = {
+            "status": "success",
+            "note_id": "note_trig_01",
+            "user_vote": 1,
+            "upvote_count": 11,
+            "downvote_count": 2,
+        }
+
+        client = TestClient(app)
+        res = client.post("/api/v1/study-notes/note_trig_01/vote", json={"vote": 1})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["user_vote"], 1)
+        self.assertEqual(data["upvote_count"], 11)
+        self.assertEqual(data["downvote_count"], 2)
+        self.mock_service.vote_note.assert_awaited_once_with(
+            note_id="note_trig_01",
+            user_id="usr_student_01",
+            vote=1,
+        )
+
+        # Invalid vote value (e.g. 5) must be rejected with 422
+        bad_res = client.post("/api/v1/study-notes/note_trig_01/vote", json={"vote": 5})
+        self.assertEqual(bad_res.status_code, 422)
+
+    def test_bookmark_study_note_endpoint(self) -> None:
+        """Verify POST /api/v1/study-notes/{note_id}/bookmark supports explicit boolean and body-less toggle."""
+        standard_user = {"uid": "usr_student_01", "email": "student@mathsdd.lk", "role": "USER"}
+        app.dependency_overrides[get_current_user] = lambda: standard_user
+
+        self.mock_service.toggle_bookmark.return_value = {
+            "status": "success",
+            "note_id": "note_trig_01",
+            "is_bookmarked": True,
+        }
+
+        client = TestClient(app)
+        # 1. Explicit bookmark
+        res = client.post("/api/v1/study-notes/note_trig_01/bookmark", json={"is_bookmarked": True})
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["is_bookmarked"])
+
+        # 2. Toggle without body
+        res_toggle = client.post("/api/v1/study-notes/note_trig_01/bookmark")
+        self.assertEqual(res_toggle.status_code, 200)
+        self.assertTrue(res_toggle.json()["is_bookmarked"])
+
+
+class TestNormalizedStudyNoteRepository(unittest.IsolatedAsyncioTestCase):
+    """Tests 3NF normalized row creation, transition, and deletion in PostgresStudyNoteRepository."""
+
+    async def test_vote_transitions_and_3nf_deletion_on_zero(self) -> None:
+        from app.models.study_note import StudyNote, StudyNoteVote
+        from app.repositories.study_note_repository import PostgresStudyNoteRepository
+
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        repo = PostgresStudyNoteRepository(mock_session)
+
+        fake_note = StudyNote(
+            id="note_01",
+            title="Vectors",
+            subject_id="sub_amat",
+            upvote_count=5,
+            downvote_count=1,
+        )
+
+        # Case 1: User has no previous vote (None) -> casts Upvote (+1)
+        res_note = MagicMock()
+        res_note.scalar_one_or_none.return_value = fake_note
+        res_vote_none = MagicMock()
+        res_vote_none.scalar_one_or_none.return_value = None
+        mock_session.execute.side_effect = [res_note, res_vote_none]
+
+        out1 = await repo.vote_note(note_id="note_01", user_id="usr_1", vote=1)
+        self.assertEqual(out1["user_vote"], 1)
+        self.assertEqual(out1["upvote_count"], 6)
+        self.assertEqual(out1["downvote_count"], 1)
+        mock_session.add.assert_called_once()
+
+        # Case 2: User switches Upvote (+1) -> Downvote (-1)
+        existing_vote = StudyNoteVote(id="usr_1_note_01", user_id="usr_1", note_id="note_01", vote_type=1)
+        res_vote_up = MagicMock()
+        res_vote_up.scalar_one_or_none.return_value = existing_vote
+        mock_session.execute.side_effect = [res_note, res_vote_up]
+
+        out2 = await repo.vote_note(note_id="note_01", user_id="usr_1", vote=-1)
+        self.assertEqual(out2["user_vote"], -1)
+        self.assertEqual(out2["upvote_count"], 5)
+        self.assertEqual(out2["downvote_count"], 2)
+        self.assertEqual(existing_vote.vote_type, -1)
+
+        # Case 3: User removes vote (-1 -> 0) -> 3NF row is DELETED from study_note_votes
+        res_vote_down = MagicMock()
+        res_vote_down.scalar_one_or_none.return_value = existing_vote
+        mock_session.execute.side_effect = [res_note, res_vote_down]
+
+        out3 = await repo.vote_note(note_id="note_01", user_id="usr_1", vote=0)
+        self.assertEqual(out3["user_vote"], 0)
+        self.assertEqual(out3["upvote_count"], 5)
+        self.assertEqual(out3["downvote_count"], 1)
+        mock_session.delete.assert_awaited_once_with(existing_vote)
+
+    async def test_bookmark_3nf_insert_and_delete(self) -> None:
+        from app.models.study_note import StudyNote, StudyNoteBookmark
+        from app.repositories.study_note_repository import PostgresStudyNoteRepository
+
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        repo = PostgresStudyNoteRepository(mock_session)
+
+        fake_note = StudyNote(id="note_01", title="Vectors", subject_id="sub_amat")
+        res_note = MagicMock()
+        res_note.scalar_one_or_none.return_value = fake_note
+
+        # 1. Toggle when not bookmarked -> inserts StudyNoteBookmark row
+        res_bm_none = MagicMock()
+        res_bm_none.scalar_one_or_none.return_value = None
+        mock_session.execute.side_effect = [res_note, res_bm_none]
+
+        out1 = await repo.toggle_bookmark(note_id="note_01", user_id="usr_1", is_bookmarked=None)
+        self.assertTrue(out1["is_bookmarked"])
+        mock_session.add.assert_called_once()
+
+        # 2. Toggle when already bookmarked -> deletes StudyNoteBookmark row
+        existing_bm = StudyNoteBookmark(id="usr_1_note_01", user_id="usr_1", note_id="note_01")
+        res_bm_existing = MagicMock()
+        res_bm_existing.scalar_one_or_none.return_value = existing_bm
+        mock_session.execute.side_effect = [res_note, res_bm_existing]
+
+        out2 = await repo.toggle_bookmark(note_id="note_01", user_id="usr_1", is_bookmarked=None)
+        self.assertFalse(out2["is_bookmarked"])
+        mock_session.delete.assert_awaited_once_with(existing_bm)
+
 
 if __name__ == "__main__":
     unittest.main()
+

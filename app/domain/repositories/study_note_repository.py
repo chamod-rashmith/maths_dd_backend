@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 
 class StudyNoteRepository(ABC):
-    """Domain contract defining study notes persistence."""
+    """Domain contract defining study notes persistence, voting, and bookmarking."""
 
     @abstractmethod
     async def list_notes(
@@ -17,13 +17,48 @@ class StudyNoteRepository(ABC):
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        user_id: Optional[str] = None,
+        bookmarked_only: bool = False,
     ) -> Dict[str, Any]:
-        """Lists study notes with filtered items and a total count."""
+        """Lists study notes with filtered items, aggregate vote counts, user state, and total count."""
         raise NotImplementedError
 
     @abstractmethod
-    async def get_by_id(self, note_id: str) -> Optional[Dict[str, Any]]:
-        """Fetches a single study note by its unique ID."""
+    async def get_by_id(
+        self,
+        note_id: str,
+        user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Fetches a single study note by its unique ID along with vote counts and user state."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_user_note_states(
+        self,
+        user_id: str,
+        note_ids: List[str],
+    ) -> Dict[str, Dict[str, Any]]:
+        """Fetches a mapping of note_id -> {'user_vote': int, 'is_bookmarked': bool} for the given user."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def vote_note(
+        self,
+        note_id: str,
+        user_id: str,
+        vote: int,
+    ) -> Optional[Dict[str, Any]]:
+        """Casts, switches, or removes a vote (1, -1, 0) on a study note and updates aggregate counters."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def toggle_bookmark(
+        self,
+        note_id: str,
+        user_id: str,
+        is_bookmarked: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Bookmarks or unbookmarks a study note for the given user."""
         raise NotImplementedError
 
     @abstractmethod
@@ -47,3 +82,4 @@ class StudyNoteRepository(ABC):
     async def delete(self, note_id: str) -> Dict[str, Any]:
         """Deletes a study note by its unique ID."""
         raise NotImplementedError
+
