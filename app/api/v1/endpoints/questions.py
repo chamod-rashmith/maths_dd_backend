@@ -7,16 +7,18 @@ Provides reverse-chronological daily series catalog with safe teaser metadata fo
 """
 
 from typing import Any
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    get_admin_audit_service,
     get_question_service,
     get_user_repository,
     require_admin_or_editor,
 )
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.domain.enums import AuditAction, AuditResourceType
 from app.domain.repositories.user_repository import UserRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.common import DeleteResponse
@@ -30,6 +32,7 @@ from app.schemas.question import (
     QuestionSummaryResponse,
     QuestionWithSolutionResponse,
 )
+from app.services.admin_audit_service import AdminAuditService
 from app.services.question_service import QuestionService
 
 router = APIRouter(prefix="/questions", tags=["Questions v1"])
@@ -260,11 +263,32 @@ async def get_question_solution(
 )
 async def add_question(
     q: QuestionCreate,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: QuestionService = Depends(get_question_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Creates or updates a question with its corresponding marking scheme (requires ADMIN or EDITOR role)."""
-    return await service.create_question(q)
+    result = await service.create_question(q)
+    q_data = result.get("question") if isinstance(result, dict) else {}
+    q_id = (q_data.get("id") if isinstance(q_data, dict) else None) or q.id
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.QUESTION_UPSERTED.value,
+        resource_type=AuditResourceType.QUESTION.value,
+        resource_id=str(q_id) if q_id else None,
+        request=request,
+        details={
+            "title": q.title,
+            "subject_id": q.subject_id,
+            "type": str(
+                q.question_type.value
+                if hasattr(q.question_type, "value")
+                else q.question_type
+            ),
+        },
+    )
+    return result
 
 
 @router.delete(
@@ -273,8 +297,18 @@ async def add_question(
 )
 async def remove_question(
     question_id: str,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: QuestionService = Depends(get_question_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Deletes a question by ID (requires ADMIN or EDITOR role)."""
-    return await service.delete_question(question_id)
+    result = await service.delete_question(question_id)
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.QUESTION_DELETED.value,
+        resource_type=AuditResourceType.QUESTION.value,
+        resource_id=question_id,
+        request=request,
+    )
+    return result

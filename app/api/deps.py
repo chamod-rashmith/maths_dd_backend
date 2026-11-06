@@ -12,17 +12,23 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.totp import verify_elevated_session_token
 from app.domain.exceptions import PermissionDeniedError
+from app.domain.repositories.admin_audit_repository import AdminAuditRepository
 from app.domain.repositories.curriculum_repository import CurriculumRepository
+from app.domain.repositories.leaderboard_repository import LeaderboardRepository
 from app.domain.repositories.progress_repository import ProgressRepository
 from app.domain.repositories.question_repository import QuestionRepository
 from app.domain.repositories.study_note_repository import StudyNoteRepository
 from app.domain.repositories.user_repository import UserRepository
+from app.repositories.admin_audit_repository import PostgresAdminAuditRepository
 from app.repositories.curriculum_repository import PostgresCurriculumRepository
+from app.repositories.leaderboard_repository import PostgresLeaderboardRepository
 from app.repositories.progress_repository import PostgresProgressRepository
 from app.repositories.question_repository import PostgresQuestionRepository
 from app.repositories.study_note_repository import PostgresStudyNoteRepository
 from app.repositories.user_repository import PostgresUserRepository
+from app.services.admin_audit_service import AdminAuditService
 from app.services.curriculum_service import CurriculumService
+from app.services.leaderboard_service import LeaderboardService
 from app.services.progress_service import ProgressService
 from app.services.question_service import QuestionService
 from app.services.study_note_service import StudyNoteService
@@ -72,6 +78,20 @@ def get_progress_repository(
     return PostgresProgressRepository(session)
 
 
+def get_leaderboard_repository(
+    session: AsyncSession = Depends(get_db),
+) -> LeaderboardRepository:
+    """Provides a `LeaderboardRepository` instance bound to the active SQLAlchemy session."""
+    return PostgresLeaderboardRepository(session)
+
+
+def get_admin_audit_repository(
+    session: AsyncSession = Depends(get_db),
+) -> AdminAuditRepository:
+    """Provides an `AdminAuditRepository` instance bound to the active SQLAlchemy session."""
+    return PostgresAdminAuditRepository(session)
+
+
 # -----------------------------------------------------------------------------
 # 2. Application Service Providers
 # -----------------------------------------------------------------------------
@@ -109,6 +129,20 @@ def get_progress_service(
 ) -> ProgressService:
     """Provides a `ProgressService` orchestrated with `ProgressRepository`."""
     return ProgressService(repo)
+
+
+def get_leaderboard_service(
+    repo: LeaderboardRepository = Depends(get_leaderboard_repository),
+) -> LeaderboardService:
+    """Provides a `LeaderboardService` orchestrated with `LeaderboardRepository`."""
+    return LeaderboardService(repo)
+
+
+def get_admin_audit_service(
+    repo: AdminAuditRepository = Depends(get_admin_audit_repository),
+) -> AdminAuditService:
+    """Provides an `AdminAuditService` orchestrated with `AdminAuditRepository`."""
+    return AdminAuditService(repo)
 
 
 # -----------------------------------------------------------------------------

@@ -19,12 +19,17 @@ Security & Zero-Leak Principles:
 """
 
 from typing import Any
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_study_note_service, require_admin_or_editor
+from app.api.deps import (
+    get_admin_audit_service,
+    get_study_note_service,
+    require_admin_or_editor,
+)
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.domain.enums import AuditAction, AuditResourceType
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.common import DeleteResponse
 from app.schemas.pagination import PaginatedResponse, PaginationMetadata
@@ -37,6 +42,7 @@ from app.schemas.study_note import (
     StudyNoteVoteRequest,
     StudyNoteVoteResponse,
 )
+from app.services.admin_audit_service import AdminAuditService
 from app.services.study_note_service import StudyNoteService
 
 router = APIRouter(prefix="/study-notes", tags=["Study Notes v1"])
@@ -240,28 +246,54 @@ async def toggle_study_note_bookmark(
     response_model=StudyNoteDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create or Update Study Note (Admin)",
-    description="Creates or updates a study note (requires ADMIN or EDITOR role).",
+    description="Creates or updates a study note (requires ADMIN or EDITOR role). Records an immutable Ring 4 audit log.",
 )
 async def create_or_update_study_note(
     body: StudyNoteCreateOrUpdate,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: StudyNoteService = Depends(get_study_note_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Creates or updates a study note."""
-    return await service.upsert_note(body)
+    result = await service.upsert_note(body)
+    note_id = (result.get("id") if isinstance(result, dict) else None) or body.id
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.STUDY_NOTE_UPSERTED.value,
+        resource_type=AuditResourceType.STUDY_NOTE.value,
+        resource_id=str(note_id) if note_id else None,
+        request=request,
+        details={
+            "title": body.title,
+            "subject_id": body.subject_id,
+            "is_premium": body.is_premium,
+        },
+    )
+    return result
 
 
 @router.delete(
     "/{note_id}",
     response_model=DeleteResponse,
     summary="Soft-Delete Study Note (Admin)",
-    description="Soft-deletes a study note by ID (requires ADMIN or EDITOR role).",
+    description="Soft-deletes a study note by ID (requires ADMIN or EDITOR role). Records an immutable Ring 4 audit log.",
 )
 async def delete_study_note(
     note_id: str,
+    request: Request,
     _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: StudyNoteService = Depends(get_study_note_service),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> dict[str, Any]:
     """Deletes a study note by ID."""
-    return await service.delete_note(note_id)
+    result = await service.delete_note(note_id)
+    await audit_service.record_action(
+        actor=_admin,
+        action=AuditAction.STUDY_NOTE_DELETED.value,
+        resource_type=AuditResourceType.STUDY_NOTE.value,
+        resource_id=note_id,
+        request=request,
+    )
+    return result
 

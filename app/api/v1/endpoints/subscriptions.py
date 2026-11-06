@@ -26,14 +26,15 @@ import logging
 from typing import Any, Dict, List, Optional
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin_or_account_audit
+from app.api.deps import get_admin_audit_service, require_admin_or_account_audit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.storage import generate_signed_upload_url
+from app.domain.enums import AuditAction, AuditResourceType
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.common import (
     MaintenanceExpirationResponse,
@@ -49,6 +50,7 @@ from app.schemas.subscription import (
     SubscriptionPlanResponse,
     UserSubscriptionResponse,
 )
+from app.services.admin_audit_service import AdminAuditService
 
 logger = logging.getLogger("maths_dd.subscriptions")
 
@@ -351,14 +353,16 @@ async def list_pending_subscriptions(
     summary="Approve a Bank Slip Subscription",
     description=(
         "Admin approves a valid deposit slip, activating premium access for the specified duration "
-        "and marking associated payment records as COMPLETED."
+        "and marking associated payment records as COMPLETED. Records an immutable Ring 4 audit log."
     ),
 )
 async def approve_subscription(
     subscription_id: str,
     payload: AdminApprovalRequest,
+    request: Request,
     admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> UserSubscriptionResponse:
     """Approve a pending subscription and grant active access."""
     admin_uid = admin.get("uid", "admin")
@@ -374,6 +378,20 @@ async def approve_subscription(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Subscription with id '{subscription_id}' not found.",
         )
+
+    await audit_service.record_action(
+        actor=admin,
+        action=AuditAction.BANK_SLIP_APPROVED.value,
+        resource_type=AuditResourceType.SUBSCRIPTION.value,
+        resource_id=subscription_id,
+        request=request,
+        details={
+            "user_id": getattr(sub, "user_id", None),
+            "plan_id": getattr(sub, "plan_id", None),
+            "duration_days": payload.duration_days,
+            "admin_notes": payload.admin_notes,
+        },
+    )
     return UserSubscriptionResponse.model_validate(sub)
 
 
@@ -383,14 +401,16 @@ async def approve_subscription(
     summary="Reject an Invalid or Fraudulent Bank Slip",
     description=(
         "Admin marks a bank slip submission as REJECTED with a required reason displayed to the student "
-        "and marks associated payment records as FAILED."
+        "and marks associated payment records as FAILED. Records an immutable Ring 4 audit log."
     ),
 )
 async def reject_subscription(
     subscription_id: str,
     payload: AdminRejectionRequest,
+    request: Request,
     admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> UserSubscriptionResponse:
     """Reject a bank slip submission with reason."""
     admin_uid = admin.get("uid", "admin")
@@ -405,6 +425,19 @@ async def reject_subscription(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Subscription with id '{subscription_id}' not found.",
         )
+
+    await audit_service.record_action(
+        actor=admin,
+        action=AuditAction.BANK_SLIP_REJECTED.value,
+        resource_type=AuditResourceType.SUBSCRIPTION.value,
+        resource_id=subscription_id,
+        request=request,
+        details={
+            "user_id": getattr(sub, "user_id", None),
+            "plan_id": getattr(sub, "plan_id", None),
+            "rejection_reason": payload.rejection_reason,
+        },
+    )
     return UserSubscriptionResponse.model_validate(sub)
 
 
@@ -418,12 +451,22 @@ async def reject_subscription(
     ),
 )
 async def trigger_expire_stale_subscriptions(
+    request: Request,
     admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> Dict[str, Any]:
     """Expire subscriptions past their expiration date."""
     repo = SubscriptionRepository(session)
     expired_count = await repo.expire_stale_subscriptions()
+    await audit_service.record_action(
+        actor=admin,
+        action=AuditAction.SUBSCRIPTIONS_EXPIRE_STALE.value,
+        resource_type=AuditResourceType.SUBSCRIPTION.value,
+        resource_id="batch_maintenance",
+        request=request,
+        details={"expired_count": expired_count},
+    )
     return {
         "status": "success",
         "expired_count": expired_count,

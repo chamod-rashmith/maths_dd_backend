@@ -10,11 +10,15 @@ from datetime import datetime, timezone
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_privileged_staff
+from app.api.deps import (
+    get_admin_audit_service,
+    require_admin_or_account_audit,
+    require_privileged_staff,
+)
 from app.core.database import get_db
 from app.core.totp import (
     build_provisioning_uri,
@@ -27,14 +31,18 @@ from app.core.totp import (
     verify_and_consume_recovery_code,
     verify_totp_code,
 )
+from app.domain.enums import AuditAction, AuditResourceType
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError, ValidationDomainError
 from app.models.admin_totp import AdminTotpCredential
 from app.schemas.admin_security import (
+    AdminAuditLogResponse,
     ElevatedSessionResponse,
     TotpSetupResponse,
     TotpStatusResponse,
     TotpVerifyRequest,
 )
+from app.schemas.pagination import PaginatedResponse, PaginationMetadata
+from app.services.admin_audit_service import AdminAuditService
 
 router = APIRouter(prefix="/admin/security", tags=["Admin Security & TOTP Sudo v1"])
 
@@ -88,8 +96,10 @@ async def get_totp_status(
     ),
 )
 async def setup_totp(
+    request: Request,
     staff_user: dict[str, Any] = Depends(require_privileged_staff),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> TotpSetupResponse:
     """Enrolls or resets TOTP credentials for the authenticated staff member."""
     uid = str(staff_user["uid"])
@@ -124,6 +134,14 @@ async def setup_totp(
 
     await session.flush()
 
+    await audit_service.record_action(
+        actor=staff_user,
+        action=AuditAction.ADMIN_TOTP_SETUP_INITIATED.value,
+        resource_type=AuditResourceType.ADMIN_TOTP.value,
+        resource_id=uid,
+        request=request,
+    )
+
     return TotpSetupResponse(
         secret=raw_secret,
         provisioning_uri=provisioning_uri,
@@ -141,8 +159,10 @@ async def setup_totp(
 )
 async def verify_totp_setup(
     body: TotpVerifyRequest,
+    request: Request,
     staff_user: dict[str, Any] = Depends(require_privileged_staff),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> TotpStatusResponse:
     """Verifies initial 6-digit TOTP code and enables TOTP for the staff account."""
     uid = str(staff_user["uid"])
@@ -174,6 +194,14 @@ async def verify_totp_setup(
     cred.last_verified_at = now
     await session.flush()
 
+    await audit_service.record_action(
+        actor=staff_user,
+        action=AuditAction.ADMIN_TOTP_ENABLED.value,
+        resource_type=AuditResourceType.ADMIN_TOTP.value,
+        resource_id=uid,
+        request=request,
+    )
+
     try:
         hashes = json.loads(cred.recovery_codes_hash or "[]")
     except (json.JSONDecodeError, TypeError):
@@ -198,8 +226,10 @@ async def verify_totp_setup(
 )
 async def elevate_admin_session(
     body: TotpVerifyRequest,
+    request: Request,
     staff_user: dict[str, Any] = Depends(require_privileged_staff),
     session: AsyncSession = Depends(get_db),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
 ) -> ElevatedSessionResponse:
     """Validates TOTP or consumes a recovery code to grant a 15-minute elevated sudo session token."""
     uid = str(staff_user["uid"])
@@ -253,6 +283,18 @@ async def elevate_admin_session(
     except (json.JSONDecodeError, TypeError):
         remaining = 0
 
+    await audit_service.record_action(
+        actor=staff_user,
+        action=AuditAction.ADMIN_SESSION_ELEVATED.value,
+        resource_type=AuditResourceType.ADMIN_TOTP.value,
+        resource_id=uid,
+        request=request,
+        details={
+            "used_recovery_code": used_recovery,
+            "remaining_recovery_codes": remaining,
+        },
+    )
+
     token_info = issue_elevated_session_token(user_id=uid, role=role, ttl_seconds=900)
     return ElevatedSessionResponse(
         elevated_token=token_info["elevated_token"],
@@ -260,4 +302,49 @@ async def elevate_admin_session(
         expires_at=token_info["expires_at"],
         used_recovery_code=used_recovery,
         remaining_recovery_codes=remaining,
+    )
+
+
+@router.get(
+    "/audit-logs",
+    response_model=PaginatedResponse[AdminAuditLogResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Immutable Admin Audit Logs (Ring 4)",
+    description=(
+        "Returns the append-only, immutable audit trail of all privileged staff operations "
+        "(Bank Slip Approvals/Rejections, Question/Study Note/Curriculum mutations, and TOTP Sudo events) "
+        "with actor UID, role, IP address, User-Agent, and UTC timestamp. Accessible to ADMIN and ACCOUNT_AUDIT roles."
+    ),
+)
+async def list_admin_audit_logs(
+    actor_uid: str | None = Query(None, description="Filter by staff member UID"),
+    actor_role: str | None = Query(None, description="Filter by staff role (ADMIN, EDITOR, ACCOUNT_AUDIT)"),
+    action: str | None = Query(None, description="Filter by action code (e.g. BANK_SLIP_APPROVED, QUESTION_DELETED)"),
+    resource_type: str | None = Query(None, description="Filter by resource category (SUBSCRIPTION, QUESTION, STUDY_NOTE, etc.)"),
+    resource_id: str | None = Query(None, description="Filter by target resource ID"),
+    limit: int = Query(50, ge=1, le=200, description="Number of audit log entries per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    _auditor: dict[str, Any] = Depends(require_admin_or_account_audit),
+    audit_service: AdminAuditService = Depends(get_admin_audit_service),
+) -> PaginatedResponse[AdminAuditLogResponse]:
+    """Queries the immutable `admin_audit_logs` ledger in reverse-chronological order."""
+    result = await audit_service.list_audit_logs(
+        actor_uid=actor_uid,
+        actor_role=actor_role,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        limit=limit,
+        offset=offset,
+    )
+    items = [AdminAuditLogResponse.model_validate(item) for item in result["items"]]
+    total = int(result["total"])
+    return PaginatedResponse(
+        items=items,
+        pagination=PaginationMetadata.from_offset(
+            total=total,
+            limit=limit,
+            offset=offset,
+            items_count=len(items),
+        ),
     )

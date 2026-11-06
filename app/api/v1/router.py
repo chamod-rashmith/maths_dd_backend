@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     admin_security,
     curriculum,
     districts,
+    leaderboard,
     progress,
     questions,
     study_notes,
@@ -33,4 +34,5 @@ api_v1_router.include_router(curriculum.router)
 api_v1_router.include_router(questions.router)
 api_v1_router.include_router(study_notes.router)
 api_v1_router.include_router(progress.router)
+api_v1_router.include_router(leaderboard.router)
 api_v1_router.include_router(admin_security.router)

@@ -24,6 +24,7 @@ from app.models.subscription import (
 from app.models.progress import UserQuestionAttempt, UserDailyActivity, XpTransaction
 from app.models.daily_challenge import DailyChallenge, DailyChallengeQuestion
 from app.models.admin_totp import AdminTotpCredential
+from app.models.admin_audit_log import AdminAuditLog
 
 __all__ = [
     "Subject",
@@ -51,4 +52,5 @@ __all__ = [
     "DailyChallenge",
     "DailyChallengeQuestion",
     "AdminTotpCredential",
+    "AdminAuditLog",
 ]
