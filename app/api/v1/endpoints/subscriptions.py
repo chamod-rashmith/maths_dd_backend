@@ -67,10 +67,11 @@ router = APIRouter(prefix="/subscriptions", tags=["Subscriptions & Billing"])
     summary="Get Active Subscription Plans & Pricing",
     description=(
         "Returns all currently active educational subscription plans with localized Sinhala titles, "
-        "descriptions, duration days, feature lists, and prices. Internal database audit timestamps are stripped."
+        "descriptions, duration days, feature lists, and prices. Requires authentication; internal database audit timestamps are stripped."
     ),
 )
 async def list_subscription_plans(
+    _current_user: Dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> List[SubscriptionPlanResponse]:
     """

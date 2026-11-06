@@ -158,6 +158,8 @@ def _enforce_sudo_token_if_required(
     In local development (`ADMIN_REQUIRE_TOTP_SUDO=false`), omitting the header is permitted
     so normal development workflows are unblocked, while still validating the token whenever provided.
     """
+    # 🚨 TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර `ADMIN_REQUIRE_TOTP_SUDO` අනිවාර්ය කරන්න
+    # (හෝ `x_elevated_token` සෑම විටම අනිවාර්ය වන පරිදි `elif` කොන්දේසිය ඉවත් කරන්න).
     uid = str(current_user.get("uid", ""))
     if x_elevated_token is not None:
         if not verify_elevated_session_token(x_elevated_token, expected_uid=uid):
@@ -249,4 +251,32 @@ async def require_privileged_staff(
 
     raise PermissionDeniedError(
         "Insufficient privileges. Staff role (ADMIN, EDITOR, or ACCOUNT_AUDIT) is required."
+    )
+
+
+async def require_admin(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
+    x_elevated_token: str | None = Header(None, alias="X-Elevated-Token"),
+) -> Dict[str, Any]:
+    """
+    Verifies that the authenticated user holds the 'ADMIN' role
+    for system-level infrastructure diagnostics (/db-test) and database seeding (/db-seed).
+    """
+    token_role = str(current_user.get("role", "")).upper()
+    if token_role == "ADMIN":
+        _enforce_sudo_token_if_required(current_user, x_elevated_token)
+        return current_user
+
+    uid = current_user.get("uid")
+    if uid:
+        db_user = await user_repo.get_by_uid(uid)
+        if db_user and str(db_user.get("role", "")).upper() == "ADMIN":
+            resolved = dict(current_user)
+            resolved["role"] = "ADMIN"
+            _enforce_sudo_token_if_required(resolved, x_elevated_token)
+            return resolved
+
+    raise PermissionDeniedError(
+        "Insufficient privileges. ADMIN role is required."
     )

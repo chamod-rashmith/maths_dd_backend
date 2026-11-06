@@ -40,6 +40,10 @@ def create_app() -> FastAPI:
         description="Production REST API service for Maths DD mobile & web ecosystem.",
         version=settings.VERSION,
         lifespan=lifespan,
+        # 🚨 TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර `ENABLE_DOCS=false` කරන්න හෝ docs_url/redoc_url/openapi_url=None කරන්න.
+        docs_url="/docs" if settings.ENABLE_DOCS else None,
+        redoc_url="/redoc" if settings.ENABLE_DOCS else None,
+        openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
     )
 
     application.add_middleware(
@@ -61,7 +65,8 @@ def create_app() -> FastAPI:
     # Register global domain exception handlers
     register_exception_handlers(application)
 
-    # Infrastructure & readiness probes (/health, /db-test)
+    # Infrastructure & readiness probes (/health; plus dev-only /db-test & /db-seed)
+    # 🚨 TODO(PRODUCTION-CLEANUP): Production යැවීමට පෙර `health_router` තුළ ඇති `/db-test` සහ `/db-seed` ඉවත් කරන්න.
     application.include_router(health_router)
 
     # Versioned v1 REST API (/api/v1/...)

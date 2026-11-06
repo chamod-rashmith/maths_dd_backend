@@ -9,12 +9,88 @@ from typing import Any, Dict, Optional
 import firebase_admin
 from firebase_admin import auth, credentials
 from firebase_admin.exceptions import FirebaseError
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
 logger = logging.getLogger("maths_dd.security")
+
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    scheme_name="FirebaseBearerAuth",
+    description=(
+        "Firebase ID Token (`Bearer <token>`). "
+        # ⚠️ TODO(PRODUCTION-CLEANUP): Remove dev shortcut token description before production release.
+        "In local development (`ENVIRONMENT=development`), shortcut tokens "
+        "`dev-student`, `dev-admin`, `dev-editor`, and `dev-auditor` are also supported."
+    ),
+)
+
+# ==============================================================================
+# 🚨 TODO(PRODUCTION-CLEANUP) / REMOVE BEFORE PRODUCTION 🚨
+# පහත `_DEV_SHORTCUT_TOKENS` යොදා ඇත්තේ Development අවධියේදී (Swagger UI / Postman)
+# පහසුවෙන් API පරීක්ෂා කිරීම සඳහා පමණි.
+# Production යැවීමට පෙර මෙම `_DEV_SHORTCUT_TOKENS` dictionary එක සහ `get_current_user`
+# තුළ ඇති `is_dev_mode` bypass කොටස සම්පූර්ණයෙන්ම ඉවත් කරන්න!
+# ==============================================================================
+_DEV_SHORTCUT_TOKENS: Dict[str, Dict[str, Any]] = {
+    "dev-admin": {
+        "uid": "admin_master_001",
+        "email": "admin@mathsdd.lk",
+        "name": "Super Admin",
+        "role": "ADMIN",
+    },
+    "admin": {
+        "uid": "admin_master_001",
+        "email": "admin@mathsdd.lk",
+        "name": "Super Admin",
+        "role": "ADMIN",
+    },
+    "dev-student": {
+        "uid": "dev_student_001",
+        "email": "student@mathsdd.lk",
+        "name": "Dev Student",
+        "role": "USER",
+    },
+    "dev-user": {
+        "uid": "dev_student_001",
+        "email": "student@mathsdd.lk",
+        "name": "Dev Student",
+        "role": "USER",
+    },
+    "student": {
+        "uid": "dev_student_001",
+        "email": "student@mathsdd.lk",
+        "name": "Dev Student",
+        "role": "USER",
+    },
+    "dev-editor": {
+        "uid": "dev_editor_001",
+        "email": "editor@mathsdd.lk",
+        "name": "Dev Editor",
+        "role": "EDITOR",
+    },
+    "editor": {
+        "uid": "dev_editor_001",
+        "email": "editor@mathsdd.lk",
+        "name": "Dev Editor",
+        "role": "EDITOR",
+    },
+    "dev-auditor": {
+        "uid": "dev_auditor_001",
+        "email": "audit@mathsdd.lk",
+        "name": "Dev Auditor",
+        "role": "ACCOUNT_AUDIT",
+    },
+    "auditor": {
+        "uid": "dev_auditor_001",
+        "email": "audit@mathsdd.lk",
+        "name": "Dev Auditor",
+        "role": "ACCOUNT_AUDIT",
+    },
+}
 
 
 def init_firebase() -> None:
@@ -41,9 +117,13 @@ init_firebase()
 async def get_current_user(
     authorization: Optional[str] = Header(
         None, description="Bearer Firebase ID token"
-    )
+    ),
+    bearer_creds: Optional[HTTPAuthorizationCredentials] = Security(bearer_scheme),
 ) -> Dict[str, Any]:
-    """Verifies a Firebase ID token from the Authorization header."""
+    """Verifies a Firebase ID token from the Authorization header or Swagger Authorize dialog."""
+    if not authorization and isinstance(bearer_creds, HTTPAuthorizationCredentials):
+        authorization = f"{bearer_creds.scheme} {bearer_creds.credentials}"
+
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,13 +141,14 @@ async def get_current_user(
 
     id_token = parts[1]
 
-    if settings.ENVIRONMENT == "development" and id_token in ("dev-admin", "admin"):
-        return {
-            "uid": "admin_master_001",
-            "email": "admin@mathsdd.lk",
-            "name": "Super Admin",
-            "role": "ADMIN",
-        }
+    # 🚨 TODO(PRODUCTION-CLEANUP): Remove this dev-mode token bypass block before production deployment!
+    # Production යැවීමට පෙර මෙම `is_dev_mode` සහ `_DEV_SHORTCUT_TOKENS` කොටස ඉවත් කරන්න.
+    is_dev_mode = (
+        settings.ENVIRONMENT.lower() in ("development", "dev", "local", "test")
+        or settings.ALLOW_DEV_AUTH_BYPASS
+    )
+    if is_dev_mode and id_token in _DEV_SHORTCUT_TOKENS:
+        return dict(_DEV_SHORTCUT_TOKENS[id_token])
 
     try:
         decoded_token: Dict[str, Any] = await run_in_threadpool(

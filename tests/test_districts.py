@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.cache import districts_cache
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.main import app
 from app.models.district import District
 from app.repositories.district_repository import DISTRICTS_CACHE_KEY, DistrictRepository
@@ -115,7 +116,7 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
         DistrictRepository.invalidate_cache()
         self.assertIsNone(districts_cache.get(DISTRICTS_CACHE_KEY))
 
-    def test_districts_api_endpoint(self) -> None:
+    def test_districts_api_endpoint_requires_auth_and_returns_data(self) -> None:
         # Pre-seed cache with sample data for API test
         districts_cache.set(
             DISTRICTS_CACHE_KEY,
@@ -146,8 +147,18 @@ class TestDistricts(unittest.IsolatedAsyncioTestCase):
             yield AsyncMock()
 
         app.dependency_overrides[get_db] = override_get_db
-
         client = TestClient(app)
+
+        # 1. Unauthenticated request must be rejected with 401
+        unauth_res = client.get("/api/v1/districts")
+        self.assertEqual(unauth_res.status_code, 401)
+
+        # 2. Authenticated student request succeeds with 200
+        app.dependency_overrides[get_current_user] = lambda: {
+            "uid": "stu_001",
+            "email": "student@mathsdd.lk",
+            "role": "USER",
+        }
         response = client.get("/api/v1/districts")
         self.assertEqual(response.status_code, 200)
         data = response.json()
