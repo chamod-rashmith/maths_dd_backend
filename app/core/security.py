@@ -5,8 +5,10 @@ Firebase Authentication & JWT Security verification for FastAPI backend on Googl
 import logging
 import os
 from typing import Any, Dict, Optional
+
 import firebase_admin
 from firebase_admin import auth, credentials
+from firebase_admin.exceptions import FirebaseError
 from fastapi import Header, HTTPException, status
 from starlette.concurrency import run_in_threadpool
 
@@ -38,16 +40,14 @@ init_firebase()
 
 async def get_current_user(
     authorization: Optional[str] = Header(
-        None, description="Bearer <Firebase_ID_Token>"
+        None, description="Bearer Firebase ID token"
     )
 ) -> Dict[str, Any]:
-    """
-    FastAPI dependency to verify Firebase ID Token from Authorization header.
-    """
+    """Verifies a Firebase ID token from the Authorization header."""
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header is required (Bearer <Firebase_ID_Token>)",
+            detail="Authorization header is required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -55,7 +55,7 @@ async def get_current_user(
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Authorization header format. Expected: Bearer <Firebase_ID_Token>",
+            detail="Invalid authorization header. Expected a Bearer token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -77,23 +77,37 @@ async def get_current_user(
     except auth.ExpiredIdTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Firebase ID token has expired. Please refresh the token on client-side.",
+            detail="Authentication token has expired. Please sign in again.",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
     except auth.RevokedIdTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Firebase ID token has been revoked.",
+            detail="Authentication token has been revoked. Please sign in again.",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
-    except auth.InvalidIdTokenError as exc:
+    except auth.InvalidIdTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid Firebase ID token: {str(exc)}",
+            detail="Authentication token is invalid. Please sign in again.",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
-    except Exception as exc:
-        logger.error("Error validating token: %s", exc)
+    except auth.CertificateFetchError:
+        logger.exception("Firebase certificate fetch failed during token validation.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service is temporarily unavailable. Please try again.",
+            headers={"Retry-After": "30"},
+        )
+    except FirebaseError:
+        logger.exception("Firebase authentication service error during token validation.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception:
+        logger.exception("Unexpected error during Firebase token validation.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",
@@ -103,12 +117,11 @@ async def get_current_user(
 
 async def get_optional_current_user(
     authorization: Optional[str] = Header(
-        None, description="Optional Bearer <Firebase_ID_Token>"
+        None, description="Optional Bearer Firebase ID token"
     )
 ) -> Optional[Dict[str, Any]]:
     """
-    FastAPI dependency that returns decoded user token if Authorization header is provided,
-    or None if absent.
+    Returns the decoded user token if Authorization is provided, or None if absent/invalid.
     """
     if not authorization:
         return None
