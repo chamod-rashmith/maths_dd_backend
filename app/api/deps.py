@@ -4,11 +4,13 @@ Provides abstract domain repository contracts, application services, and RBAC se
 """
 
 from typing import Any, Dict
-from fastapi import Depends
+from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.totp import verify_elevated_session_token
 from app.domain.exceptions import PermissionDeniedError
 from app.domain.repositories.curriculum_repository import CurriculumRepository
 from app.domain.repositories.progress_repository import ProgressRepository
@@ -28,6 +30,7 @@ from app.services.user_service import UserService
 
 _CONTENT_PRIVILEGED_ROLES = {"ADMIN", "EDITOR"}
 _FINANCE_AUDIT_ROLES = {"ADMIN", "ACCOUNT_AUDIT"}
+_ALL_STAFF_ROLES = {"ADMIN", "EDITOR", "ACCOUNT_AUDIT"}
 
 
 # -----------------------------------------------------------------------------
@@ -112,9 +115,31 @@ def get_progress_service(
 # 3. Role-Based Access Control (RBAC) Dependencies
 # -----------------------------------------------------------------------------
 
+def _enforce_sudo_token_if_required(
+    current_user: Dict[str, Any],
+    x_elevated_token: str | None,
+) -> None:
+    """
+    Checks `X-Elevated-Token` if submitted by the client or if `ADMIN_REQUIRE_TOTP_SUDO=true`.
+    In local development (`ADMIN_REQUIRE_TOTP_SUDO=false`), omitting the header is permitted
+    so normal development workflows are unblocked, while still validating the token whenever provided.
+    """
+    uid = str(current_user.get("uid", ""))
+    if x_elevated_token is not None:
+        if not verify_elevated_session_token(x_elevated_token, expected_uid=uid):
+            raise PermissionDeniedError(
+                "Invalid or expired X-Elevated-Token. Please re-verify your TOTP code via /api/v1/admin/security/elevate."
+            )
+    elif settings.ADMIN_REQUIRE_TOTP_SUDO:
+        raise PermissionDeniedError(
+            "Step-up TOTP Sudo authentication is required. Provide a valid X-Elevated-Token header."
+        )
+
+
 async def require_admin_or_editor(
     current_user: Dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(get_user_repository),
+    x_elevated_token: str | None = Header(None, alias="X-Elevated-Token"),
 ) -> Dict[str, Any]:
     """
     Verifies that the authenticated user holds an 'ADMIN' or 'EDITOR' role
@@ -122,13 +147,17 @@ async def require_admin_or_editor(
     """
     token_role = str(current_user.get("role", "")).upper()
     if token_role in _CONTENT_PRIVILEGED_ROLES:
+        _enforce_sudo_token_if_required(current_user, x_elevated_token)
         return current_user
 
     uid = current_user.get("uid")
     if uid:
         db_user = await user_repo.get_by_uid(uid)
         if db_user and str(db_user.get("role", "")).upper() in _CONTENT_PRIVILEGED_ROLES:
-            return current_user
+            resolved = dict(current_user)
+            resolved["role"] = str(db_user.get("role", "")).upper()
+            _enforce_sudo_token_if_required(resolved, x_elevated_token)
+            return resolved
 
     raise PermissionDeniedError(
         "Insufficient privileges. ADMIN or EDITOR role is required."
@@ -138,6 +167,7 @@ async def require_admin_or_editor(
 async def require_admin_or_account_audit(
     current_user: Dict[str, Any] = Depends(get_current_user),
     user_repo: UserRepository = Depends(get_user_repository),
+    x_elevated_token: str | None = Header(None, alias="X-Elevated-Token"),
 ) -> Dict[str, Any]:
     """
     Verifies that the authenticated user holds an 'ADMIN' or 'ACCOUNT_AUDIT' role
@@ -145,14 +175,44 @@ async def require_admin_or_account_audit(
     """
     token_role = str(current_user.get("role", "")).upper()
     if token_role in _FINANCE_AUDIT_ROLES:
+        _enforce_sudo_token_if_required(current_user, x_elevated_token)
         return current_user
 
     uid = current_user.get("uid")
     if uid:
         db_user = await user_repo.get_by_uid(uid)
         if db_user and str(db_user.get("role", "")).upper() in _FINANCE_AUDIT_ROLES:
-            return current_user
+            resolved = dict(current_user)
+            resolved["role"] = str(db_user.get("role", "")).upper()
+            _enforce_sudo_token_if_required(resolved, x_elevated_token)
+            return resolved
 
     raise PermissionDeniedError(
         "Insufficient privileges. ADMIN or ACCOUNT_AUDIT role is required."
+    )
+
+
+async def require_privileged_staff(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Dict[str, Any]:
+    """
+    Verifies that the user holds any privileged staff role (ADMIN, EDITOR, or ACCOUNT_AUDIT)
+    for enrolling in TOTP 2FA and requesting elevated sudo tokens.
+    """
+    token_role = str(current_user.get("role", "")).upper()
+    if token_role in _ALL_STAFF_ROLES:
+        return current_user
+
+    uid = current_user.get("uid")
+    if uid:
+        db_user = await user_repo.get_by_uid(uid)
+        db_role = str((db_user or {}).get("role", "")).upper()
+        if db_role in _ALL_STAFF_ROLES:
+            resolved = dict(current_user)
+            resolved["role"] = db_role
+            return resolved
+
+    raise PermissionDeniedError(
+        "Insufficient privileges. Staff role (ADMIN, EDITOR, or ACCOUNT_AUDIT) is required."
     )

@@ -23,6 +23,7 @@ from app.models.subscription import (
 )
 from app.models.progress import UserQuestionAttempt, UserDailyActivity, XpTransaction
 from app.models.daily_challenge import DailyChallenge, DailyChallengeQuestion
+from app.models.admin_totp import AdminTotpCredential
 
 __all__ = [
     "Subject",
@@ -47,4 +48,5 @@ __all__ = [
     "XpTransaction",
     "DailyChallenge",
     "DailyChallengeQuestion",
+    "AdminTotpCredential",
 ]

@@ -120,6 +120,11 @@ class Settings:
     # Fernet key used for application-level encryption of sensitive fields.
     DATA_ENCRYPTION_KEY: str = os.environ.get("DATA_ENCRYPTION_KEY", "").strip()
 
+    # Admin Step-Up TOTP Sudo Enforcement (False by default in development; can be set to "true" in production)
+    ADMIN_REQUIRE_TOTP_SUDO: bool = os.environ.get(
+        "ADMIN_REQUIRE_TOTP_SUDO", "false"
+    ).strip().lower() in ("1", "true", "yes")
+
     # Upstash Serverless Redis
     UPSTASH_REDIS_REST_URL: str = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip()
     UPSTASH_REDIS_REST_TOKEN: str = os.environ.get(

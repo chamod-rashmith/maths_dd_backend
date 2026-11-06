@@ -5,6 +5,7 @@ Central API v1 Router aggregating all feature endpoint routers.
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin_security,
     curriculum,
     districts,
     progress,
@@ -32,3 +33,4 @@ api_v1_router.include_router(curriculum.router)
 api_v1_router.include_router(questions.router)
 api_v1_router.include_router(study_notes.router)
 api_v1_router.include_router(progress.router)
+api_v1_router.include_router(admin_security.router)
