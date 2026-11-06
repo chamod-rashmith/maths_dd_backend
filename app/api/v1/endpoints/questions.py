@@ -8,14 +8,17 @@ Provides reverse-chronological daily series catalog with safe teaser metadata fo
 
 from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_question_service,
     get_user_repository,
     require_admin_or_editor,
 )
+from app.core.database import get_db
 from app.core.security import get_current_user, get_optional_current_user
 from app.domain.repositories.user_repository import UserRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.question import (
     DailyChallengePackResponse,
@@ -29,27 +32,32 @@ from app.schemas.question import (
 from app.services.question_service import QuestionService
 
 router = APIRouter(prefix="/questions", tags=["Questions v1"])
+_PRIVILEGED_ROLES = {"ADMIN", "EDITOR"}
 
 
-async def _has_premium_access(
-    current_user: Dict[str, Any], user_repo: UserRepository
-) -> bool:
-    """Resolve premium access server-side; never trust a client-supplied flag."""
-    role = str(current_user.get("role", "")).upper()
-    if role in ("ADMIN", "EDITOR"):
-        return True
+async def _resolve_question_access_context(
+    current_user: Dict[str, Any],
+    user_repo: UserRepository,
+    session: AsyncSession,
+) -> tuple[Dict[str, Any], bool]:
+    """Resolve authoritative role + premium entitlement server-side."""
+    resolved_user = dict(current_user)
+    token_role = str(resolved_user.get("role", "")).upper()
+    if token_role in _PRIVILEGED_ROLES:
+        return resolved_user, True
 
-    uid = current_user.get("uid")
+    uid = resolved_user.get("uid")
     if not uid:
-        return False
+        return resolved_user, False
+
     db_user = await user_repo.get_by_uid(uid)
-    return bool(
-        db_user
-        and (
-            db_user.get("is_premium", False)
-            or str(db_user.get("role", "")).upper() in ("ADMIN", "EDITOR")
-        )
-    )
+    db_role = str((db_user or {}).get("role", "")).upper()
+    if db_role in _PRIVILEGED_ROLES:
+        resolved_user["role"] = db_role
+        return resolved_user, True
+
+    sub_repo = SubscriptionRepository(session)
+    return resolved_user, await sub_repo.is_user_premium(uid)
 
 
 @router.get(
@@ -134,6 +142,7 @@ async def get_daily_challenge_pack(
         description="Sequential target day number (e.g. 1 for Day 1 challenge pack)",
     ),
     current_user: Dict[str, Any] = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Optional[Dict[str, Any]]:
@@ -145,11 +154,16 @@ async def get_daily_challenge_pack(
       to regular students. Attempting to fetch a future locked day returns a 403 Forbidden.
     - Admins and content editors can preview future days for verification.
     """
+    resolved_user, is_premium = await _resolve_question_access_context(
+        current_user=current_user,
+        user_repo=user_repo,
+        session=session,
+    )
     return await service.get_daily_pack(
         target_date=date,
         day_number=day,
-        current_user=current_user,
-        is_premium=await _has_premium_access(current_user, user_repo),
+        current_user=resolved_user,
+        is_premium=is_premium,
     )
 
 
@@ -192,6 +206,7 @@ async def list_recent_questions(
 async def get_question_by_id(
     question_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Dict[str, Any]:
@@ -199,10 +214,15 @@ async def get_question_by_id(
     Fetches a single question with its full LaTeX/Markdown problem statement or signed asset URL.
     Requires an authenticated user session.
     """
+    resolved_user, is_premium = await _resolve_question_access_context(
+        current_user=current_user,
+        user_repo=user_repo,
+        session=session,
+    )
     return await service.get_question_by_id(
         question_id=question_id,
-        current_user=current_user,
-        is_premium=await _has_premium_access(current_user, user_repo),
+        current_user=resolved_user,
+        is_premium=is_premium,
     )
 
 
@@ -210,6 +230,7 @@ async def get_question_by_id(
 async def get_question_solution(
     question_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
 ) -> Dict[str, Any]:
@@ -217,22 +238,15 @@ async def get_question_solution(
     Fetches the official marking scheme and step-by-step solution for a question.
     Requires an authenticated user session and enforces premium subscription check for premium solutions.
     """
-    is_premium = False
-    role = str(current_user.get("role", "")).upper()
-    if role in ("ADMIN", "EDITOR"):
-        is_premium = True
-    else:
-        uid = current_user.get("uid")
-        if uid:
-            db_user = await user_repo.get_by_uid(uid)
-            if db_user:
-                is_premium = bool(db_user.get("is_premium", False)) or str(
-                    db_user.get("role", "")
-                ).upper() in ("ADMIN", "EDITOR")
+    resolved_user, is_premium = await _resolve_question_access_context(
+        current_user=current_user,
+        user_repo=user_repo,
+        session=session,
+    )
 
     return await service.get_marking_scheme(
         question_id=question_id,
-        current_user=current_user,
+        current_user=resolved_user,
         is_premium=is_premium,
     )
 

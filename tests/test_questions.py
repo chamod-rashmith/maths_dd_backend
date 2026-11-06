@@ -5,7 +5,7 @@ and anti-leak time-locks preventing future question leaks.
 """
 
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.api.deps import (
@@ -25,6 +25,13 @@ class TestQuestionsFeature(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_service = AsyncMock(spec=QuestionService)
         self.mock_user_repo = AsyncMock()
+        self.subscription_repo_patcher = patch(
+            "app.api.v1.endpoints.questions.SubscriptionRepository"
+        )
+        self.mock_subscription_repo_cls = self.subscription_repo_patcher.start()
+        self.mock_subscription_repo = AsyncMock()
+        self.mock_subscription_repo.is_user_premium = AsyncMock(return_value=False)
+        self.mock_subscription_repo_cls.return_value = self.mock_subscription_repo
         self.mock_user = {
             "uid": "usr_student_01",
             "email": "student@maths.lk",
@@ -42,6 +49,7 @@ class TestQuestionsFeature(unittest.TestCase):
         app.dependency_overrides[get_optional_current_user] = lambda: self.mock_user
 
     def tearDown(self) -> None:
+        self.subscription_repo_patcher.stop()
         app.dependency_overrides.clear()
 
     def test_list_questions_requires_authentication(self) -> None:
@@ -219,10 +227,136 @@ class TestQuestionsFeature(unittest.TestCase):
             "role": "USER",
             "is_premium": True,
         }
+        self.mock_subscription_repo.is_user_premium.return_value = True
         client = TestClient(app)
         response = client.get("/api/v1/questions/q_prem_01/solution")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["is_premium_only"])
+
+    def test_question_detail_passes_is_premium_false_for_free_user(self) -> None:
+        self.mock_user_repo.get_by_uid.return_value = {
+            "uid": "usr_student_01",
+            "role": "USER",
+            "is_premium": True,
+        }
+        self.mock_subscription_repo.is_user_premium.return_value = False
+        self.mock_service.get_question_by_id.return_value = {
+            "id": "q_detail_01",
+            "title": "Detail question",
+            "description": "",
+            "subject_id": "sub_pmat",
+            "content_text": "Solve this.",
+            "type": "SHORT",
+            "difficulty": "MEDIUM",
+            "schedule": "REGULAR",
+            "source": "PAST_PAPER",
+            "allocated_marks": 25,
+            "is_premium": False,
+            "is_published": True,
+            "has_marking_scheme": True,
+        }
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/q_detail_01")
+        self.assertEqual(response.status_code, 200)
+        self.mock_service.get_question_by_id.assert_awaited_once_with(
+            question_id="q_detail_01",
+            current_user=self.mock_user,
+            is_premium=False,
+        )
+
+    def test_question_detail_passes_is_premium_true_for_active_subscription(self) -> None:
+        self.mock_subscription_repo.is_user_premium.return_value = True
+        self.mock_service.get_question_by_id.return_value = {
+            "id": "q_detail_02",
+            "title": "Premium detail question",
+            "description": "",
+            "subject_id": "sub_pmat",
+            "content_text": "Solve this premium one.",
+            "type": "SHORT",
+            "difficulty": "MEDIUM",
+            "schedule": "REGULAR",
+            "source": "PAST_PAPER",
+            "allocated_marks": 25,
+            "is_premium": True,
+            "is_published": True,
+            "has_marking_scheme": True,
+        }
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/q_detail_02")
+        self.assertEqual(response.status_code, 200)
+        self.mock_service.get_question_by_id.assert_awaited_once_with(
+            question_id="q_detail_02",
+            current_user=self.mock_user,
+            is_premium=True,
+        )
+
+    def test_daily_pack_passes_is_premium_true_for_active_subscription(self) -> None:
+        self.mock_subscription_repo.is_user_premium.return_value = True
+        self.mock_service.get_daily_pack.return_value = {
+            "day_number": 1,
+            "challenge_title": "Day 01 Combined Maths Challenge",
+            "scheduled_date": "2026-11-03",
+            "total_questions": 1,
+            "total_marks": 25,
+            "questions": [
+                {
+                    "id": "q_pack_03",
+                    "title": "Premium pack question",
+                    "description": "",
+                    "subject_id": "sub_pmat",
+                    "content_text": "Question text",
+                    "type": "SHORT",
+                    "difficulty": "MEDIUM",
+                    "schedule": "DAILY",
+                    "source": "PAST_PAPER",
+                    "allocated_marks": 25,
+                    "is_premium": True,
+                    "is_published": True,
+                    "day_number": 1,
+                    "has_marking_scheme": True,
+                }
+            ],
+        }
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/daily/pack?day=1")
+        self.assertEqual(response.status_code, 200)
+        self.mock_service.get_daily_pack.assert_awaited_once_with(
+            target_date=None,
+            day_number=1,
+            current_user=self.mock_user,
+            is_premium=True,
+        )
+
+    def test_question_detail_uses_database_role_fallback_for_privileged_access(self) -> None:
+        self.mock_user_repo.get_by_uid.return_value = {
+            "uid": "usr_student_01",
+            "role": "EDITOR",
+            "is_premium": False,
+        }
+        self.mock_service.get_question_by_id.return_value = {
+            "id": "q_detail_03",
+            "title": "Preview question",
+            "description": "",
+            "subject_id": "sub_pmat",
+            "content_text": "Preview text.",
+            "type": "SHORT",
+            "difficulty": "MEDIUM",
+            "schedule": "REGULAR",
+            "source": "PAST_PAPER",
+            "allocated_marks": 25,
+            "is_premium": True,
+            "is_published": False,
+            "has_marking_scheme": True,
+        }
+        client = TestClient(app)
+        response = client.get("/api/v1/questions/q_detail_03")
+        self.assertEqual(response.status_code, 200)
+        called_user = self.mock_service.get_question_by_id.await_args.kwargs["current_user"]
+        self.assertEqual(called_user["role"], "EDITOR")
+        self.assertTrue(
+            self.mock_service.get_question_by_id.await_args.kwargs["is_premium"]
+        )
+        self.mock_subscription_repo.is_user_premium.assert_not_awaited()
 
     def test_create_question_blocks_standard_user(self) -> None:
         client = TestClient(app)
