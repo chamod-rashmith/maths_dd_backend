@@ -10,6 +10,7 @@ class UserRole(str, Enum):
 
     ADMIN = "ADMIN"
     EDITOR = "EDITOR"
+    ACCOUNT_AUDIT = "ACCOUNT_AUDIT"
     USER = "USER"
 
 
@@ -44,6 +45,56 @@ class QuestionSource(str, Enum):
     MODEL_PAPER = "MODEL_PAPER"
     PROVINCIAL = "PROVINCIAL"
     SCHOOL_PAPER = "SCHOOL_PAPER"
+
+
+class ContentType(str, Enum):
+    """Format of question or study note content."""
+
+    MARKDOWN = "markdown"
+    PDF = "pdf"
+    IMAGE = "image"
+
+
+class ExamPaperType(str, Enum):
+    """Category of A/L examination paper."""
+
+    AL_GOVT = "AL_GOVT"
+    MODEL = "MODEL"
+    PROVINCIAL = "PROVINCIAL"
+
+
+class ExamPaperPart(str, Enum):
+    """Section / part of an examination paper."""
+
+    PART_I = "PART_I"
+    PART_II_A = "PART_II_A"
+    PART_II_B = "PART_II_B"
+    FULL = "FULL"
+
+
+class MarkingStepType(str, Enum):
+    """Rubric allocation category for marking scheme steps."""
+
+    METHOD = "METHOD"
+    ACCURACY = "ACCURACY"
+    FINAL = "FINAL"
+    BONUS = "BONUS"
+
+
+class ConfidenceLevel(str, Enum):
+    """Student self-reported confidence level when completing a question."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class ExamMedium(str, Enum):
+    """Language medium of examination."""
+
+    SINHALA = "SINHALA"
+    ENGLISH = "ENGLISH"
+    TAMIL = "TAMIL"
 
 
 class Province(str, Enum):

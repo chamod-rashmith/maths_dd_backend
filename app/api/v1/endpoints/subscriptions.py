@@ -29,12 +29,16 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin_or_editor
+from app.api.deps import require_admin_or_account_audit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.storage import generate_signed_upload_url
 from app.repositories.subscription_repository import SubscriptionRepository
+from app.schemas.common import (
+    MaintenanceExpirationResponse,
+    WebhookAckResponse,
+)
 from app.schemas.subscription import (
     AdminApprovalRequest,
     AdminRejectionRequest,
@@ -235,6 +239,7 @@ async def get_subscription_history(
 
 @router.post(
     "/webhook/revenuecat",
+    response_model=WebhookAckResponse,
     status_code=status.HTTP_200_OK,
     summary="RevenueCat Server-to-Server Webhook Receiver",
     description=(
@@ -331,7 +336,7 @@ async def handle_revenuecat_webhook(
     description="Returns all subscriptions with PENDING_APPROVAL status awaiting human admin review.",
 )
 async def list_pending_subscriptions(
-    admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
 ) -> List[UserSubscriptionResponse]:
     """Retrieve all pending bank slip submissions."""
@@ -352,7 +357,7 @@ async def list_pending_subscriptions(
 async def approve_subscription(
     subscription_id: str,
     payload: AdminApprovalRequest,
-    admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
 ) -> UserSubscriptionResponse:
     """Approve a pending subscription and grant active access."""
@@ -384,7 +389,7 @@ async def approve_subscription(
 async def reject_subscription(
     subscription_id: str,
     payload: AdminRejectionRequest,
-    admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
 ) -> UserSubscriptionResponse:
     """Reject a bank slip submission with reason."""
@@ -405,6 +410,7 @@ async def reject_subscription(
 
 @router.post(
     "/admin/maintenance/expire-stale",
+    response_model=MaintenanceExpirationResponse,
     summary="Trigger Subscription Expiration Maintenance Routine",
     description=(
         "Scans all ACTIVE subscriptions whose expires_at timestamp has passed and updates "
@@ -412,7 +418,7 @@ async def reject_subscription(
     ),
 )
 async def trigger_expire_stale_subscriptions(
-    admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    admin: Dict[str, Any] = Depends(require_admin_or_account_audit),
     session: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Expire subscriptions past their expiration date."""

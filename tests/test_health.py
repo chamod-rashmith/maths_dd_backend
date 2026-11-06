@@ -345,10 +345,13 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         )
         self.assertEqual(create_res.status_code, 201)
 
-        # 1. Test List Endpoint: Must return summary (NO content_text or pdf_url)
+        # 1. Test List Endpoint: Must return summary inside PaginatedResponse (NO content_text or pdf_url)
         list_res = self.client.get("/api/v1/study-notes")
         self.assertEqual(list_res.status_code, 200)
-        items = list_res.json()
+        payload = list_res.json()
+        self.assertIn("items", payload)
+        self.assertIn("pagination", payload)
+        items = payload["items"]
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], "text_note_1")
         self.assertEqual(items[0]["content_type"], "markdown")
@@ -397,6 +400,34 @@ class TestBackendCleanArchitecture(unittest.TestCase):
         self.assertIn("storage.googleapis.com", detail["pdf_url"])
         self.assertIn("study_notes/pure/complex_numbers.pdf", detail["pdf_url"])
         self.assertIn("X-Goog-Expires=", detail["pdf_url"])
+
+    def test_openapi_schema_contract_and_pagination_consistency(self) -> None:
+        """Verifies that all v1 endpoints declare strict OpenAPI schemas without untyped dicts or Union[PaginatedResponse, List]."""
+        res = self.client.get("/openapi.json")
+        self.assertEqual(res.status_code, 200)
+        schema = res.json()
+
+        components = schema.get("components", {}).get("schemas", {})
+        self.assertIn("ErrorResponse", components)
+        self.assertIn("DeleteResponse", components)
+        self.assertIn("BookmarkToggleResponse", components)
+        self.assertIn("WebhookAckResponse", components)
+        self.assertIn("MaintenanceExpirationResponse", components)
+        self.assertIn("QuestionWithSolutionResponse", components)
+        self.assertIn("PaginationMetadata", components)
+
+        # Verify QuestionWithSolutionResponse uses QuestionDetailResponse instead of untyped Dict[str, Any]
+        qws_props = components["QuestionWithSolutionResponse"]["properties"]
+        self.assertEqual(
+            qws_props["question"].get("$ref"),
+            "#/components/schemas/QuestionDetailResponse",
+        )
+
+        # Verify PaginationMetadata includes total_pages and has_prev
+        pag_props = components["PaginationMetadata"]["properties"]
+        self.assertIn("total_pages", pag_props)
+        self.assertIn("has_prev", pag_props)
+        self.assertIn("has_next", pag_props)
 
 
 if __name__ == "__main__":

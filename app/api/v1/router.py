@@ -13,8 +13,18 @@ from app.api.v1.endpoints import (
     subscriptions,
     users,
 )
+from app.schemas.common import ErrorResponse
 
-api_v1_router = APIRouter()
+api_v1_router = APIRouter(
+    responses={
+        400: {"model": ErrorResponse, "description": "Bad Request / Domain Validation Error"},
+        401: {"model": ErrorResponse, "description": "Authentication Required"},
+        403: {"model": ErrorResponse, "description": "Forbidden / Insufficient Entitlements"},
+        404: {"model": ErrorResponse, "description": "Resource Not Found"},
+        422: {"model": ErrorResponse, "description": "Unprocessable Entity / Request Validation Error"},
+        500: {"model": ErrorResponse, "description": "Internal Server Error"},
+    }
+)
 api_v1_router.include_router(users.router)
 api_v1_router.include_router(districts.router)
 api_v1_router.include_router(subscriptions.router)

@@ -1,12 +1,13 @@
 """
 Pydantic v2 schemas for Student Progress Tracking, Question Attempts, Activity Heatmaps, and XP Ledger.
 මෙම මොඩියුලය මඟින් ශිෂ්‍ය ප්‍රගතිය, ප්‍රශ්න විසඳීමේ කාලය, දිනපතා Heatmap, සහ Gamification XP විගණන ලේඛනය
-සඳහා වන සියලුම DTO Schemas නිරවද්‍යව camelCase serialization සමඟින් කළමනාකරණය කරයි.
+සඳහා වන සියලුම DTO Schemas නිරවද්‍යව කළමනාකරණය කරයි.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.domain.enums import ConfidenceLevel
 
 
 class BaseProgressSchema(BaseModel):
@@ -28,7 +29,7 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     question_id: str = Field(..., description="ප්‍රශ්නයේ හැඳුනුම් අංකය")
     title: str = Field(..., description="ප්‍රශ්නයේ මාතෘකාව")
     subject: str = Field("pureMaths", description="විෂය (pureMaths, appliedMaths)")
-    lesson_id: Optional[str] = Field(None, description="අදාළ පාඩමේ ID")
+    lesson_id: str | None = Field(None, description="අදාළ පාඩමේ ID")
     question_type: str = Field("short", description="ප්‍රශ්න වර්ගය (short, essay)")
     is_daily_question: bool = Field(False, description="දිනපතා අභ්‍යාසයක් ලෙස විසඳුවේද යන්න")
     time_spent_seconds: int = Field(0, description="සමස්ත වැය කළ කාලය (Cumulative Seconds across all attempts)")
@@ -39,8 +40,8 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     completed_date_key: str = Field(..., description="විසඳූ දිනය (YYYY-MM-DD)")
     completed_at: datetime = Field(..., description="විසඳූ නිශ්චිත වේලාව (UTC)")
     is_bookmarked: bool = Field(False, description="Bookmark කර ඇත්ද යන්න")
-    confidence: Optional[str] = Field(None, description="විශ්වාසනීයත්ව මට්ටම (LOW, MEDIUM, HIGH)")
-    student_notes: Optional[str] = Field(None, description="ශිෂ්‍යයාගේ සටහන්")
+    confidence: ConfidenceLevel | str | None = Field(None, description="විශ්වාසනීයත්ව මට්ටම (LOW, MEDIUM, HIGH)")
+    student_notes: str | None = Field(None, description="ශිෂ්‍යයාගේ සටහන්")
 
 
 class DailyActivityBucketSchema(BaseProgressSchema):
@@ -53,7 +54,7 @@ class DailyActivityBucketSchema(BaseProgressSchema):
     questions_solved_count: int = Field(0, description="අදාළ දිනයේ විසඳූ ප්‍රශ්න ගණන")
     total_time_spent_seconds: int = Field(0, description="අදාළ දිනයේ වැය කළ මුළු කාලය (තත්පර වලින්)")
     daily_challenge_completed: bool = Field(False, description="Daily Challenge සම්පූර්ණ කළේද යන්න")
-    question_ids: List[str] = Field(default_factory=list, description="එදින විසඳූ ප්‍රශ්න ලැයිස්තුව")
+    question_ids: list[str] = Field(default_factory=list, description="එදින විසඳූ ප්‍රශ්න ලැයිස්තුව")
 
 
 class XpTransactionResponse(BaseProgressSchema):
@@ -65,9 +66,9 @@ class XpTransactionResponse(BaseProgressSchema):
     id: str = Field(..., description="ගනුදෙනුවේ ID")
     amount: int = Field(..., description="ලැබුණු/අඩු වූ XP ප්‍රමාණය (+10, +25, +50, -10)")
     reason: str = Field(..., description="හේතු කේතය (QUESTION_SOLVED, DAILY_CHALLENGE_BONUS, etc.)")
-    question_id: Optional[str] = Field(None, description="අදාළ ප්‍රශ්නයේ ID")
-    description_si: Optional[str] = Field(None, description="සිංහල විස්තරය (e.g. 'කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)')")
-    description_en: Optional[str] = Field(None, description="ඉංග්‍රීසි විස්තරය")
+    question_id: str | None = Field(None, description="අදාළ ප්‍රශ්නයේ ID")
+    description_si: str | None = Field(None, description="සිංහල විස්තරය (e.g. 'කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)')")
+    description_en: str | None = Field(None, description="ඉංග්‍රීසි විස්තරය")
     created_at: datetime = Field(..., description="XP හිමි වූ දිනය සහ වේලාව")
 
 
@@ -75,7 +76,7 @@ class XpHistoryResponse(BaseProgressSchema):
     """ශිෂ්‍යයාගේ සමස්ත XP ඉතිහාසය (Complete XP History & Audit Trail)."""
 
     total_xp: int = Field(..., description="සමස්ත තහවුරු කළ XP අගය")
-    transactions: List[XpTransactionResponse] = Field(default_factory=list, description="XP ගනුදෙනු ලැයිස්තුව")
+    transactions: list[XpTransactionResponse] = Field(default_factory=list, description="XP ගනුදෙනු ලැයිස්තුව")
 
 
 class UserProgressSummaryResponse(BaseProgressSchema):
@@ -84,25 +85,25 @@ class UserProgressSummaryResponse(BaseProgressSchema):
     Mobile App එකෙහි Dashboard සහ Profile තිර සඳහා අවශ්‍ය සියලුම සංඛ්‍යාලේඛන මෙහි අඩංගු වේ.
     """
 
-    completed_questions: Dict[str, CompletedQuestionRecordSchema] = Field(
+    completed_questions: dict[str, CompletedQuestionRecordSchema] = Field(
         default_factory=dict, description="විසඳූ ප්‍රශ්න ලැයිස්තුව (question_id මඟින් key කර ඇත)"
     )
-    daily_activity: Dict[str, DailyActivityBucketSchema] = Field(
+    daily_activity: dict[str, DailyActivityBucketSchema] = Field(
         default_factory=dict, description="දිනපතා Activity Heatmap දත්ත (YYYY-MM-DD මඟින් key කර ඇත)"
     )
-    solved_count_by_lesson: Dict[str, int] = Field(
+    solved_count_by_lesson: dict[str, int] = Field(
         default_factory=dict, description="පාඩම් අනුව විසඳූ ප්‍රශ්න ගණන"
     )
-    solved_count_by_subject: Dict[str, int] = Field(
+    solved_count_by_subject: dict[str, int] = Field(
         default_factory=dict, description="විෂය අනුව විසඳූ ප්‍රශ්න ගණන"
     )
     total_questions_solved: int = Field(0, description="විසඳූ සමස්ත ප්‍රශ්න ගණන")
     total_time_spent_seconds: int = Field(0, description="සමස්ත අධ්‍යයන කාලය (තත්පර වලින් - Accurate Cumulative)")
     current_streak_days: int = Field(0, description="වත්මන් අඛණ්ඩ දින ගණන (Current Streak)")
     longest_streak_days: int = Field(0, description="වැඩිම අඛණ්ඩ දින ගණන (Longest Streak)")
-    last_active_date_key: Optional[str] = Field(None, description="අවසන් වරට ක්‍රියාකාරී වූ දිනය (YYYY-MM-DD)")
+    last_active_date_key: str | None = Field(None, description="අවසන් වරට ක්‍රියාකාරී වූ දිනය (YYYY-MM-DD)")
     xp: int = Field(0, description="සමස්ත අත්දැකීම් ලකුණු (Verified XP from Ledger)")
-    recent_xp_transactions: Optional[List[XpTransactionResponse]] = Field(
+    recent_xp_transactions: list[XpTransactionResponse] | None = Field(
         None, description="නවතම XP ගනුදෙනු සාක්ෂි (Recent XP Proofs)"
     )
 
@@ -115,9 +116,9 @@ class MarkQuestionCompletedRequest(BaseProgressSchema):
     target_duration_seconds: int = Field(0, ge=0, description="නිර්දේශිත කාලය (තත්පර වලින්)")
     was_overtime: bool = Field(False, description="කාලය ඉක්මවා ගියේද යන්න")
     is_daily_question: bool = Field(False, description="දිනපතා අභ්‍යාස ප්‍රශ්නයක්ද යන්න")
-    confidence: Optional[str] = Field(None, description="විශ්වාසනීයත්වය (LOW, MEDIUM, HIGH)")
-    student_notes: Optional[str] = Field(None, description="ශිෂ්‍යයාගේ සටහන්")
-    is_bookmarked: Optional[bool] = Field(None, description="Bookmark කරන්නේද යන්න")
+    confidence: ConfidenceLevel | str | None = Field(None, description="විශ්වාසනීයත්වය (LOW, MEDIUM, HIGH)")
+    student_notes: str | None = Field(None, description="ශිෂ්‍යයාගේ සටහන්")
+    is_bookmarked: bool | None = Field(None, description="Bookmark කරන්නේද යන්න")
 
 
 class ToggleBookmarkRequest(BaseProgressSchema):

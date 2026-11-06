@@ -12,11 +12,11 @@ Security & Zero-Leak Principles:
    - If a free student requests a premium note, the content body and PDF URL are withheld entirely
      at the server boundary with HTTP 403 Forbidden, preventing any local client storage leaks.
 3. Bandwidth Optimization:
-   - Catalog listings (`GET /study-notes`) return lightweight summaries with `is_locked` badges
-     without transmitting heavy text or signed PDF download URLs.
+   - Catalog listings (`GET /study-notes`) return lightweight summaries inside a standardized
+     `PaginatedResponse` envelope with `is_locked` badges without transmitting heavy text or signed PDF download URLs.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,8 @@ from app.api.deps import get_study_note_service, require_admin_or_editor
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.schemas.pagination import PaginatedResponse
+from app.schemas.common import DeleteResponse
+from app.schemas.pagination import PaginatedResponse, PaginationMetadata
 from app.schemas.study_note import (
     StudyNoteCreateOrUpdate,
     StudyNoteDetailResponse,
@@ -37,26 +38,24 @@ router = APIRouter(prefix="/study-notes", tags=["Study Notes v1"])
 
 @router.get(
     "",
-    response_model=Union[
-        PaginatedResponse[StudyNoteSummaryResponse], List[StudyNoteSummaryResponse]
-    ],
+    response_model=PaginatedResponse[StudyNoteSummaryResponse],
     summary="List Study Notes Summaries",
     description=(
-        "Returns lightweight catalog card summaries for study notes matching filters. "
+        "Returns a standardized paginated envelope of lightweight catalog card summaries for study notes matching filters. "
         "Evaluates the authenticated user's premium entitlement to set the `is_locked` flag for UI lock badges. "
         "Does NOT transmit heavy markdown content or signed PDF URLs."
     ),
 )
 async def list_study_notes(
-    subject_id: Optional[str] = Query(None, description="Filter by subject ID or code (PMAT/AMAT)"),
-    lesson_id: Optional[str] = Query(None, description="Filter by syllabus lesson ID"),
-    search: Optional[str] = Query(None, description="Case-insensitive title or description keyword search"),
+    subject_id: str | None = Query(None, description="Filter by subject ID or code (PMAT/AMAT)"),
+    lesson_id: str | None = Query(None, description="Filter by syllabus lesson ID"),
+    search: str | None = Query(None, description="Case-insensitive title or description keyword search"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> Dict[str, Any]:
+) -> PaginatedResponse[StudyNoteSummaryResponse]:
     """
     ශිෂ්‍යයාට බැලීම සඳහා සටහන් ලැයිස්තුව ලබා දීම.
     ශිෂ්‍යයා සතුව Premium access නොමැති නම්, premium සටහන් සඳහා `is_locked = True` ලෙස ලකුණු කර එවයි.
@@ -78,32 +77,28 @@ async def list_study_notes(
         offset=offset,
     )
 
-    # Attach is_locked badge state per card
     if isinstance(raw_notes, list):
         notes = raw_notes
-        results = []
+        total = len(notes)
     else:
         notes = raw_notes["items"]
-        results = []
+        total = int(raw_notes.get("total", len(notes)))
 
+    results: list[StudyNoteSummaryResponse] = []
     for note in notes:
         note_dict = dict(note)
         note_dict["is_locked"] = bool(note_dict.get("is_premium") and not is_premium_user)
-        results.append(note_dict)
+        results.append(StudyNoteSummaryResponse.model_validate(note_dict))
 
-    if isinstance(raw_notes, list):
-        return results
-
-    page = (offset // limit) + 1
-    return {
-        "items": results,
-        "pagination": {
-            "page": page,
-            "page_size": limit,
-            "total": raw_notes["total"],
-            "has_next": offset + len(results) < raw_notes["total"],
-        },
-    }
+    return PaginatedResponse(
+        items=results,
+        pagination=PaginationMetadata.from_offset(
+            total=total,
+            limit=limit,
+            offset=offset,
+            items_count=len(results),
+        ),
+    )
 
 
 @router.get(
@@ -118,10 +113,10 @@ async def list_study_notes(
 )
 async def get_study_note(
     note_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     තනි Theory සටහනක සම්පූර්ණ අන්තර්ගතය ලබා ගැනීම.
     Premium සටහනක් නොමිලේ ලබා ගැනීමට උත්සාහ කළහොත් 403 Forbidden ලබා දී content කාන්දු වීම වළක්වයි.
@@ -158,22 +153,23 @@ async def get_study_note(
 )
 async def create_or_update_study_note(
     body: StudyNoteCreateOrUpdate,
-    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Creates or updates a study note."""
     return await service.upsert_note(body)
 
 
 @router.delete(
     "/{note_id}",
+    response_model=DeleteResponse,
     summary="Soft-Delete Study Note (Admin)",
     description="Soft-deletes a study note by ID (requires ADMIN or EDITOR role).",
 )
 async def delete_study_note(
     note_id: str,
-    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: StudyNoteService = Depends(get_study_note_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deletes a study note by ID."""
     return await service.delete_note(note_id)

@@ -88,15 +88,19 @@ class TestStudyNotesFeature(unittest.TestCase):
         response = client.get("/api/v1/study-notes")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 2)
+        self.assertIn("items", data)
+        self.assertIn("pagination", data)
+        items = data["items"]
+        self.assertEqual(len(items), 2)
+        self.assertEqual(data["pagination"]["total"], 2)
 
         # Free note -> is_locked is False
-        self.assertEqual(data[0]["id"], "note_free_01")
-        self.assertFalse(data[0]["is_locked"])
+        self.assertEqual(items[0]["id"], "note_free_01")
+        self.assertFalse(items[0]["is_locked"])
 
         # Premium note for free student -> is_locked is True
-        self.assertEqual(data[1]["id"], "note_prem_01")
-        self.assertTrue(data[1]["is_locked"])
+        self.assertEqual(items[1]["id"], "note_prem_01")
+        self.assertTrue(items[1]["is_locked"])
 
     def test_get_free_study_note_detail_allowed_for_all(self) -> None:
         """Verify free notes return full content to any authenticated student."""

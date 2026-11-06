@@ -13,8 +13,8 @@ Optimized for client bandwidth by excluding internal DB audit timestamps.
 ===============================================================================
 """
 
-from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SubjectCreate(BaseModel):
@@ -23,12 +23,12 @@ class SubjectCreate(BaseModel):
     විෂයයක් අලුතින් ඇතුළත් කිරීමට හෝ යාවත්කාලීන කිරීමට යොදාගන්නා schema එක.
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     name: str = Field(..., min_length=1, max_length=255, description="Subject name in English")
-    sinhala_name: Optional[str] = Field("", description="Subject name in Sinhala (e.g. 'ශුද්ධ ගණිතය')")
+    sinhala_name: str | None = Field("", description="Subject name in Sinhala (e.g. 'ශුද්ධ ගණිතය')")
     code: str = Field(..., min_length=1, max_length=50, description="Unique uppercase code (e.g. 'PMAT')")
     order_index: int = Field(1, description="Display order sequence")
-    description: Optional[str] = Field("", description="Overview notes or description")
+    description: str | None = Field("", description="Overview notes or description")
 
 
 class SubjectResponse(BaseModel):
@@ -41,10 +41,10 @@ class SubjectResponse(BaseModel):
 
     id: str
     name: str
-    sinhala_name: Optional[str] = None
+    sinhala_name: str | None = None
     code: str
     order_index: int
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class LessonCreate(BaseModel):
@@ -53,16 +53,16 @@ class LessonCreate(BaseModel):
     ප්‍රධාන පාඩමක් හෝ උප-පාඩමක් නිර්මාණය කිරීමට යොදාගන්නා schema එක.
     """
 
-    id: Optional[str] = Field(None, description="Optional custom ID (e.g. 'les_trig_01'). Auto-generated if omitted.")
+    id: str | None = Field(None, description="Optional custom ID (e.g. 'les_trig_01'). Auto-generated if omitted.")
     subject_id: str = Field(..., min_length=1, max_length=100, description="Parent subject ID (e.g. 'subj_pmat')")
-    parent_lesson_id: Optional[str] = Field(
+    parent_lesson_id: str | None = Field(
         None,
         description="Self-referencing parent lesson ID. Set to None for root units, or parent ID for sub-lessons.",
     )
     title: str = Field(..., min_length=1, max_length=255, description="Lesson title in English")
-    sinhala_title: Optional[str] = Field("", description="Lesson title in Sinhala (ප්‍රධාන මාතෘකාව)")
+    sinhala_title: str | None = Field("", description="Lesson title in Sinhala (ප්‍රධාන මාතෘකාව)")
     order_index: int = Field(1, description="Sort order among siblings (1, 2, 3...)")
-    description: Optional[str] = Field("", description="Overview, objectives, or syllabus syllabus notes")
+    description: str | None = Field("", description="Overview, objectives, or syllabus notes")
 
 
 class LessonResponse(BaseModel):
@@ -75,15 +75,20 @@ class LessonResponse(BaseModel):
 
     id: str
     subject_id: str
-    parent_lesson_id: Optional[str] = Field(
+    parent_lesson_id: str | None = Field(
         None,
         description="Parent lesson ID if this is a sub-lesson; None if top-level unit.",
     )
-    subject_code: Optional[str] = None
-    subject_name: Optional[str] = None
+    subject_code: str | None = None
+    subject_name: str | None = None
     title: str
-    sinhala_title: Optional[str] = None
+    sinhala_title: str | None = None
     order_index: int
-    description: Optional[str] = None
-    question_count: Optional[int] = 0
-    premium_count: Optional[int] = 0
+    description: str | None = None
+    question_count: int = 0
+    premium_count: int = 0
+
+    @field_validator("question_count", "premium_count", mode="before")
+    @classmethod
+    def _coerce_none_counts(cls, v: Any) -> int:
+        return 0 if v is None else int(v)

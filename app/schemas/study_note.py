@@ -1,12 +1,12 @@
 """
 Pydantic DTO schemas for Study Notes.
-Enforces lightweight Summary for listings, mutually exclusive Content for detail view,
+Enforces lightweight Summary for listings, DRY inheritance for detail view with mutually exclusive Content,
 and strict server-side Premium Gating (`is_locked`) without leaking full notes to free users.
 """
 
-from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.enums import ContentType
 from app.domain.exceptions import ValidationDomainError
 
 
@@ -16,16 +16,16 @@ class StudyNoteCreateOrUpdate(BaseModel):
     Supports either storage path/url (pdf_url) OR markdown (content_text).
     """
 
-    id: Optional[str] = None
+    id: str | None = None
     title: str = Field(..., min_length=1, max_length=255)
     subject_id: str = Field(..., min_length=1, max_length=100)
-    lesson_id: Optional[str] = None
-    content_text: Optional[str] = None
-    description: Optional[str] = ""
-    pdf_url: Optional[str] = None
+    lesson_id: str | None = None
+    content_text: str | None = None
+    description: str | None = ""
+    pdf_url: str | None = None
     is_premium: bool = False
     order_index: int = 0
-    author: Optional[str] = ""
+    author: str | None = ""
 
     @model_validator(mode="after")
     def validate_content_mutual_exclusivity(self) -> "StudyNoteCreateOrUpdate":
@@ -54,46 +54,30 @@ class StudyNoteSummaryResponse(BaseModel):
 
     id: str
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     subject_id: str
-    lesson_id: Optional[str] = None
-    content_type: str = "markdown"  # 'pdf' or 'markdown'
+    lesson_id: str | None = None
+    content_type: ContentType | str = ContentType.MARKDOWN  # 'pdf' or 'markdown'
     is_premium: bool = False
     is_locked: bool = False
     order_index: int = 0
-    author: Optional[str] = None
-    subject_name: Optional[str] = None
-    subject_sinhala_name: Optional[str] = None
-    lesson_title: Optional[str] = None
-    lesson_sinhala_title: Optional[str] = None
+    author: str | None = None
+    subject_name: str | None = None
+    subject_sinhala_name: str | None = None
+    lesson_title: str | None = None
+    lesson_sinhala_title: str | None = None
 
 
-class StudyNoteDetailResponse(BaseModel):
+class StudyNoteDetailResponse(StudyNoteSummaryResponse):
     """
-    Detailed representation of a single Study Note.
+    Detailed representation of a single Study Note, inheriting all summary fields.
     Loaded on-demand when user opens the note.
     Guarantees ONLY signed pdf_url OR content_text (never both).
     Delivered ONLY to authenticated users with valid permissions.
     """
 
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    title: str
-    description: Optional[str] = None
-    subject_id: str
-    lesson_id: Optional[str] = None
-    content_text: Optional[str] = None
-    pdf_url: Optional[str] = None
-    content_type: str = "markdown"  # 'pdf' or 'markdown'
-    is_premium: bool = False
-    is_locked: bool = False
-    order_index: int = 0
-    author: Optional[str] = None
-    subject_name: Optional[str] = None
-    subject_sinhala_name: Optional[str] = None
-    lesson_title: Optional[str] = None
-    lesson_sinhala_title: Optional[str] = None
+    content_text: str | None = None
+    pdf_url: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -107,6 +91,8 @@ class StudyNoteDetailResponse(BaseModel):
 
             if has_pdf:
                 data["content_text"] = None
+                if not data.get("content_type"):
+                    data["content_type"] = ContentType.PDF.value
             elif not has_text:
                 data["content_text"] = None
         return data

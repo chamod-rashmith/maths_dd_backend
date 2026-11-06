@@ -6,7 +6,7 @@ Removes deprecated single-question /daily endpoint in favor of dynamic multi-que
 Provides reverse-chronological daily series catalog with safe teaser metadata for tomorrow.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,10 +16,11 @@ from app.api.deps import (
     require_admin_or_editor,
 )
 from app.core.database import get_db
-from app.core.security import get_current_user, get_optional_current_user
+from app.core.security import get_current_user
 from app.domain.repositories.user_repository import UserRepository
 from app.repositories.subscription_repository import SubscriptionRepository
-from app.schemas.pagination import PaginatedResponse
+from app.schemas.common import DeleteResponse
+from app.schemas.pagination import PaginatedResponse, PaginationMetadata
 from app.schemas.question import (
     DailyChallengePackResponse,
     DailySeriesDaySummaryResponse,
@@ -36,10 +37,10 @@ _PRIVILEGED_ROLES = {"ADMIN", "EDITOR"}
 
 
 async def _resolve_question_access_context(
-    current_user: Dict[str, Any],
+    current_user: dict[str, Any],
     user_repo: UserRepository,
     session: AsyncSession,
-) -> tuple[Dict[str, Any], bool]:
+) -> tuple[dict[str, Any], bool]:
     """Resolve authoritative role + premium entitlement server-side."""
     resolved_user = dict(current_user)
     token_role = str(resolved_user.get("role", "")).upper()
@@ -62,43 +63,42 @@ async def _resolve_question_access_context(
 
 @router.get(
     "",
-    response_model=Union[
-        PaginatedResponse[QuestionSummaryResponse], List[QuestionSummaryResponse]
-    ],
+    response_model=PaginatedResponse[QuestionSummaryResponse],
 )
 async def list_questions(
-    subject_id: Optional[str] = Query(
+    subject_id: str | None = Query(
         None,
         description="Filter by subject ID or code (e.g. 'PMAT', 'AMAT', 'pure_maths', 'applied_maths')",
     ),
-    lesson_id: Optional[str] = Query(
+    lesson_id: str | None = Query(
         None, description="Filter by syllabus lesson ID"
     ),
-    type: Optional[str] = Query(
+    type: str | None = Query(
         None, description="Filter by question type ('SHORT' or 'ESSAY')"
     ),
-    difficulty: Optional[str] = Query(
+    difficulty: str | None = Query(
         None, description="Filter by difficulty ('EASY', 'MEDIUM', 'HARD')"
     ),
-    schedule: Optional[str] = Query(
+    schedule: str | None = Query(
         None, description="Filter by schedule category"
     ),
-    source: Optional[str] = Query(
+    source: str | None = Query(
         None, description="Filter by source ('PAST_PAPER', 'MODEL_PAPER', etc.)"
     ),
-    is_premium: Optional[bool] = Query(
+    is_premium: bool | None = Query(
         None, description="Filter by premium tier status"
     ),
-    day_number: Optional[int] = Query(
+    day_number: int | None = Query(
         None, description="Filter by sequential daily challenge day number"
     ),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service),
-) -> Dict[str, Any]:
+) -> PaginatedResponse[QuestionSummaryResponse]:
     """
     Lists published and active questions as lightweight summaries for catalog and lesson views.
+    Always returns a standardized `PaginatedResponse[QuestionSummaryResponse]` envelope.
     Security: Requires an authenticated user session (Bearer token).
     Data minimization: Excludes heavy problem content and internal database timestamps.
     """
@@ -116,36 +116,38 @@ async def list_questions(
         offset=offset,
     )
     if isinstance(result, list):
-        return result
+        items = result
+        total = len(items)
+    else:
+        items = result["items"]
+        total = int(result.get("total", len(items)))
 
-    page_size = limit
-    page = (offset // page_size) + 1
-    return {
-        "items": result["items"],
-        "pagination": {
-            "page": page,
-            "page_size": page_size,
-            "total": result["total"],
-            "has_next": offset + len(result["items"]) < result["total"],
-        },
-    }
+    return PaginatedResponse(
+        items=[QuestionSummaryResponse.model_validate(q) for q in items],
+        pagination=PaginationMetadata.from_offset(
+            total=total,
+            limit=limit,
+            offset=offset,
+            items_count=len(items),
+        ),
+    )
 
 
-@router.get("/daily/pack", response_model=Optional[DailyChallengePackResponse])
+@router.get("/daily/pack", response_model=DailyChallengePackResponse | None)
 async def get_daily_challenge_pack(
-    date: Optional[str] = Query(
+    date: str | None = Query(
         None,
         description="Target date in YYYY-MM-DD format (defaults to current date in Asia/Colombo)",
     ),
-    day: Optional[int] = Query(
+    day: int | None = Query(
         None,
         description="Sequential target day number (e.g. 1 for Day 1 challenge pack)",
     ),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Fetches the dynamic multi-question daily challenge workout pack (e.g. 1, 4, or 8-10 questions).
     Security & Anti-Leak Policy:
@@ -167,13 +169,13 @@ async def get_daily_challenge_pack(
     )
 
 
-@router.get("/daily/series", response_model=List[DailySeriesDaySummaryResponse])
+@router.get("/daily/series", response_model=list[DailySeriesDaySummaryResponse])
 async def list_daily_challenge_series(
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Lists daily challenge series summaries in reverse-chronological order (Newest/Tomorrow/Today at top).
     Security & Privacy:
@@ -189,12 +191,12 @@ async def list_daily_challenge_series(
     )
 
 
-@router.get("/recent", response_model=List[QuestionSummaryResponse])
+@router.get("/recent", response_model=list[QuestionSummaryResponse])
 async def list_recent_questions(
     limit: int = Query(15, ge=1, le=100),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: QuestionService = Depends(get_question_service),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Fetches the latest questions stored in Cloud SQL for catalog discovery.
     Requires an authenticated user session.
@@ -205,11 +207,11 @@ async def list_recent_questions(
 @router.get("/{question_id}", response_model=QuestionDetailResponse)
 async def get_question_by_id(
     question_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Fetches a single question with its full LaTeX/Markdown problem statement or signed asset URL.
     Requires an authenticated user session.
@@ -229,11 +231,11 @@ async def get_question_by_id(
 @router.get("/{question_id}/solution", response_model=MarkingSchemeResponse)
 async def get_question_solution(
     question_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
     user_repo: UserRepository = Depends(get_user_repository),
     service: QuestionService = Depends(get_question_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Fetches the official marking scheme and step-by-step solution for a question.
     Requires an authenticated user session and enforces premium subscription check for premium solutions.
@@ -258,18 +260,21 @@ async def get_question_solution(
 )
 async def add_question(
     q: QuestionCreate,
-    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: QuestionService = Depends(get_question_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Creates or updates a question with its corresponding marking scheme (requires ADMIN or EDITOR role)."""
     return await service.create_question(q)
 
 
-@router.delete("/{question_id}")
+@router.delete(
+    "/{question_id}",
+    response_model=DeleteResponse,
+)
 async def remove_question(
     question_id: str,
-    _admin: Dict[str, Any] = Depends(require_admin_or_editor),
+    _admin: dict[str, Any] = Depends(require_admin_or_editor),
     service: QuestionService = Depends(get_question_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deletes a question by ID (requires ADMIN or EDITOR role)."""
     return await service.delete_question(question_id)
