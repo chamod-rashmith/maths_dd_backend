@@ -1,6 +1,6 @@
 """
 Pydantic DTO schemas for User Profile operations.
-Enforces type-safe UserRole, StudyStream, StudentGrade, and ExamAttempt enums.
+Enforces type-safe UserRole, StudyStream, StudentGrade, ExamMedium, and ExamAttempt enums.
 
 ===============================================================================
 පරිශීලක සහ ශාස්ත්‍රීය පැතිකඩ DTO Schemas (User & Student Profile DTOs):
@@ -16,10 +16,15 @@ Enforces type-safe UserRole, StudyStream, StudentGrade, and ExamAttempt enums.
 ===============================================================================
 """
 
-from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.enums import ExamAttempt, StudentGrade, StudyStream, UserRole
+from app.domain.enums import (
+    ExamAttempt,
+    ExamMedium,
+    StudentGrade,
+    StudyStream,
+    UserRole,
+)
 from app.schemas.district import DistrictResponse
 from app.schemas.subscription import UserSubscriptionResponse
 
@@ -29,64 +34,64 @@ class UserProfileSyncRequest(BaseModel):
     Request payload for synchronizing a user profile after authentication or profile edit.
     """
 
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None, description="Display name from Google Sign-In or User Profile"
     )
-    avatar_url: Optional[str] = Field(
+    avatar_url: str | None = Field(
         None, description="Profile picture URL from Google Auth"
     )
-    telephone_no: Optional[str] = Field(None, description="Contact phone number")
-    school_name: Optional[str] = Field(
+    telephone_no: str | None = Field(None, description="Contact phone number")
+    school_name: str | None = Field(
         None, description="School attended by the student"
     )
 
     # -------------------------------------------------------------------------
     # Normalized Domain 1 Fields (A/L විභාග ශාස්ත්‍රීය දත්ත)
     # -------------------------------------------------------------------------
-    exam_year: Optional[int] = Field(
+    exam_year: int | None = Field(
         None,
         ge=2020,
         le=2040,
         description="Target G.C.E. A/L examination year (e.g. 2025, 2026, 2027)",
     )
-    attempt_number: Optional[int] = Field(
+    attempt_number: int | None = Field(
         None,
         ge=1,
         le=3,
         description="Sitting attempt number: 1 (1st shy), 2 (2nd shy), 3 (3rd shy)",
     )
-    exam_district_id: Optional[int] = Field(
+    exam_district_id: int | None = Field(
         None,
         description="Official Sri Lankan District integer ID (1-25) for Z-Score calculation",
     )
-    medium: Optional[str] = Field(
-        "SINHALA",
+    medium: ExamMedium | str | None = Field(
+        ExamMedium.SINHALA,
         description="Examination medium (SINHALA, ENGLISH, TAMIL)",
     )
 
     # -------------------------------------------------------------------------
     # Regional Residential District Fields
     # -------------------------------------------------------------------------
-    district_id: Optional[int] = Field(
+    district_id: int | None = Field(
         None, description="Sri Lankan District integer ID (1-25)"
     )
-    district_code: Optional[str] = Field(
+    district_code: str | None = Field(
         None, description="Sri Lankan District slug code (e.g. 'COLOMBO', 'KANDY')"
     )
-    district: Optional[Union[int, str]] = Field(
+    district: int | str | None = Field(
         None, description="Legacy fallback field for district (accepts ID or code)"
     )
 
     # -------------------------------------------------------------------------
     # Academic Study Stream & Grade
     # -------------------------------------------------------------------------
-    stream: Optional[StudyStream] = Field(
+    stream: StudyStream | None = Field(
         None, description="PHYSICAL_SCIENCE, BIO_SCIENCE, etc."
     )
-    grade: Optional[StudentGrade] = Field(
+    grade: StudentGrade | None = Field(
         None, description="GRADE_12, GRADE_13, or REVISION"
     )
-    attempt: Optional[ExamAttempt] = Field(
+    attempt: ExamAttempt | None = Field(
         None, description="FIRST, SECOND, or THIRD attempt"
     )
 
@@ -138,31 +143,31 @@ class UserProfileResponse(BaseModel):
     uid: str
     email: str
     name: str
-    telephone_no: Optional[str] = None
+    telephone_no: str | None = None
     role: UserRole = UserRole.USER
-    avatar_url: Optional[str] = None
-    school_name: Optional[str] = None
+    avatar_url: str | None = None
+    school_name: str | None = None
 
     # Regional & Z-Score data
-    district_id: Optional[int] = None
-    district: Optional[DistrictResponse] = None
-    exam_district_id: Optional[int] = None
-    exam_district: Optional[DistrictResponse] = None
+    district_id: int | None = None
+    district: DistrictResponse | None = None
+    exam_district_id: int | None = None
+    exam_district: DistrictResponse | None = None
 
     # Academic Syllabus & Target Exam
-    exam_year: Optional[int] = None
-    attempt_number: Optional[int] = None
-    medium: Optional[str] = "SINHALA"
-    stream: Optional[str] = None
-    grade: Optional[str] = None
-    attempt: Optional[str] = None
+    exam_year: int | None = None
+    attempt_number: int | None = None
+    medium: ExamMedium | str | None = ExamMedium.SINHALA
+    stream: StudyStream | str | None = None
+    grade: StudentGrade | str | None = None
+    attempt: ExamAttempt | str | None = None
 
     # Gamification & Telemetry stats
-    xp: Optional[int] = 0
-    streak_count: Optional[int] = 0
-    accuracy_rate: Optional[float] = 0.0
-    questions_solved: Optional[int] = 0
+    xp: int = 0
+    streak_count: int = 0
+    accuracy_rate: float = 0.0
+    questions_solved: int = 0
 
     # Subscription state
     is_premium: bool = False
-    active_subscription: Optional[UserSubscriptionResponse] = None
+    active_subscription: UserSubscriptionResponse | None = None

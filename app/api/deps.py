@@ -26,7 +26,8 @@ from app.services.question_service import QuestionService
 from app.services.study_note_service import StudyNoteService
 from app.services.user_service import UserService
 
-_PRIVILEGED_ROLES = {"ADMIN", "EDITOR"}
+_CONTENT_PRIVILEGED_ROLES = {"ADMIN", "EDITOR"}
+_FINANCE_AUDIT_ROLES = {"ADMIN", "ACCOUNT_AUDIT"}
 
 
 # -----------------------------------------------------------------------------
@@ -117,18 +118,41 @@ async def require_admin_or_editor(
 ) -> Dict[str, Any]:
     """
     Verifies that the authenticated user holds an 'ADMIN' or 'EDITOR' role
-    (via Firebase custom claims or the PostgreSQL `users` record).
+    for curriculum, questions, and study notes management (Create / Update / Delete).
     """
     token_role = str(current_user.get("role", "")).upper()
-    if token_role in _PRIVILEGED_ROLES:
+    if token_role in _CONTENT_PRIVILEGED_ROLES:
         return current_user
 
     uid = current_user.get("uid")
     if uid:
         db_user = await user_repo.get_by_uid(uid)
-        if db_user and str(db_user.get("role", "")).upper() in _PRIVILEGED_ROLES:
+        if db_user and str(db_user.get("role", "")).upper() in _CONTENT_PRIVILEGED_ROLES:
             return current_user
 
     raise PermissionDeniedError(
         "Insufficient privileges. ADMIN or EDITOR role is required."
+    )
+
+
+async def require_admin_or_account_audit(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> Dict[str, Any]:
+    """
+    Verifies that the authenticated user holds an 'ADMIN' or 'ACCOUNT_AUDIT' role
+    for financial bank slip verification, subscription approvals, rejections, and billing maintenance.
+    """
+    token_role = str(current_user.get("role", "")).upper()
+    if token_role in _FINANCE_AUDIT_ROLES:
+        return current_user
+
+    uid = current_user.get("uid")
+    if uid:
+        db_user = await user_repo.get_by_uid(uid)
+        if db_user and str(db_user.get("role", "")).upper() in _FINANCE_AUDIT_ROLES:
+            return current_user
+
+    raise PermissionDeniedError(
+        "Insufficient privileges. ADMIN or ACCOUNT_AUDIT role is required."
     )

@@ -190,6 +190,19 @@ class TestCurriculumFeature(unittest.TestCase):
         response = client.delete("/api/v1/curriculum/lessons/les_trig")
         self.assertEqual(response.status_code, 403)
 
+    def test_account_audit_role_blocked_from_content_mutations(self) -> None:
+        """Verifies ACCOUNT_AUDIT role cannot add/delete curriculum lessons or subjects."""
+        auditor_user = {"uid": "usr_audit_01", "email": "audit@mathsdd.lk", "role": "ACCOUNT_AUDIT"}
+        app.dependency_overrides[get_current_user] = lambda: auditor_user
+        mock_user_repo = AsyncMock()
+        mock_user_repo.get_by_uid.return_value = auditor_user
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+
+        client = TestClient(app)
+        response = client.delete("/api/v1/curriculum/lessons/les_trig")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("ADMIN or EDITOR role is required", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,11 +4,12 @@ FastAPI Router for Student Progress, Question Completion Attempts, Activity Heat
 සහ සාක්ෂි සහිත XP ගනුදෙනු ලේඛනය (XP Audit Proofs) ලබා දෙන සියලුම Endpoints කළමනාකරණය කරයි.
 """
 
-from typing import Any, Dict
+from typing import Any
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import get_progress_service
 from app.core.security import get_current_user
+from app.schemas.common import BookmarkToggleResponse
 from app.schemas.progress import (
     MarkQuestionCompletedRequest,
     ToggleBookmarkRequest,
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/progress", tags=["Student Progress v1"])
     ),
 )
 async def get_progress_summary(
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
 ) -> UserProgressSummaryResponse:
     """ශිෂ්‍යයාගේ සමස්ත ප්‍රගති සාරාංශය ලබා ගැනීම."""
@@ -52,7 +53,7 @@ async def get_progress_summary(
 )
 async def mark_question_completed(
     body: MarkQuestionCompletedRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
 ) -> UserProgressSummaryResponse:
     """ප්‍රශ්නයක් විසඳූ බව සටහන් කර අදාළ XP ලකුණු ලබා දීම."""
@@ -72,7 +73,7 @@ async def mark_question_completed(
 )
 async def unmark_question_completed(
     question_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
 ) -> UserProgressSummaryResponse:
     """ප්‍රශ්නයක් සම්පූර්ණ කළ බවට වූ වාර්තාව ඉවත් කිරීම."""
@@ -81,6 +82,7 @@ async def unmark_question_completed(
 
 @router.post(
     "/bookmarks/{question_id}",
+    response_model=BookmarkToggleResponse,
     status_code=status.HTTP_200_OK,
     summary="Toggle Question Bookmark",
     description="Stars or unstars a question for quick student bookmarking and revision lists.",
@@ -88,9 +90,9 @@ async def unmark_question_completed(
 async def toggle_bookmark(
     question_id: str,
     body: ToggleBookmarkRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """ප්‍රශ්නයක් Bookmark / Star කිරීම හෝ ඉවත් කිරීම."""
     return await service.toggle_bookmark(current_user, question_id, body)
 
@@ -100,16 +102,16 @@ async def toggle_bookmark(
     response_model=XpHistoryResponse,
     response_model_by_alias=False,
     status_code=status.HTTP_200_OK,
-    summary="Get Student XP Transaction Audit Trail",
+    summary="Get Verified XP Transaction Ledger & Proofs",
     description=(
-        "Returns the verified immutable ledger of XP awards, deductions, and challenge bonuses "
-        "verifying how the student's total XP score was earned."
+        "Returns the student's immutable XP audit history, listing every XP award or deduction "
+        "with reason codes, timestamps, and localized Sinhala descriptions."
     ),
 )
 async def get_xp_history(
-    limit: int = Query(50, ge=1, le=200, description="Number of recent transactions to return"),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of recent XP transactions to return"),
+    current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
 ) -> XpHistoryResponse:
-    """ශිෂ්‍යයා ලබාගත් XP ලකුණු පිළිබඳ සාක්ෂි සහිත සම්පූර්ණ ඉතිහාසය (XP Proof Audit Trail)."""
+    """ශිෂ්‍යයාගේ XP ගනුදෙනු ඉතිහාසය සහ සාක්ෂි ලබා ගැනීම."""
     return await service.get_xp_history(current_user, limit=limit)

@@ -78,8 +78,15 @@ class TestQuestionsFeature(unittest.TestCase):
         response = client.get("/api/v1/questions?subject_id=sub_pmat")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["id"], "q_2023_01")
+        self.assertIn("items", data)
+        self.assertIn("pagination", data)
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(data["items"][0]["id"], "q_2023_01")
+        self.assertEqual(data["pagination"]["total"], 1)
+        self.assertEqual(data["pagination"]["page"], 1)
+        self.assertEqual(data["pagination"]["total_pages"], 1)
+        self.assertFalse(data["pagination"]["has_next"])
+        self.assertFalse(data["pagination"]["has_prev"])
 
     def test_get_daily_challenge_pack_success(self) -> None:
         """Verifies fetching an unlocked daily challenge pack with multiple questions."""

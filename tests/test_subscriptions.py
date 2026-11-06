@@ -15,7 +15,11 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_user_repository, require_admin_or_editor
+from app.api.deps import (
+    get_user_repository,
+    require_admin_or_account_audit,
+    require_admin_or_editor,
+)
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.main import app
@@ -447,6 +451,39 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response_approve.status_code, 403)
         self.assertIn("Insufficient privileges", response_approve.json()["detail"])
+
+    def test_account_audit_role_can_review_bank_slips_and_editor_blocked(self) -> None:
+        """Verify ACCOUNT_AUDIT role can view and approve bank slips, while EDITOR role is blocked."""
+        # 1. EDITOR role should be blocked from financial bank slip approvals
+        editor_user = {"uid": "usr_editor", "email": "editor@mathsdd.lk", "role": "EDITOR"}
+        app.dependency_overrides[get_current_user] = lambda: editor_user
+        mock_user_repo = AsyncMock()
+        mock_user_repo.get_by_uid.return_value = {"uid": "usr_editor", "role": "EDITOR"}
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+
+        client = TestClient(app)
+        res_editor = client.get("/api/v1/subscriptions/admin/pending")
+        self.assertEqual(res_editor.status_code, 403)
+        self.assertIn("ADMIN or ACCOUNT_AUDIT role is required", res_editor.json()["detail"])
+
+        # 2. ACCOUNT_AUDIT role should be allowed to list pending slips and approve/reject
+        auditor_user = {"uid": "usr_audit_01", "email": "audit@mathsdd.lk", "role": "ACCOUNT_AUDIT"}
+        app.dependency_overrides[get_current_user] = lambda: auditor_user
+        mock_user_repo.get_by_uid.return_value = {"uid": "usr_audit_01", "role": "ACCOUNT_AUDIT"}
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = mock_result
+
+        async def override_get_db():
+            yield mock_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        res_auditor = client.get("/api/v1/subscriptions/admin/pending")
+        self.assertEqual(res_auditor.status_code, 200)
+        self.assertEqual(res_auditor.json(), [])
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ Client Security & Privacy Standards:
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 
@@ -27,6 +26,7 @@ class SubscriptionPlanCode(str, Enum):
     PURE_MATHS_TERM = "PURE_MATHS_TERM"
     APPLIED_MATHS_TERM = "APPLIED_MATHS_TERM"
     LIFETIME = "LIFETIME"
+    ADMIN_OVERRIDE = "ADMIN_OVERRIDE"
 
 
 # Legacy alias for backward compatibility
@@ -36,6 +36,7 @@ SubscriptionPlan = SubscriptionPlanCode
 class SubscriptionStatus(str, Enum):
     """Lifecycle statuses for user subscriptions."""
 
+    NONE = "NONE"
     ACTIVE = "ACTIVE"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     REJECTED = "REJECTED"
@@ -53,6 +54,32 @@ class SubscriptionProvider(str, Enum):
     APP_STORE = "APP_STORE"
     BANK_TRANSFER = "BANK_TRANSFER"
     MANUAL_ADMIN = "MANUAL_ADMIN"
+
+
+class PlanInterval(str, Enum):
+    """Billing cycle interval for plans."""
+
+    MONTH = "MONTH"
+    YEAR = "YEAR"
+    TERM = "TERM"
+    LIFETIME = "LIFETIME"
+
+
+class PaymentStatus(str, Enum):
+    """Transaction status of a payment record."""
+
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
+
+
+class SlipReviewStatus(str, Enum):
+    """Human admin review status for a bank deposit slip."""
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 # =============================================================================
@@ -87,15 +114,15 @@ class SubscriptionPlanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="පැකේජයේ හැඳුනුම් අංකය (UUID)")
-    code: str = Field(..., description="පැකේජ කේතය (e.g. COMBINED_PRO_MONTHLY, COMBINED_PRO_ANNUAL)")
+    code: SubscriptionPlanCode | str = Field(..., description="පැකේජ කේතය (e.g. COMBINED_PRO_MONTHLY, COMBINED_PRO_ANNUAL)")
     name_si: str = Field(..., description="සිංහල නම (e.g. 'සංයුක්ත ගණිතය මාසික සාමාජිකත්වය')")
-    name_en: Optional[str] = Field(None, description="ඉංග්‍රීසි නම (Optional English Title)")
-    description_si: Optional[str] = Field(None, description="සිංහල විස්තරය (Sinhala Description)")
-    interval: str = Field(default="MONTH", description="ගෙවීම් වාර ගණන (MONTH, YEAR, LIFETIME)")
-    duration_days: Optional[int] = Field(None, description="වලංගු දින ගණන (30, 365, හෝ Lifetime සඳහා None)")
+    name_en: str | None = Field(None, description="ඉංග්‍රීසි නම (Optional English Title)")
+    description_si: str | None = Field(None, description="සිංහල විස්තරය (Sinhala Description)")
+    interval: PlanInterval | str = Field(default=PlanInterval.MONTH, description="ගෙවීම් වාර ගණන (MONTH, YEAR, LIFETIME)")
+    duration_days: int | None = Field(None, description="වලංගු දින ගණන (30, 365, හෝ Lifetime සඳහා None)")
     display_order: int = Field(default=0, description="තිරයේ පෙන්වන අනුපිළිවෙල")
-    features_si: Optional[str] = Field(None, description="පැකේජයේ අඩංගු පහසුකම් (Features / Perks)")
-    prices: List[PlanPriceResponse] = Field(default_factory=list, description="පැකේජයේ සක්‍රිය මිල ගණන්")
+    features_si: str | None = Field(None, description="පැකේජයේ අඩංගු පහසුකම් (Features / Perks)")
+    prices: list[PlanPriceResponse] = Field(default_factory=list, description="පැකේජයේ සක්‍රිය මිල ගණන්")
 
 
 # =============================================================================
@@ -110,11 +137,11 @@ class BankSlipUploadRequest(BaseModel):
 
     plan_id: str = Field(..., description="ඉල්ලුම් කරන පැකේජ කේතය හෝ ID (e.g. COMBINED_PRO_MONTHLY)")
     slip_image_url: str = Field(..., description="Cloud Storage හි ගබඩා කළ රිසිට්පත් ඡායාරූපයේ URL එක")
-    amount_lkr: Optional[float] = Field(None, gt=0, description="තැන්පත් කළ මුදල රුපියල් වලින් (e.g. 2500.0)")
-    amount_minor: Optional[int] = Field(None, gt=0, description="තැන්පත් කළ මුදල ශත වලින් (e.g. 250000 = Rs. 2,500.00)")
-    bank_name: Optional[str] = Field(None, max_length=100, description="තැන්පත් කළ බැංකුව (e.g. 'BOC', 'Commercial Bank')")
-    deposit_reference: Optional[str] = Field(None, max_length=100, description="රිසිට්පත් අංකය හෝ CDM reference අංකය")
-    reference_note: Optional[str] = Field(
+    amount_lkr: float | None = Field(None, gt=0, description="තැන්පත් කළ මුදල රුපියල් වලින් (e.g. 2500.0)")
+    amount_minor: int | None = Field(None, gt=0, description="තැන්පත් කළ මුදල ශත වලින් (e.g. 250000 = Rs. 2,500.00)")
+    bank_name: str | None = Field(None, max_length=100, description="තැන්පත් කළ බැංකුව (e.g. 'BOC', 'Commercial Bank')")
+    deposit_reference: str | None = Field(None, max_length=100, description="රිසිට්පත් අංකය හෝ CDM reference අංකය")
+    reference_note: str | None = Field(
         None, max_length=500, description="තැන්පත්කරුගේ නම, දුරකථන අංකය හෝ අමතර සටහන"
     )
 
@@ -141,12 +168,12 @@ class BankSlipDetailsResponse(BaseModel):
 
     payment_id: str = Field(..., description="අදාළ ගෙවීමේ ID")
     slip_image_url: str = Field(..., description="රිසිට්පත් ඡායාරූපයේ URL")
-    bank_name: Optional[str] = Field(None, description="තැන්පත් කළ බැංකුව")
-    deposit_reference: Optional[str] = Field(None, description="රිසිට්පත් අංකය")
-    depositor_note: Optional[str] = Field(None, description="ශිෂ්‍යයාගේ සටහන")
-    review_status: str = Field(..., description="පරීක්ෂා කිරීමේ තත්වය: PENDING, APPROVED, REJECTED")
-    admin_feedback: Optional[str] = Field(None, description="පරිපාලකගේ සටහන හෝ ප්‍රතික්ෂේප කළ හේතුව")
-    reviewed_at: Optional[datetime] = Field(None, description="පරිපාලක අනුමත කළ දිනය")
+    bank_name: str | None = Field(None, description="තැන්පත් කළ බැංකුව")
+    deposit_reference: str | None = Field(None, description="රිසිට්පත් අංකය")
+    depositor_note: str | None = Field(None, description="ශිෂ්‍යයාගේ සටහන")
+    review_status: SlipReviewStatus | str = Field(..., description="පරීක්ෂා කිරීමේ තත්වය: PENDING, APPROVED, REJECTED")
+    admin_feedback: str | None = Field(None, description="පරිපාලකගේ සටහන හෝ ප්‍රතික්ෂේප කළ හේතුව")
+    reviewed_at: datetime | None = Field(None, description="පරිපාලක අනුමත කළ දිනය")
 
 
 class PaymentResponse(BaseModel):
@@ -156,12 +183,12 @@ class PaymentResponse(BaseModel):
 
     id: str = Field(..., description="ගෙවීමේ හැඳුනුම් අංකය")
     subscription_id: str = Field(..., description="අදාළ සාමාජිකත්වයේ ID")
-    method: str = Field(..., description="ගෙවීම් ක්‍රමය (BANK_TRANSFER, PLAY_STORE, etc.)")
-    status: str = Field(..., description="ගෙවීමේ තත්වය (PENDING, COMPLETED, FAILED)")
+    method: SubscriptionProvider | str = Field(..., description="ගෙවීම් ක්‍රමය (BANK_TRANSFER, PLAY_STORE, etc.)")
+    status: PaymentStatus | str = Field(..., description="ගෙවීමේ තත්වය (PENDING, COMPLETED, FAILED)")
     currency: str = Field(default="LKR", description="මුදල් ඒකකය")
     amount_minor: int = Field(..., description="ගෙවූ මුදල ශත වලින්")
-    paid_at: Optional[datetime] = Field(None, description="ගෙවූ දිනය")
-    bank_slip: Optional[BankSlipDetailsResponse] = Field(None, description="බැංකු රිසිට්පත් විස්තර")
+    paid_at: datetime | None = Field(None, description="ගෙවූ දිනය")
+    bank_slip: BankSlipDetailsResponse | None = Field(None, description="බැංකු රිසිට්පත් විස්තර")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -178,7 +205,7 @@ class AdminApprovalRequest(BaseModel):
     """Payload submitted by an Admin to approve a pending bank slip subscription."""
 
     duration_days: int = Field(30, ge=1, le=730, description="Duration in days to grant access for this payment")
-    admin_notes: Optional[str] = Field(None, max_length=500, description="Optional verification note by admin")
+    admin_notes: str | None = Field(None, max_length=500, description="Optional verification note by admin")
 
 
 class AdminRejectionRequest(BaseModel):
@@ -205,21 +232,21 @@ class RevenueCatEventPayload(BaseModel):
     id: str = Field(..., description="Unique event identifier from RevenueCat used for idempotency")
     type: str = Field(..., description="Event type: INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, etc.")
     app_user_id: str = Field(..., description="Application user ID matching our Firebase UID")
-    product_id: Optional[str] = None
-    period_type: Optional[str] = None
-    purchased_at_ms: Optional[int] = None
-    expiration_at_ms: Optional[int] = None
-    store: Optional[str] = "PLAY_STORE"
-    environment: Optional[str] = "PRODUCTION"
-    entitlement_ids: Optional[List[str]] = None
-    transaction_id: Optional[str] = None
-    original_transaction_id: Optional[str] = None
+    product_id: str | None = None
+    period_type: str | None = None
+    purchased_at_ms: int | None = None
+    expiration_at_ms: int | None = None
+    store: str | None = "PLAY_STORE"
+    environment: str | None = "PRODUCTION"
+    entitlement_ids: list[str] | None = None
+    transaction_id: str | None = None
+    original_transaction_id: str | None = None
 
 
 class RevenueCatWebhookPayload(BaseModel):
     """Outer wrapper for RevenueCat webhook posts."""
 
-    api_version: Optional[str] = "1.0"
+    api_version: str | None = "1.0"
     event: RevenueCatEventPayload
 
 
@@ -236,18 +263,18 @@ class UserSubscriptionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="සාමාජිකත්වයේ ID")
-    plan_id: str = Field(..., description="පැකේජ කේතය හෝ ID")
-    status: str = Field(..., description="තත්වය (ACTIVE, PENDING_APPROVAL, REJECTED, EXPIRED)")
-    provider: str = Field(..., description="නාලිකාව (BANK_TRANSFER, REVENUECAT, etc.)")
+    plan_id: SubscriptionPlanCode | str = Field(..., description="පැකේජ කේතය හෝ ID")
+    status: SubscriptionStatus | str = Field(..., description="තත්වය (ACTIVE, PENDING_APPROVAL, REJECTED, EXPIRED)")
+    provider: SubscriptionProvider | str = Field(..., description="නාලිකාව (BANK_TRANSFER, REVENUECAT, etc.)")
     starts_at: datetime = Field(..., description="ආරම්භක දිනය")
-    expires_at: Optional[datetime] = Field(None, description="අවසන් වන දිනය (Lifetime සඳහා None)")
-    amount_lkr: Optional[float] = Field(None, description="ගෙවූ මුදල (රුපියල් වලින්)")
-    amount_minor: Optional[int] = Field(None, description="ගෙවූ මුදල (ශත වලින්)")
-    slip_image_url: Optional[str] = Field(None, description="රිසිට්පතේ URL එක")
-    reference_note: Optional[str] = Field(None, description="තැන්පත්කරුගේ සටහන")
-    admin_notes: Optional[str] = Field(None, description="පරිපාලකගේ සටහන")
-    approved_at: Optional[datetime] = Field(None, description="අනුමත කළ දිනය")
-    payments: Optional[List[PaymentResponse]] = Field(default=None, description="අදාළ ගෙවීම් වාර්තා (Payments)")
+    expires_at: datetime | None = Field(None, description="අවසන් වන දිනය (Lifetime සඳහා None)")
+    amount_lkr: float | None = Field(None, description="ගෙවූ මුදල (රුපියල් වලින්)")
+    amount_minor: int | None = Field(None, description="ගෙවූ මුදල (ශත වලින්)")
+    slip_image_url: str | None = Field(None, description="රිසිට්පතේ URL එක")
+    reference_note: str | None = Field(None, description="තැන්පත්කරුගේ සටහන")
+    admin_notes: str | None = Field(None, description="පරිපාලකගේ සටහන")
+    approved_at: datetime | None = Field(None, description="අනුමත කළ දිනය")
+    payments: list[PaymentResponse] | None = Field(default=None, description="අදාළ ගෙවීම් වාර්තා (Payments)")
 
 
 class CurrentSubscriptionStatusResponse(BaseModel):
@@ -257,9 +284,9 @@ class CurrentSubscriptionStatusResponse(BaseModel):
     """
 
     is_premium: bool = Field(..., description="ශිෂ්‍යයාට මේ මොහොතේ Premium අයිතිය තිබේද යන්න")
-    plan_id: Optional[str] = Field(None, description="සක්‍රිය පැකේජ කේතය")
-    status: Optional[str] = Field(None, description="සාමාජිකත්ව තත්වය")
-    provider: Optional[str] = Field(None, description="ගෙවීම් නාලිකාව")
-    expires_at: Optional[datetime] = Field(None, description="කල් ඉකුත් වන දිනය")
-    days_remaining: Optional[int] = Field(None, description="ඉතිරිව ඇති දින ගණන")
-    active_subscription: Optional[UserSubscriptionResponse] = Field(None, description="සක්‍රිය සාමාජිකත්ව විස්තරය")
+    plan_id: SubscriptionPlanCode | str | None = Field(None, description="සක්‍රිය පැකේජ කේතය")
+    status: SubscriptionStatus | str | None = Field(None, description="සාමාජිකත්ව තත්වය")
+    provider: SubscriptionProvider | str | None = Field(None, description="ගෙවීම් නාලිකාව")
+    expires_at: datetime | None = Field(None, description="කල් ඉකුත් වන දිනය")
+    days_remaining: int | None = Field(None, description="ඉතිරිව ඇති දින ගණන")
+    active_subscription: UserSubscriptionResponse | None = Field(None, description="සක්‍රිය සාමාජිකත්ව විස්තරය")

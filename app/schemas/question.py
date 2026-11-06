@@ -1,16 +1,19 @@
 """
 Pydantic DTO schemas for Questions, Marking Schemes, Marking Steps, and Exam Papers.
-Enforces type-safe domain Enums for Type, Difficulty, Schedule, and Source,
-lightweight Summary responses for catalog listings, dynamic Multi-Question Daily Challenge Pack schemas,
-and on-demand Detail/Solution schemas with 3NF step rubrics.
+Enforces type-safe domain Enums for Type, Difficulty, Schedule, Source, and ContentType,
+uses clean class inheritance between QuestionSummaryResponse and QuestionDetailResponse,
+and guarantees strictly typed composite responses without untyped Dict[str, Any].
 Omits internal database timestamps (created_at, updated_at, deleted_at) for security and minimal bandwidth payload.
 """
 
 from datetime import date
-from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
+    ContentType,
+    ExamPaperPart,
+    ExamPaperType,
+    MarkingStepType,
     QuestionDifficulty,
     QuestionSchedule,
     QuestionSource,
@@ -25,12 +28,12 @@ class ExamPaperResponse(BaseModel):
 
     id: str = Field(..., description="ප්‍රශ්න පත්‍රයේ ID")
     subject_id: str = Field(..., description="විෂය ID")
-    type: str = Field("AL_GOVT", description="වර්ගය (AL_GOVT, MODEL, PROVINCIAL)")
+    type: ExamPaperType | str = Field(ExamPaperType.AL_GOVT, description="වර්ගය (AL_GOVT, MODEL, PROVINCIAL)")
     year: int = Field(..., description="විභාග වර්ෂය (e.g. 2023, 2024)")
-    part: str = Field("PART_I", description="කොටස (PART_I, PART_II_A, PART_II_B, FULL)")
+    part: ExamPaperPart | str = Field(ExamPaperPart.PART_I, description="කොටස (PART_I, PART_II_A, PART_II_B, FULL)")
     title_si: str = Field(..., description="සිංහල මාතෘකාව")
-    title_en: Optional[str] = Field(None, description="ඉංග්‍රීසි මාතෘකාව")
-    source_pdf_url: Optional[str] = Field(None, description="නිල ප්‍රශ්න පත්‍ර PDF URL")
+    title_en: str | None = Field(None, description="ඉංග්‍රීසි මාතෘකාව")
+    source_pdf_url: str | None = Field(None, description="නිල ප්‍රශ්න පත්‍ර PDF URL")
 
 
 class MarkingSchemeStepResponse(BaseModel):
@@ -40,10 +43,10 @@ class MarkingSchemeStepResponse(BaseModel):
 
     id: str = Field(..., description="පියවරේ ID")
     step_number: int = Field(1, description="පියවර අංකය")
-    step_type: str = Field("METHOD", description="ලකුණු වර්ගය (METHOD, ACCURACY, FINAL, BONUS)")
+    step_type: MarkingStepType | str = Field(MarkingStepType.METHOD, description="ලකුණු වර්ගය (METHOD, ACCURACY, FINAL, BONUS)")
     description_si: str = Field(..., description="පියවරේ ගණිතමය විසඳුම (Sinhala + LaTeX)")
     allocated_marks: int = Field(1, description="හිමිවන ලකුණු ගණන")
-    annotation: Optional[str] = Field(None, description="පරීක්ෂක සටහන් / විකල්ප ක්‍රම")
+    annotation: str | None = Field(None, description="පරීක්ෂක සටහන් / විකල්ප ක්‍රම")
     order_index: int = Field(1, description="ප්‍රදර්ශන අනුපිළිවෙල")
 
 
@@ -55,42 +58,45 @@ class MarkingSchemeResponse(BaseModel):
     id: str
     question_id: str
     title: str = "Official Marking Scheme"
-    description_si: Optional[str] = None
-    content_text: Optional[str] = ""
-    pdf_url: Optional[str] = None
-    content_type: str = "markdown"
+    description_si: str | None = None
+    content_text: str | None = ""
+    pdf_url: str | None = None
+    content_type: ContentType | str = ContentType.MARKDOWN
     total_marks: int = 25
     is_official: bool = True
     is_premium_only: bool = False
     order_index: int = 1
-    steps: List[MarkingSchemeStepResponse] = Field(default_factory=list, description="පියවරෙන් පියවර ලකුණු බෙදී යන ආකාරය")
+    steps: list[MarkingSchemeStepResponse] = Field(
+        default_factory=list,
+        description="පියවරෙන් පියවර ලකුණු බෙදී යන ආකාරය",
+    )
 
 
 class QuestionCreate(BaseModel):
     """Request schema for creating or updating a mathematical question and its marking scheme."""
 
-    id: Optional[str] = None
-    custom_id: Optional[str] = None
+    id: str | None = None
+    custom_id: str | None = None
     title: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = ""
+    description: str | None = ""
     subject_id: str = Field(..., min_length=1, max_length=100)
-    lesson_id: Optional[str] = None
-    exam_paper_id: Optional[str] = None
-    content_text: Optional[str] = ""
-    content_url: Optional[str] = None
-    solution_text: Optional[str] = ""
-    solution_pdf_url: Optional[str] = None
+    lesson_id: str | None = None
+    exam_paper_id: str | None = None
+    content_text: str | None = ""
+    content_url: str | None = None
+    solution_text: str | None = ""
+    solution_pdf_url: str | None = None
     solution_title: str = "Official Marking Scheme"
     question_type: QuestionType = QuestionType.SHORT
     difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
     schedule: QuestionSchedule = QuestionSchedule.REGULAR
     source: QuestionSource = QuestionSource.PAST_PAPER
-    source_details: Optional[str] = ""
+    source_details: str | None = ""
     allocated_marks: int = 25
     is_premium: bool = False
     is_published: bool = True
-    scheduled_date: Optional[str] = None
-    day_number: Optional[int] = None
+    scheduled_date: str | None = None
+    day_number: int | None = None
 
 
 class QuestionSummaryResponse(BaseModel):
@@ -103,60 +109,36 @@ class QuestionSummaryResponse(BaseModel):
 
     id: str
     title: str
-    description: Optional[str] = ""
+    description: str | None = ""
     subject_id: str
-    subject_code: Optional[str] = None
-    subject_name: Optional[str] = None
-    lesson_id: Optional[str] = None
-    lesson_title: Optional[str] = None
-    lesson_sinhala_title: Optional[str] = None
-    exam_paper_id: Optional[str] = None
-    content_type: str = "markdown"
+    subject_code: str | None = None
+    subject_name: str | None = None
+    lesson_id: str | None = None
+    lesson_title: str | None = None
+    lesson_sinhala_title: str | None = None
+    exam_paper_id: str | None = None
+    content_type: ContentType | str = ContentType.MARKDOWN
     type: QuestionType
     difficulty: QuestionDifficulty
     schedule: QuestionSchedule = QuestionSchedule.REGULAR
     source: QuestionSource
-    source_details: Optional[str] = ""
+    source_details: str | None = ""
     allocated_marks: int = 25
     is_premium: bool = False
     is_published: bool = True
-    scheduled_date: Optional[date] = None
-    day_number: Optional[int] = None
+    scheduled_date: date | None = None
+    day_number: int | None = None
     has_marking_scheme: bool = True
 
 
-class QuestionDetailResponse(BaseModel):
+class QuestionDetailResponse(QuestionSummaryResponse):
     """
-    Full detail representation of a single question, hydrated with inline LaTeX/Markdown
-    or a short-lived signed Cloud Storage URL.
+    Full detail representation of a single question, inheriting all summary fields
+    and hydrating inline LaTeX/Markdown or a short-lived signed Cloud Storage URL.
     """
 
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    title: str
-    description: Optional[str] = ""
-    subject_id: str
-    subject_code: Optional[str] = None
-    subject_name: Optional[str] = None
-    lesson_id: Optional[str] = None
-    lesson_title: Optional[str] = None
-    lesson_sinhala_title: Optional[str] = None
-    exam_paper_id: Optional[str] = None
-    content_text: Optional[str] = ""
-    content_url: Optional[str] = None
-    content_type: str = "markdown"
-    type: QuestionType
-    difficulty: QuestionDifficulty
-    schedule: QuestionSchedule = QuestionSchedule.REGULAR
-    source: QuestionSource
-    source_details: Optional[str] = ""
-    allocated_marks: int = 25
-    is_premium: bool = False
-    is_published: bool = True
-    scheduled_date: Optional[date] = None
-    day_number: Optional[int] = None
-    has_marking_scheme: bool = True
+    content_text: str | None = ""
+    content_url: str | None = None
 
 
 class DailyChallengePackResponse(BaseModel):
@@ -167,10 +149,10 @@ class DailyChallengePackResponse(BaseModel):
 
     day_number: int = 1
     challenge_title: str = "Daily Challenge Pack"
-    scheduled_date: Optional[date] = None
+    scheduled_date: date | None = None
     total_questions: int = 0
     total_marks: int = 0
-    questions: List[QuestionDetailResponse] = []
+    questions: list[QuestionDetailResponse] = Field(default_factory=list)
 
 
 class DailySeriesDaySummaryResponse(BaseModel):
@@ -180,7 +162,7 @@ class DailySeriesDaySummaryResponse(BaseModel):
     """
 
     day_number: int
-    scheduled_date: Optional[date] = None
+    scheduled_date: date | None = None
     title: str = ""
     total_questions: int = 0
     short_questions_count: int = 0
@@ -188,11 +170,13 @@ class DailySeriesDaySummaryResponse(BaseModel):
     total_marks: int = 0
     target_duration_seconds: int = 3600
     is_unlocked: bool = True
-    unlocks_at: Optional[str] = None
+    unlocks_at: str | None = None
 
 
 class QuestionWithSolutionResponse(BaseModel):
-    """Composite response returned upon creating or updating a question and its marking scheme."""
+    """Strictly typed composite response returned upon creating or updating a question and its marking scheme."""
 
-    question: Dict[str, Any]
-    marking_scheme: Optional[Dict[str, Any]] = None
+    model_config = ConfigDict(from_attributes=True)
+
+    question: QuestionDetailResponse
+    marking_scheme: MarkingSchemeResponse | None = None
