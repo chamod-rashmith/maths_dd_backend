@@ -25,7 +25,7 @@ from app.domain.enums import (
     StudyStream,
     UserRole,
 )
-from app.schemas.district import DistrictResponse
+from app.schemas.district import DistrictResponse, UserDistrictSummary
 from app.schemas.subscription import ActiveSubscriptionSummaryResponse
 
 
@@ -152,8 +152,8 @@ class UserProfileResponse(BaseModel):
     avatar_url: str | None = None
     school_name: str | None = None
 
-    # Unified Regional & Z-Score District (single source of truth with id, code, name_si, name_en)
-    district: DistrictResponse | None = None
+    # Unified Regional & Z-Score District (single lightweight source of truth with id, code, name_en)
+    district: UserDistrictSummary | None = None
 
     # Academic Syllabus & Target Exam
     exam_year: int | None = None

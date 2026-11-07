@@ -20,3 +20,18 @@ class DistrictResponse(BaseModel):
     name_ta: str
     province: Province | str
 
+
+class UserDistrictSummary(BaseModel):
+    """
+    Lightweight District representation for Student Profile responses (`/api/v1/users/me`).
+    Omits heavy/unused localized names (name_ta, name_si) and regional groupings (province)
+    to keep personal profile payloads minimal.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name_en: str
+
+
