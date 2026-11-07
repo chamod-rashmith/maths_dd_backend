@@ -242,9 +242,8 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
     def test_1_static_ast_zero_dynamic_sql_across_entire_codebase(self) -> None:
         """
         AST-level static verification across every .py file in `app/`:
-        - Zero `text()` calls anywhere inside `app/repositories/`.
-        - Every `text(...)` call in `app/models/` and `app/core/database.py` uses a compile-time constant string
-          (zero f-strings, zero `%` formatting, zero `.format()`, zero `+` concatenation).
+        - Zero `text()` calls anywhere outside `app/models/` (i.e. zero `text()` in repositories, core, services, api).
+        - Every `server_default=text(...)` inside `app/models/` uses a compile-time constant literal.
         - Zero usage of raw driver escape hatches (`exec_driver_sql`, `raw_connection`, `driver_connection`).
         """
         app_root = pathlib.Path(__file__).resolve().parent.parent / "app"
@@ -253,7 +252,7 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
         for py_file in sorted(app_root.rglob("*.py")):
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
-            is_repository = "repositories" in py_file.parts
+            is_model_file = "models" in py_file.parts
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
@@ -271,9 +270,9 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
                     )
 
                     if func_name == "text":
-                        self.assertFalse(
-                            is_repository,
-                            f"Raw SQLAlchemy text() is forbidden in repositories ({py_file}:{node.lineno})",
+                        self.assertTrue(
+                            is_model_file,
+                            f"Raw SQLAlchemy text() is strictly forbidden outside app/models/ ({py_file}:{node.lineno})",
                         )
                         self.assertEqual(
                             len(node.args),
