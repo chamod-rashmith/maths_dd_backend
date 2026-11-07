@@ -418,6 +418,8 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("subject", comp_items[0])
         self.assertNotIn("lesson_id", comp_items[0])
         self.assertNotIn("question_type", comp_items[0])
+        self.assertNotIn("target_duration_seconds", comp_items[0])
+        self.assertNotIn("recent_xp_transactions", prog_data)
 
         xp_res = self.client.get("/api/v1/progress/xp-history")
         self.assertEqual(xp_res.status_code, 200)

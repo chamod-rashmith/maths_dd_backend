@@ -113,7 +113,6 @@ class PostgresProgressRepository(ProgressRepository):
                     is_daily_question=a.is_daily_question,
                     time_spent_seconds=a.time_spent_seconds,
                     last_attempt_duration_seconds=getattr(a, "last_attempt_duration_seconds", a.time_spent_seconds),
-                    target_duration_seconds=a.target_duration_seconds,
                     was_overtime=a.was_overtime,
                     attempt_count=max(a.attempt_count, 1),
                     completed_at=a.completed_at,
@@ -182,17 +181,6 @@ class PostgresProgressRepository(ProgressRepository):
             res_stats_xp = await self.session.execute(stmt_stats_xp)
             user_xp = res_stats_xp.scalar_one_or_none() or 0
 
-        # 5. Fetch Recent 5 XP Transactions for Proof Audit
-        stmt_recent_xp = (
-            select(XpTransaction)
-            .where(XpTransaction.user_id == user_id)
-            .order_by(desc(XpTransaction.created_at))
-            .limit(5)
-        )
-        res_recent_xp = await self.session.execute(stmt_recent_xp)
-        recent_xp_rows = res_recent_xp.scalars().all()
-        recent_xp_dto = [XpTransactionResponse.model_validate(tx) for tx in recent_xp_rows]
-
         return UserProgressSummaryResponse(
             completed_questions=completed_questions,
             daily_activity=daily_activity,
@@ -204,7 +192,6 @@ class PostgresProgressRepository(ProgressRepository):
             longest_streak_days=longest_streak,
             last_active_date_key=last_active_key,
             xp=user_xp,
-            recent_xp_transactions=recent_xp_dto,
         )
 
     # =========================================================================

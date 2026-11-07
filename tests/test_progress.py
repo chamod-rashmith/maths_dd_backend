@@ -140,14 +140,6 @@ class TestProgressFeature(unittest.TestCase):
             longest_streak_days=1,
             last_active_date_key="2026-11-02",
             xp=35,
-            recent_xp_transactions=[
-                XpTransactionResponse(
-                    amount=25,
-                    reason="QUESTION_SOLVED",
-                    description_en="Solved Essay Question (+25 XP)",
-                    created_at=now,
-                )
-            ],
         )
         mock_service.get_progress_summary.return_value = mock_summary
 
@@ -165,8 +157,8 @@ class TestProgressFeature(unittest.TestCase):
             self.assertEqual(data["completed_questions"]["q_001"]["last_attempt_duration_seconds"], 90)
             self.assertEqual(data["total_time_spent_seconds"], 210)
             self.assertEqual(data["xp"], 35)
-            self.assertIn("recent_xp_transactions", data)
-            self.assertEqual(len(data["recent_xp_transactions"]), 1)
+            self.assertNotIn("recent_xp_transactions", data)
+            self.assertNotIn("target_duration_seconds", data["completed_questions"]["q_001"])
         finally:
             app.dependency_overrides.clear()
 

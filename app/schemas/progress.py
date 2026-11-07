@@ -31,7 +31,6 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     is_daily_question: bool = Field(False, description="දිනපතා අභ්‍යාසයක් ලෙස විසඳුවේද යන්න")
     time_spent_seconds: int = Field(0, description="සමස්ත වැය කළ කාලය (Cumulative Seconds across all attempts)")
     last_attempt_duration_seconds: int = Field(0, description="අවසන් වරට විසඳීමට වැය වූ කාලය (Most recent attempt duration)")
-    target_duration_seconds: int = Field(0, description="නිර්දේශිත කාලය")
     was_overtime: bool = Field(False, description="කාලය ඉක්මවා ගියේද යන්න")
     attempt_count: int = Field(1, description="විසඳූ වාර ගණන")
     completed_at: datetime = Field(..., description="විසඳූ නිශ්චිත වේලාව (UTC)")
@@ -96,9 +95,6 @@ class UserProgressSummaryResponse(BaseProgressSchema):
     longest_streak_days: int = Field(0, description="වැඩිම අඛණ්ඩ දින ගණන (Longest Streak)")
     last_active_date_key: str | None = Field(None, description="අවසන් වරට ක්‍රියාකාරී වූ දිනය (YYYY-MM-DD)")
     xp: int = Field(0, description="සමස්ත අත්දැකීම් ලකුණු (Verified XP from Ledger)")
-    recent_xp_transactions: list[XpTransactionResponse] | None = Field(
-        None, description="නවතම XP ගනුදෙනු සාක්ෂි (Recent XP Proofs)"
-    )
 
 
 class MarkQuestionCompletedRequest(BaseProgressSchema):
