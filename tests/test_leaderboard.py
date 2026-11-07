@@ -157,31 +157,39 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["total_students"], 5)
         self.assertEqual(len(data["items"]), 5)
 
-        # Verify deterministic ranking order: stu_cmb_1 (1), stu_kdy_1 (2), stu_cmb_2 (3), stu_gal_1 (4), stu_cmb_3 (5)
-        expected_uids = ["stu_cmb_1", "stu_kdy_1", "stu_cmb_2", "stu_gal_1", "stu_cmb_3"]
-        self.assertEqual([item["user_id"] for item in data["items"]], expected_uids)
+        # Verify deterministic ranking order by student name: Kasun Perera (1), Nimal Silva (2), Chamod Rashmith (3), Ruwan Bandara (4), Tharindu Fernando (5)
+        expected_names = ["Kasun Perera", "Nimal Silva", "Chamod Rashmith", "Ruwan Bandara", "Tharindu Fernando"]
+        self.assertEqual([item["name"] for item in data["items"]], expected_names)
         self.assertEqual([item["rank"] for item in data["items"]], [1, 2, 3, 4, 5])
 
         # Verify current user flag on rank #3
         self.assertFalse(data["items"][0]["is_current_user"])
         self.assertTrue(data["items"][2]["is_current_user"])
         self.assertEqual(data["items"][2]["school_name"], "Ananda College")
-        self.assertEqual(data["items"][2]["district_code"], "COLOMBO")
+        self.assertEqual(data["items"][2]["district_name_en"], "Colombo")
 
-        # Verify sensitive PII is never leaked
+        # Verify sensitive PII and private user identifiers are never leaked
         for item in data["items"]:
+            self.assertNotIn("user_id", item)
+            self.assertNotIn("uid", item)
             self.assertNotIn("email", item)
             self.assertNotIn("telephone_no", item)
+            self.assertNotIn("district_code", item)
+            self.assertNotIn("district_name_si", item)
 
         # Verify my_rank card: #3 Island-wide (out of 5), #2 in Colombo District (out of 3)
         my_rank = data["my_rank"]
-        self.assertEqual(my_rank["user_id"], "stu_cmb_2")
+        self.assertNotIn("user_id", my_rank)
+        self.assertNotIn("uid", my_rank)
+        self.assertNotIn("district_code", my_rank)
+        self.assertNotIn("district_name_si", my_rank)
         self.assertEqual(my_rank["xp"], 800)
+        self.assertEqual(my_rank["current_streak_days"], 7)
+        self.assertEqual(my_rank["total_solved_count"], 50)
         self.assertEqual(my_rank["island_rank"], 3)
         self.assertEqual(my_rank["total_island_students"], 5)
         self.assertEqual(my_rank["district_rank"], 2)
         self.assertEqual(my_rank["total_district_students"], 3)
-        self.assertEqual(my_rank["district_code"], "COLOMBO")
 
     def test_district_leaderboard_with_cmb_abbreviation_and_full_code(self) -> None:
         """Verifies ?district_id=CMB, ?district_id=COLOMBO, and ?district_id=1 filter Colombo district top students."""
@@ -200,10 +208,10 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(data["total_students"], 3)
             self.assertEqual(len(data["items"]), 3)
 
-            # Colombo ranks: 1. stu_cmb_1 (1200 XP), 2. stu_cmb_2 (800 XP), 3. stu_cmb_3 (450 XP)
+            # Colombo ranks: 1. Kasun Perera (1200 XP), 2. Chamod Rashmith (800 XP), 3. Tharindu Fernando (450 XP)
             self.assertEqual(
-                [item["user_id"] for item in data["items"]],
-                ["stu_cmb_1", "stu_cmb_2", "stu_cmb_3"],
+                [item["name"] for item in data["items"]],
+                ["Kasun Perera", "Chamod Rashmith", "Tharindu Fernando"],
             )
             self.assertEqual([item["rank"] for item in data["items"]], [1, 2, 3])
 
@@ -240,27 +248,27 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
 
-        expected_order = [
-            "stu_cmb_1",           # 1200 XP
-            "stu_kdy_1",           # 950 XP
-            "stu_cmb_2",           # 800 XP, 50 solved
-            "stu_tie_streak_high", # 800 XP, 40 solved, 12 streak
-            "stu_gal_1",           # 800 XP, 40 solved, 5 streak, uid 'stu_gal_1' < 'stu_tie_uid_a'
-            "stu_tie_uid_a",       # 800 XP, 40 solved, 5 streak, uid 'stu_tie_uid_a'
-            "stu_cmb_3",           # 450 XP
-            "stu_zero_xp",         # 0 XP (no UserStats row)
+        expected_order_names = [
+            "Kasun Perera",        # 1200 XP
+            "Nimal Silva",         # 950 XP
+            "Chamod Rashmith",     # 800 XP, 50 solved
+            "Streak High",         # 800 XP, 40 solved, 12 streak
+            "Ruwan Bandara",       # 800 XP, 40 solved, 5 streak, uid 'stu_gal_1' < 'stu_tie_uid_a'
+            "Tie UID A",           # 800 XP, 40 solved, 5 streak, uid 'stu_tie_uid_a'
+            "Tharindu Fernando",   # 450 XP
+            "New Student",         # 0 XP (no UserStats row)
         ]
-        self.assertEqual([item["user_id"] for item in data["items"]], expected_order)
+        self.assertEqual([item["name"] for item in data["items"]], expected_order_names)
         self.assertEqual([item["rank"] for item in data["items"]], [1, 2, 3, 4, 5, 6, 7, 8])
 
         # Verify legacy fallback fields on stu_zero_xp and deduplicated my_rank card
         my_rank = data["my_rank"]
-        self.assertEqual(my_rank["user_id"], "stu_zero_xp")
+        self.assertNotIn("user_id", my_rank)
         self.assertEqual(my_rank["xp"], 0)
         self.assertNotIn("district_id", my_rank)
+        self.assertNotIn("district_code", my_rank)
         self.assertNotIn("name", my_rank)
         self.assertNotIn("school_name", my_rank)
-        self.assertEqual(my_rank["district_code"], "COLOMBO")
         self.assertEqual(my_rank["island_rank"], 8)
         self.assertEqual(my_rank["total_island_students"], 8)
         self.assertEqual(my_rank["district_rank"], 4)
@@ -273,7 +281,7 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(len(data["items"]), 2)
-        self.assertEqual([item["user_id"] for item in data["items"]], ["stu_cmb_2", "stu_gal_1"])
+        self.assertEqual([item["name"] for item in data["items"]], ["Chamod Rashmith", "Ruwan Bandara"])
         self.assertEqual([item["rank"] for item in data["items"]], [3, 4])
 
         # Verify out-of-bounds limit is rejected by FastAPI query validation
@@ -286,7 +294,8 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
         res = client.get("/api/v1/leaderboard/me")
         self.assertEqual(res.status_code, 200)
         my_rank = res.json()
-        self.assertEqual(my_rank["user_id"], "stu_cmb_2")
+        self.assertNotIn("user_id", my_rank)
+        self.assertEqual(my_rank["xp"], 800)
         self.assertEqual(my_rank["island_rank"], 3)
         self.assertEqual(my_rank["total_island_students"], 5)
         self.assertEqual(my_rank["district_rank"], 2)

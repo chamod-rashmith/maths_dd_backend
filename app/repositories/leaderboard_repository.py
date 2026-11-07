@@ -280,8 +280,7 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                     effective_xp.label("xp"),
                     effective_streak.label("current_streak_days"),
                     effective_solved.label("total_solved_count"),
-                    District.code.label("district_code"),
-                    District.name_si.label("district_name_si"),
+                    District.name_en.label("district_name_en"),
                 )
                 .outerjoin(UserStats, UserStats.user_id == User.uid)
                 .outerjoin(StudentProfile, StudentProfile.user_id == User.uid)
@@ -304,12 +303,10 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                 items.append(
                     {
                         "rank": idx,
-                        "user_id": row.uid,
                         "name": row.name,
                         "avatar_url": row.avatar_url,
                         "school_name": row.school_name,
-                        "district_code": row.district_code,
-                        "district_name_si": row.district_name_si,
+                        "district_name_en": row.district_name_en,
                         "exam_year": row.exam_year,
                         "xp": int(row.xp or 0),
                         "current_streak_days": int(row.current_streak_days or 0),
