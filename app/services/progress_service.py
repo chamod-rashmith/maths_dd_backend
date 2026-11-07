@@ -69,7 +69,7 @@ class ProgressService:
         return {"question_id": question_id, "is_bookmarked": res}
 
     async def get_xp_history(
-        self, current_user: Dict[str, Any], limit: int = 50
+        self, current_user: Dict[str, Any], limit: int = 10
     ) -> XpHistoryResponse:
         """Retrieves immutable XP audit trail records verifying the student's earned score."""
         user_id = current_user.get("uid")

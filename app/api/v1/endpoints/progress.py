@@ -109,7 +109,7 @@ async def toggle_bookmark(
     ),
 )
 async def get_xp_history(
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of recent XP transactions to return"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of recent XP transactions to return (default 10)"),
     current_user: dict[str, Any] = Depends(get_current_user),
     service: ProgressService = Depends(get_progress_service),
 ) -> XpHistoryResponse:

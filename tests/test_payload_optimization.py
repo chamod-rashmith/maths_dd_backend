@@ -254,6 +254,7 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
                     reason="QUESTION_SOLVED",
                     question_id="q_trig_1",
                     description_si="q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්",
+                    description_en="Solved Short Question (+20 XP)",
                     created_at=now,
                 )
             )
@@ -421,8 +422,12 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         xp_res = self.client.get("/api/v1/progress/xp-history")
         self.assertEqual(xp_res.status_code, 200)
         tx = xp_res.json()["transactions"][0]
-        self.assertNotIn("description_en", tx)
-        self.assertEqual(tx["description_si"], "q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්")
+        self.assertNotIn("id", tx)
+        self.assertNotIn("question_id", tx)
+        self.assertNotIn("description_si", tx)
+        self.assertEqual(tx["description_en"], "Solved Short Question (+20 XP)")
+        self.assertEqual(tx["amount"], 20)
+        self.assertEqual(tx["reason"], "QUESTION_SOLVED")
 
     def test_leaderboard_excludes_redundant_district_fields(self) -> None:
         lb_res = self.client.get("/api/v1/leaderboard")

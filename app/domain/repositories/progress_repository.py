@@ -45,7 +45,7 @@ class ProgressRepository(ABC):
 
     @abstractmethod
     async def get_user_xp_history(
-        self, user_id: str, limit: int = 50
+        self, user_id: str, limit: int = 10
     ) -> List[Any]:
         """Retrieves immutable XP transaction audit records for a user ordered newest first."""
         raise NotImplementedError

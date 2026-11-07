@@ -532,7 +532,7 @@ class PostgresProgressRepository(ProgressRepository):
     # =========================================================================
 
     async def get_user_xp_history(
-        self, user_id: str, limit: int = 50
+        self, user_id: str, limit: int = 10
     ) -> List[XpTransaction]:
         """
         ශිෂ්‍යයා ලබාගත් සියලුම XP ගනුදෙනු ලැයිස්තුව කාලානුක්‍රමිකව (Newest First) ලබා ගැනීම.

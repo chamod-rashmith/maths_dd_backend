@@ -55,14 +55,13 @@ class DailyActivityBucketSchema(BaseProgressSchema):
 class XpTransactionResponse(BaseProgressSchema):
     """
     XP විගණන ගනුදෙනු විස්තරය (XP Audit Transaction Proof DTO).
-    ශිෂ්‍යයාට ලැබුණු හෝ අඩු වූ සෑම XP අගයකටම අදාළ සාක්ෂිය සහ පැහැදිලි කිරීම.
+    ශිෂ්‍යයාට ලැබුණු හෝ අඩු වූ සෑම XP අගයකටම අදාළ සාක්ෂිය සහ කෙටි විස්තරය.
+    Omits redundant internal IDs (`id`, `question_id`) and unused fields to keep the recent history payload minimal.
     """
 
-    id: str = Field(..., description="ගනුදෙනුවේ ID")
     amount: int = Field(..., description="ලැබුණු/අඩු වූ XP ප්‍රමාණය (+10, +25, +50, -10)")
     reason: str = Field(..., description="හේතු කේතය (QUESTION_SOLVED, DAILY_CHALLENGE_BONUS, etc.)")
-    question_id: str | None = Field(None, description="අදාළ ප්‍රශ්නයේ ID")
-    description_si: str | None = Field(None, description="සිංහල විස්තරය (e.g. 'කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)')")
+    description_en: str | None = Field(None, description="ඉංග්‍රීසි විස්තරය (e.g. 'Solved Short Question (+10 XP)')")
     created_at: datetime = Field(..., description="XP හිමි වූ දිනය සහ වේලාව")
 
 

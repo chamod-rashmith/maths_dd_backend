@@ -142,11 +142,9 @@ class TestProgressFeature(unittest.TestCase):
             xp=35,
             recent_xp_transactions=[
                 XpTransactionResponse(
-                    id="tx_01",
                     amount=25,
                     reason="QUESTION_SOLVED",
-                    question_id="q_001",
-                    description_si="රචනා ප්‍රශ්නයක් විසඳීම (+25 XP)",
+                    description_en="Solved Essay Question (+25 XP)",
                     created_at=now,
                 )
             ],
@@ -232,19 +230,15 @@ class TestProgressFeature(unittest.TestCase):
             total_xp=60,
             transactions=[
                 XpTransactionResponse(
-                    id="tx_101",
                     amount=50,
                     reason="DAILY_CHALLENGE_BONUS",
-                    question_id="q_002",
-                    description_si="දිනපතා අභ්‍යාස ප්‍රසාද ලකුණු (+50 XP)",
+                    description_en="Daily Challenge Bonus (+50 XP)",
                     created_at=now,
                 ),
                 XpTransactionResponse(
-                    id="tx_100",
                     amount=10,
                     reason="QUESTION_SOLVED",
-                    question_id="q_002",
-                    description_si="කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)",
+                    description_en="Solved Short Question (+10 XP)",
                     created_at=now - timedelta(minutes=5),
                 ),
             ],
