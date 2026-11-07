@@ -12,7 +12,6 @@ from app.models import (
     SyllabusLesson,
     Question,
     MarkingScheme,
-    MarkingSchemeStep,
     StudyNote,
     ExamPaper,
     District,
@@ -26,11 +25,10 @@ from app.schemas.curriculum import SubjectResponse, LessonResponse
 from app.schemas.question import (
     ExamPaperResponse,
     MarkingSchemeResponse,
-    MarkingSchemeStepResponse,
     QuestionDetailResponse,
 )
 from app.schemas.study_note import StudyNoteDetailResponse
-from app.schemas.user import UserProfileResponse
+from app.schemas.user import DistrictResponse, UserProfileResponse
 from app.schemas.subscription import UserSubscriptionResponse
 
 
@@ -131,7 +129,42 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.id, "q_100")
         self.assertEqual(dto.title, "Integrate x^2")
         self.assertEqual(dto.exam_paper_id, "paper_2023_01")
+        self.assertEqual(dto.content_type, "pdf")
         self.assertFalse(dto.is_premium)
+
+        # Verify image and markdown content_type resolution on Question
+        q_image = Question(
+            id="q_101",
+            title="Diagram Question",
+            subject_id="subj_pmat",
+            content_url="https://example.com/diagram.png",
+            type="SHORT",
+            difficulty="EASY",
+            schedule="REGULAR",
+            source="PAST_PAPER",
+            allocated_marks=25,
+            is_premium=False,
+        )
+        self.assertEqual(
+            QuestionDetailResponse.model_validate(q_image, from_attributes=True).content_type,
+            "image",
+        )
+        q_md = Question(
+            id="q_102",
+            title="Markdown Question",
+            subject_id="subj_pmat",
+            content_text=r"$$\sin^2 x + \cos^2 x = 1$$",
+            type="SHORT",
+            difficulty="EASY",
+            schedule="REGULAR",
+            source="PAST_PAPER",
+            allocated_marks=25,
+            is_premium=False,
+        )
+        self.assertEqual(
+            QuestionDetailResponse.model_validate(q_md, from_attributes=True).content_type,
+            "markdown",
+        )
 
     def test_exam_paper_model_and_dto(self) -> None:
         """Verify ExamPaper model and DTO serialization."""
@@ -156,13 +189,16 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.year, 2023)
         self.assertEqual(dto.title_si, "2023 අ.පො.ස. උසස් පෙළ සංයුක්ත ගණිතය I")
 
-    def test_marking_scheme_and_steps_model_serialization(self) -> None:
-        """Verify MarkingScheme and child MarkingSchemeStep rubrics serialization."""
-        scheme = MarkingScheme(
+    def test_marking_scheme_model_serialization_markdown_and_pdf(self) -> None:
+        """Verify MarkingScheme supports both Markdown+LaTeX and PDF without a steps table."""
+        from app.core.database import Base
+
+        self.assertNotIn("marking_scheme_steps", Base.metadata.tables)
+
+        scheme_pdf = MarkingScheme(
             id="scheme_01",
             question_id="q_100",
             title="Official Marking Scheme",
-            description_si="කලනය මූලික ලකුණු පටිපාටිය",
             total_marks=25,
             content_text=r"Use power rule $\int x^n dx = \frac{x^{n+1}}{n+1} + C$",
             pdf_url="https://example.com/ms.pdf",
@@ -170,41 +206,30 @@ class TestSqlAlchemyModels(unittest.TestCase):
             is_premium_only=False,
             order_index=1,
         )
-        step1 = MarkingSchemeStep(
-            id="step_01",
-            marking_scheme_id="scheme_01",
-            step_number=1,
-            step_type="METHOD",
-            description_si=r"$\int x^2 dx$ සඳහා ආදේශ කිරීම",
-            allocated_marks=2,
-            annotation="M1 - ක්‍රමයට ලකුණු",
+        self.assertEqual(scheme_pdf.id, "scheme_01")
+        self.assertIn("MarkingScheme", repr(scheme_pdf))
+
+        dto_pdf = MarkingSchemeResponse.model_validate(scheme_pdf, from_attributes=True)
+        self.assertEqual(dto_pdf.id, "scheme_01")
+        self.assertEqual(dto_pdf.total_marks, 25)
+        self.assertEqual(dto_pdf.content_type, "pdf")
+        self.assertEqual(dto_pdf.pdf_url, "https://example.com/ms.pdf")
+        self.assertNotIn("steps", dto_pdf.model_dump())
+
+        scheme_md = MarkingScheme(
+            id="scheme_02",
+            question_id="q_100",
+            title="Worked Solution",
+            total_marks=25,
+            content_text=r"$$\int x^2 dx = \frac{x^3}{3} + C$$",
+            pdf_url=None,
+            is_official=True,
+            is_premium_only=False,
             order_index=1,
         )
-        step2 = MarkingSchemeStep(
-            id="step_02",
-            marking_scheme_id="scheme_01",
-            step_number=2,
-            step_type="ACCURACY",
-            description_si=r"$\frac{x^3}{3} + C$ ලබා ගැනීම",
-            allocated_marks=3,
-            annotation="A1 - නිවැරදි අගය",
-            order_index=2,
-        )
-        scheme.steps = [step1, step2]
-
-        self.assertEqual(scheme.id, "scheme_01")
-        self.assertEqual(len(scheme.steps), 2)
-        self.assertEqual(scheme.steps[0].allocated_marks, 2)
-        self.assertEqual(scheme.steps[1].allocated_marks, 3)
-        self.assertIn("MarkingScheme", repr(scheme))
-        self.assertIn("MarkingSchemeStep", repr(step1))
-
-        dto = MarkingSchemeResponse.model_validate(scheme, from_attributes=True)
-        self.assertEqual(dto.id, "scheme_01")
-        self.assertEqual(dto.total_marks, 25)
-        self.assertEqual(len(dto.steps), 2)
-        self.assertEqual(dto.steps[0].step_type, "METHOD")
-        self.assertEqual(dto.steps[1].step_type, "ACCURACY")
+        dto_md = MarkingSchemeResponse.model_validate(scheme_md, from_attributes=True)
+        self.assertEqual(dto_md.content_type, "markdown")
+        self.assertIsNone(dto_md.pdf_url)
 
     def test_study_note_model_serialization(self) -> None:
         note = StudyNote(
@@ -301,14 +326,12 @@ class TestSqlAlchemyModels(unittest.TestCase):
             name=user.name,
             role=user.role,
             school_name=user.school_name,
-            district_id=user.district_id,
-            exam_district_id=user.exam_district_id,
+            district=DistrictResponse.model_validate(district, from_attributes=True),
             exam_year=user.exam_year,
             attempt_number=user.attempt_number,
             medium="SINHALA",
             stream=user.stream,
             grade=user.grade,
-            attempt=user.attempt,
             xp=stats.xp,
             streak_count=stats.current_streak_days,
             accuracy_rate=stats.accuracy_rate,
@@ -317,8 +340,11 @@ class TestSqlAlchemyModels(unittest.TestCase):
         )
         self.assertEqual(dto.uid, "usr_007")
         self.assertEqual(dto.email, "student@mathsdd.lk")
-        self.assertEqual(dto.district_id, 1)
-        self.assertEqual(dto.exam_district_id, 1)
+        self.assertIsNotNone(dto.district)
+        self.assertEqual(dto.district.id, 1)
+        self.assertEqual(dto.district.code, "COLOMBO")
+        self.assertNotIn("district_id", dto.model_dump())
+        self.assertNotIn("exam_district_id", dto.model_dump())
         self.assertEqual(dto.exam_year, 2026)
         self.assertEqual(dto.attempt_number, 1)
         self.assertEqual(dto.xp, 150)

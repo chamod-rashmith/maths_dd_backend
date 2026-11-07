@@ -54,7 +54,6 @@ def _serialize_user(user: User) -> Dict[str, Any]:
     profile = user.student_profile
     exam_year = profile.exam_year if profile else None
     attempt_number = profile.attempt_number if profile else None
-    exam_district_id = profile.exam_district_id if (profile and profile.exam_district_id is not None) else user.district_id
     medium = profile.medium if profile else "SINHALA"
 
     # Derive attempt_number fallback from legacy attempt string if needed
@@ -76,9 +75,7 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "role": user.role,
         "avatar_url": user.avatar_url,
         "school_name": profile.school_name if (profile and profile.school_name) else user.school_name,
-        "district_id": user.district_id,
         "district": user.district,
-        "exam_district_id": exam_district_id,
         "exam_year": exam_year,
         "attempt_number": attempt_number,
         "medium": medium,
@@ -152,10 +149,16 @@ class PostgresUserRepository(UserRepository):
         Idempotently synchronizes user identity, academic profile, and stats.
         """
         try:
-            # 1. Resolve district IDs
-            raw_district = district_id if district_id is not None else district
+            # 1. Resolve district IDs (accepts district_id, district, or exam_district_id and keeps them unified)
+            raw_district = (
+                district_id
+                if district_id is not None
+                else (district if district is not None else exam_district_id)
+            )
             resolved_district_id = await self._resolve_district(raw_district)
-            resolved_exam_district_id = await self._resolve_district(exam_district_id) or resolved_district_id
+            resolved_exam_district_id = (
+                await self._resolve_district(exam_district_id) or resolved_district_id
+            )
 
             # 2. Derive attempt_number <-> attempt
             resolved_attempt_number = attempt_number

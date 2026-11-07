@@ -55,6 +55,8 @@ def _question_select_stmt():
                         Question.content_url.ilike("%.jpg%"),
                         Question.content_url.ilike("%.jpeg%"),
                         Question.content_url.ilike("%.webp%"),
+                        Question.content_url.ilike("%.gif%"),
+                        Question.content_url.ilike("%.svg%"),
                     ),
                     "image",
                 ),

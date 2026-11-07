@@ -6,7 +6,7 @@ Exports all entity definitions for Base.metadata registration.
 from app.models.subject import Subject
 from app.models.lesson import SyllabusLesson
 from app.models.question import Question
-from app.models.marking_scheme import MarkingScheme, MarkingSchemeStep
+from app.models.marking_scheme import MarkingScheme
 from app.models.study_note import StudyNote, StudyNoteVote, StudyNoteBookmark
 from app.models.exam_paper import ExamPaper
 from app.models.district import District
@@ -31,7 +31,6 @@ __all__ = [
     "SyllabusLesson",
     "Question",
     "MarkingScheme",
-    "MarkingSchemeStep",
     "StudyNote",
     "StudyNoteVote",
     "StudyNoteBookmark",

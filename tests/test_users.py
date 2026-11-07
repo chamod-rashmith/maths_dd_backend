@@ -82,8 +82,10 @@ class TestUserFeature(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["uid"], "usr_student_001")
-        self.assertEqual(data["district_id"], 1)
-        self.assertEqual(data["exam_district_id"], 1)
+        self.assertNotIn("district_id", data)
+        self.assertNotIn("exam_district_id", data)
+        self.assertEqual(data["district"]["id"], 1)
+        self.assertEqual(data["district"]["code"], "COLOMBO")
         self.assertEqual(data["exam_year"], 2026)
         self.assertEqual(data["attempt_number"], 1)
         self.assertEqual(data["medium"], "SINHALA")
@@ -105,15 +107,19 @@ class TestUserFeature(unittest.TestCase):
             "role": "USER",
             "avatar_url": None,
             "school_name": "Ananda College",
-            "district_id": 1,
-            "district": None,
-            "exam_district_id": 1,
+            "district": {
+                "id": 1,
+                "code": "COLOMBO",
+                "name_en": "Colombo",
+                "name_si": "කොළඹ",
+                "name_ta": "கொழும்பு",
+                "province": "WESTERN",
+            },
             "exam_year": 2026,
             "attempt_number": 1,
             "medium": "SINHALA",
             "stream": "PHYSICAL_SCIENCE",
             "grade": "GRADE_12",
-            "attempt": "FIRST",
             "xp": 0,
             "streak_count": 0,
             "accuracy_rate": 0.0,
@@ -143,8 +149,10 @@ class TestUserFeature(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["school_name"], "Ananda College")
-        self.assertEqual(data["district_id"], 1)
-        self.assertEqual(data["exam_district_id"], 1)
+        self.assertNotIn("district_id", data)
+        self.assertNotIn("exam_district_id", data)
+        self.assertEqual(data["district"]["id"], 1)
+        self.assertEqual(data["district"]["code"], "COLOMBO")
         self.assertEqual(data["exam_year"], 2026)
         self.assertEqual(data["attempt_number"], 1)
         self.assertEqual(data["grade"], "GRADE_12")

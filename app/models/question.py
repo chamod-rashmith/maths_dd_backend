@@ -90,5 +90,15 @@ class Question(Base):
         Index("idx_questions_is_deleted", "is_deleted"),
     )
 
+    @property
+    def content_type(self) -> str:
+        """Resolves 'image', 'pdf', or 'markdown' based on content_url."""
+        if self.content_url and self.content_url.strip():
+            lower_url = self.content_url.lower()
+            if any(ext in lower_url for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg")):
+                return "image"
+            return "pdf"
+        return "markdown"
+
     def __repr__(self) -> str:
         return f"<Question(id='{self.id}', title='{self.title}', day_number={self.day_number}, subject_id='{self.subject_id}')>"

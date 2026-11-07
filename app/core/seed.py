@@ -31,7 +31,6 @@ from app.models import (
     SyllabusLesson,
     Question,
     MarkingScheme,
-    MarkingSchemeStep,
     StudyNote,
     ExamPaper,
     User,
@@ -1300,34 +1299,6 @@ async def seed_database(session: AsyncSession) -> None:
                     order_index=1,
                 )
             )
-        await session.flush()
-
-        # Seed Step-by-Step Marking Rubric Steps
-        steps_data = q.get("solution_steps", [])
-        for s_idx, st in enumerate(steps_data, start=1):
-            step_id = f"step_{q['id']}_{st['step_number']}"
-            existing_step = (
-                await session.execute(select(MarkingSchemeStep).where(MarkingSchemeStep.id == step_id))
-            ).scalar_one_or_none()
-
-            if existing_step:
-                existing_step.step_number = st["step_number"]
-                existing_step.step_type = st["step_type"]
-                existing_step.allocated_marks = st["marks"]
-                existing_step.description_si = st["description_si"]
-                existing_step.order_index = s_idx
-            else:
-                session.add(
-                    MarkingSchemeStep(
-                        id=step_id,
-                        marking_scheme_id=sol_uuid,
-                        step_number=st["step_number"],
-                        step_type=st["step_type"],
-                        allocated_marks=st["marks"],
-                        description_si=st["description_si"],
-                        order_index=s_idx,
-                    )
-                )
         await session.flush()
 
     # 8. Seed Daily Challenges & Junction Questions
