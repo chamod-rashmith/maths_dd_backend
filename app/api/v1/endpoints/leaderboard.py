@@ -42,10 +42,10 @@ async def get_leaderboard(
         description="Optional G.C.E. A/L target examination year filter (e.g. 2026)",
     ),
     limit: int = Query(
-        50,
+        10,
         ge=1,
         le=100,
-        description="Maximum number of top students to return (default 50)",
+        description="Maximum number of top students to return (default 10)",
     ),
     offset: int = Query(
         0,

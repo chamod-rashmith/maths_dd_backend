@@ -14,19 +14,17 @@ class LeaderboardEntryResponse(BaseModel):
     """
     Single ranked student row in the Island-wide or District Leaderboard.
     Data Minimization & Privacy:
-    - Never exposes sensitive contact fields (email, telephone_no).
-    - Omits redundant `district_id` and `district_name_en` on each of the 50 rows (keeping compact `district_code` and `district_name_si`).
+    - Never exposes sensitive contact fields (email, telephone_no) or private user identifiers (user_id / Firebase UID).
+    - Exposes student display name, school, district English name, A/L year, and telemetry metrics.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     rank: int = Field(..., ge=1, description="1-indexed rank in the requested leaderboard scope")
-    user_id: str = Field(..., description="Student's unique identifier (uid)")
     name: str = Field(..., description="Student's display name")
     avatar_url: str | None = Field(None, description="Student's profile picture URL")
     school_name: str | None = Field(None, description="School attended by the student")
-    district_code: str | None = Field(None, description="District code (e.g. 'COLOMBO', 'KANDY')")
-    district_name_si: str | None = Field(None, description="District Sinhala name")
+    district_name_en: str | None = Field(None, description="District English name (e.g. 'Colombo', 'Kandy')")
     exam_year: int | None = Field(None, description="Target G.C.E. A/L examination year")
     xp: int = Field(0, ge=0, description="Total verified XP score from UserStats")
     current_streak_days: int = Field(0, ge=0, description="Current continuous daily practice streak")
@@ -38,15 +36,12 @@ class MyRankSummaryResponse(BaseModel):
     """
     Authenticated student's personal live ranking across both the Island and their District.
     Displayed in the sticky 'My Current Rank' card on the Leaderboard screen.
-    Omits redundant profile fields (`name`, `avatar_url`, `school_name`, `exam_year`, `district_id`)
-    already cached from `/users/me`.
+    Omits redundant profile/user identifiers (`user_id`, `name`, `avatar_url`, `district`, etc.)
+    already loaded from `/users/me`.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
-    user_id: str = Field(..., description="Authenticated student's UID")
-    district_code: str | None = Field(None, description="Student's district code (e.g. 'COLOMBO')")
-    district_name_si: str | None = Field(None, description="Student's district Sinhala name")
     xp: int = Field(0, ge=0, description="Student's total XP")
     current_streak_days: int = Field(0, ge=0, description="Student's current streak days")
     total_solved_count: int = Field(0, ge=0, description="Student's total solved questions")
@@ -86,7 +81,7 @@ class LeaderboardResponse(BaseModel):
         description="Optional A/L exam year filter applied to the leaderboard",
     )
     total_students: int = Field(0, ge=0, description="Total students in the current leaderboard scope")
-    limit: int = Field(50, ge=1, le=100, description="Maximum number of top entries returned")
+    limit: int = Field(10, ge=1, le=100, description="Maximum number of top entries returned")
     items: list[LeaderboardEntryResponse] = Field(
         default_factory=list,
         description="Ranked list of top students ordered by XP descending",

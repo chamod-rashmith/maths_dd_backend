@@ -254,6 +254,7 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
                     reason="QUESTION_SOLVED",
                     question_id="q_trig_1",
                     description_si="q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්",
+                    description_en="Solved Short Question (+20 XP)",
                     created_at=now,
                 )
             )
@@ -417,24 +418,36 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("subject", comp_items[0])
         self.assertNotIn("lesson_id", comp_items[0])
         self.assertNotIn("question_type", comp_items[0])
+        self.assertNotIn("target_duration_seconds", comp_items[0])
+        self.assertNotIn("recent_xp_transactions", prog_data)
 
         xp_res = self.client.get("/api/v1/progress/xp-history")
         self.assertEqual(xp_res.status_code, 200)
         tx = xp_res.json()["transactions"][0]
-        self.assertNotIn("description_en", tx)
-        self.assertEqual(tx["description_si"], "q_trig_1 ප්‍රශ්නය විසඳීම වෙනුවෙන්")
+        self.assertNotIn("id", tx)
+        self.assertNotIn("question_id", tx)
+        self.assertNotIn("description_si", tx)
+        self.assertEqual(tx["description_en"], "Solved Short Question (+20 XP)")
+        self.assertEqual(tx["amount"], 20)
+        self.assertEqual(tx["reason"], "QUESTION_SOLVED")
 
     def test_leaderboard_excludes_redundant_district_fields(self) -> None:
         lb_res = self.client.get("/api/v1/leaderboard")
         self.assertEqual(lb_res.status_code, 200)
         lb_data = lb_res.json()
         entry = lb_data["items"][0]
+        self.assertNotIn("user_id", entry)
+        self.assertNotIn("uid", entry)
         self.assertNotIn("district_id", entry)
-        self.assertNotIn("district_name_en", entry)
-        self.assertEqual(entry["district_code"], "COLOMBO")
-        self.assertEqual(entry["district_name_si"], "කොළඹ")
+        self.assertNotIn("district_code", entry)
+        self.assertNotIn("district_name_si", entry)
+        self.assertEqual(entry["district_name_en"], "Colombo")
         my_rank = lb_data["my_rank"]
+        self.assertNotIn("user_id", my_rank)
+        self.assertNotIn("uid", my_rank)
         self.assertNotIn("district_name_en", my_rank)
+        self.assertNotIn("district_name_si", my_rank)
+        self.assertNotIn("district_code", my_rank)
         self.assertNotIn("district_id", my_rank)
         self.assertNotIn("name", my_rank)
         self.assertNotIn("avatar_url", my_rank)

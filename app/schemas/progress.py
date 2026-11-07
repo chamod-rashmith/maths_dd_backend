@@ -31,7 +31,6 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     is_daily_question: bool = Field(False, description="දිනපතා අභ්‍යාසයක් ලෙස විසඳුවේද යන්න")
     time_spent_seconds: int = Field(0, description="සමස්ත වැය කළ කාලය (Cumulative Seconds across all attempts)")
     last_attempt_duration_seconds: int = Field(0, description="අවසන් වරට විසඳීමට වැය වූ කාලය (Most recent attempt duration)")
-    target_duration_seconds: int = Field(0, description="නිර්දේශිත කාලය")
     was_overtime: bool = Field(False, description="කාලය ඉක්මවා ගියේද යන්න")
     attempt_count: int = Field(1, description="විසඳූ වාර ගණන")
     completed_at: datetime = Field(..., description="විසඳූ නිශ්චිත වේලාව (UTC)")
@@ -55,14 +54,13 @@ class DailyActivityBucketSchema(BaseProgressSchema):
 class XpTransactionResponse(BaseProgressSchema):
     """
     XP විගණන ගනුදෙනු විස්තරය (XP Audit Transaction Proof DTO).
-    ශිෂ්‍යයාට ලැබුණු හෝ අඩු වූ සෑම XP අගයකටම අදාළ සාක්ෂිය සහ පැහැදිලි කිරීම.
+    ශිෂ්‍යයාට ලැබුණු හෝ අඩු වූ සෑම XP අගයකටම අදාළ සාක්ෂිය සහ කෙටි විස්තරය.
+    Omits redundant internal IDs (`id`, `question_id`) and unused fields to keep the recent history payload minimal.
     """
 
-    id: str = Field(..., description="ගනුදෙනුවේ ID")
     amount: int = Field(..., description="ලැබුණු/අඩු වූ XP ප්‍රමාණය (+10, +25, +50, -10)")
     reason: str = Field(..., description="හේතු කේතය (QUESTION_SOLVED, DAILY_CHALLENGE_BONUS, etc.)")
-    question_id: str | None = Field(None, description="අදාළ ප්‍රශ්නයේ ID")
-    description_si: str | None = Field(None, description="සිංහල විස්තරය (e.g. 'කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)')")
+    description_en: str | None = Field(None, description="ඉංග්‍රීසි විස්තරය (e.g. 'Solved Short Question (+10 XP)')")
     created_at: datetime = Field(..., description="XP හිමි වූ දිනය සහ වේලාව")
 
 
@@ -97,9 +95,6 @@ class UserProgressSummaryResponse(BaseProgressSchema):
     longest_streak_days: int = Field(0, description="වැඩිම අඛණ්ඩ දින ගණන (Longest Streak)")
     last_active_date_key: str | None = Field(None, description="අවසන් වරට ක්‍රියාකාරී වූ දිනය (YYYY-MM-DD)")
     xp: int = Field(0, description="සමස්ත අත්දැකීම් ලකුණු (Verified XP from Ledger)")
-    recent_xp_transactions: list[XpTransactionResponse] | None = Field(
-        None, description="නවතම XP ගනුදෙනු සාක්ෂි (Recent XP Proofs)"
-    )
 
 
 class MarkQuestionCompletedRequest(BaseProgressSchema):

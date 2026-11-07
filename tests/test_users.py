@@ -62,7 +62,6 @@ class TestUserFeature(unittest.TestCase):
             "attempt": "FIRST",
             "xp": 150,
             "streak_count": 5,
-            "accuracy_rate": 88.5,
             "questions_solved": 24,
             "is_premium": True,
             "active_subscription": {
@@ -84,8 +83,13 @@ class TestUserFeature(unittest.TestCase):
         self.assertEqual(data["uid"], "usr_student_001")
         self.assertNotIn("district_id", data)
         self.assertNotIn("exam_district_id", data)
+        self.assertNotIn("accuracy_rate", data)
         self.assertEqual(data["district"]["id"], 1)
         self.assertEqual(data["district"]["code"], "COLOMBO")
+        self.assertEqual(data["district"]["name_en"], "Colombo")
+        self.assertNotIn("name_si", data["district"])
+        self.assertNotIn("name_ta", data["district"])
+        self.assertNotIn("province", data["district"])
         self.assertEqual(data["exam_year"], 2026)
         self.assertEqual(data["attempt_number"], 1)
         self.assertEqual(data["medium"], "SINHALA")
@@ -122,7 +126,6 @@ class TestUserFeature(unittest.TestCase):
             "grade": "GRADE_12",
             "xp": 0,
             "streak_count": 0,
-            "accuracy_rate": 0.0,
             "questions_solved": 0,
             "is_premium": False,
             "active_subscription": None,

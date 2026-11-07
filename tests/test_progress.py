@@ -140,16 +140,6 @@ class TestProgressFeature(unittest.TestCase):
             longest_streak_days=1,
             last_active_date_key="2026-11-02",
             xp=35,
-            recent_xp_transactions=[
-                XpTransactionResponse(
-                    id="tx_01",
-                    amount=25,
-                    reason="QUESTION_SOLVED",
-                    question_id="q_001",
-                    description_si="රචනා ප්‍රශ්නයක් විසඳීම (+25 XP)",
-                    created_at=now,
-                )
-            ],
         )
         mock_service.get_progress_summary.return_value = mock_summary
 
@@ -167,8 +157,8 @@ class TestProgressFeature(unittest.TestCase):
             self.assertEqual(data["completed_questions"]["q_001"]["last_attempt_duration_seconds"], 90)
             self.assertEqual(data["total_time_spent_seconds"], 210)
             self.assertEqual(data["xp"], 35)
-            self.assertIn("recent_xp_transactions", data)
-            self.assertEqual(len(data["recent_xp_transactions"]), 1)
+            self.assertNotIn("recent_xp_transactions", data)
+            self.assertNotIn("target_duration_seconds", data["completed_questions"]["q_001"])
         finally:
             app.dependency_overrides.clear()
 
@@ -232,19 +222,15 @@ class TestProgressFeature(unittest.TestCase):
             total_xp=60,
             transactions=[
                 XpTransactionResponse(
-                    id="tx_101",
                     amount=50,
                     reason="DAILY_CHALLENGE_BONUS",
-                    question_id="q_002",
-                    description_si="දිනපතා අභ්‍යාස ප්‍රසාද ලකුණු (+50 XP)",
+                    description_en="Daily Challenge Bonus (+50 XP)",
                     created_at=now,
                 ),
                 XpTransactionResponse(
-                    id="tx_100",
                     amount=10,
                     reason="QUESTION_SOLVED",
-                    question_id="q_002",
-                    description_si="කෙටි ප්‍රශ්නයක් විසඳීම (+10 XP)",
+                    description_en="Solved Short Question (+10 XP)",
                     created_at=now - timedelta(minutes=5),
                 ),
             ],

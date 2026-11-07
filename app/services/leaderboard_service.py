@@ -19,7 +19,7 @@ class LeaderboardService:
         current_user: dict[str, Any],
         district_id: int | str | None = None,
         exam_year: int | None = None,
-        limit: int = 50,
+        limit: int = 10,
         offset: int = 0,
     ) -> LeaderboardResponse:
         """Returns validated `LeaderboardResponse` with top students and `my_rank`."""

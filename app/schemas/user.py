@@ -25,7 +25,7 @@ from app.domain.enums import (
     StudyStream,
     UserRole,
 )
-from app.schemas.district import DistrictResponse
+from app.schemas.district import DistrictResponse, UserDistrictSummary
 from app.schemas.subscription import ActiveSubscriptionSummaryResponse
 
 
@@ -152,8 +152,8 @@ class UserProfileResponse(BaseModel):
     avatar_url: str | None = None
     school_name: str | None = None
 
-    # Unified Regional & Z-Score District (single source of truth with id, code, name_si, name_en)
-    district: DistrictResponse | None = None
+    # Unified Regional & Z-Score District (single lightweight source of truth with id, code, name_en)
+    district: UserDistrictSummary | None = None
 
     # Academic Syllabus & Target Exam
     exam_year: int | None = None
@@ -168,7 +168,6 @@ class UserProfileResponse(BaseModel):
         default=0,
         validation_alias=AliasChoices("current_streak_days", "streak_count"),
     )
-    accuracy_rate: float = 0.0
     total_solved_count: int = Field(
         default=0,
         validation_alias=AliasChoices("total_solved_count", "questions_solved"),

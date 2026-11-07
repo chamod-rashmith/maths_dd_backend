@@ -28,7 +28,7 @@ from app.schemas.question import (
     QuestionDetailResponse,
 )
 from app.schemas.study_note import StudyNoteDetailResponse
-from app.schemas.user import DistrictResponse, UserProfileResponse
+from app.schemas.user import DistrictResponse, UserDistrictSummary, UserProfileResponse
 from app.schemas.subscription import UserSubscriptionResponse
 
 
@@ -279,7 +279,6 @@ class TestSqlAlchemyModels(unittest.TestCase):
             longest_streak_days=10,
             total_solved_count=20,
             total_study_time_seconds=600,
-            accuracy_rate=95.0,
         )
         user.stats = stats
 
@@ -320,7 +319,7 @@ class TestSqlAlchemyModels(unittest.TestCase):
             name=user.name,
             role=user.role,
             school_name=user.school_name,
-            district=DistrictResponse.model_validate(district, from_attributes=True),
+            district=UserDistrictSummary.model_validate(district, from_attributes=True),
             exam_year=user.exam_year,
             attempt_number=user.attempt_number,
             medium="SINHALA",
@@ -328,7 +327,6 @@ class TestSqlAlchemyModels(unittest.TestCase):
             grade=user.grade,
             xp=stats.xp,
             streak_count=stats.current_streak_days,
-            accuracy_rate=stats.accuracy_rate,
             questions_solved=stats.total_solved_count,
             is_premium=user.is_premium,
         )
@@ -337,6 +335,11 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertIsNotNone(dto.district)
         self.assertEqual(dto.district.id, 1)
         self.assertEqual(dto.district.code, "COLOMBO")
+        self.assertEqual(dto.district.name_en, "Colombo")
+        district_dump = dto.district.model_dump()
+        self.assertNotIn("name_si", district_dump)
+        self.assertNotIn("name_ta", district_dump)
+        self.assertNotIn("province", district_dump)
         self.assertNotIn("district_id", dto.model_dump())
         self.assertNotIn("exam_district_id", dto.model_dump())
         self.assertEqual(dto.exam_year, 2026)
