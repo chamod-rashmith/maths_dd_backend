@@ -127,12 +127,18 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                 stmt = stmt.where(StudyNote.lesson_id == lesson_id.strip())
 
             if search and search.strip():
-                pattern = f"%{search.strip()}%"
+                escaped_search = (
+                    search.strip()
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                )
+                pattern = f"%{escaped_search}%"
                 stmt = stmt.where(
                     or_(
-                        StudyNote.title.ilike(pattern),
-                        StudyNote.description.ilike(pattern),
-                        StudyNote.author.ilike(pattern),
+                        StudyNote.title.ilike(pattern, escape="\\"),
+                        StudyNote.description.ilike(pattern, escape="\\"),
+                        StudyNote.author.ilike(pattern, escape="\\"),
                     )
                 )
 

@@ -89,16 +89,14 @@ async def _repair_schema_anomalies(conn) -> None:
             logger.info("Repairing legacy 'users.id' column -> renaming to 'users.uid'...")
             await conn.execute(text("ALTER TABLE users RENAME COLUMN id TO uid;"))
 
-        # Ensure backward-compatible profile columns exist on users
-        for col_name, col_def in [
-            ("school_name", "VARCHAR(255)"),
-            ("stream", "VARCHAR(50)"),
-            ("grade", "VARCHAR(50)"),
-            ("attempt", "VARCHAR(50)"),
-        ]:
-            await conn.execute(
-                text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_def};")
-            )
+        # Ensure backward-compatible profile columns exist on users (100% static DDL, zero f-string text())
+        for ddl_stmt in (
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS school_name VARCHAR(255);"),
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS stream VARCHAR(50);"),
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS grade VARCHAR(50);"),
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS attempt VARCHAR(50);"),
+        ):
+            await conn.execute(ddl_stmt)
 
         # Check student_profiles primary key anomaly
         res_sp = await conn.execute(
