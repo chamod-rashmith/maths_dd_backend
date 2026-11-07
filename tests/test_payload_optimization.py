@@ -17,7 +17,7 @@ from app.core.security import get_current_user
 from app.main import app
 from app.models.district import District
 from app.models.lesson import SyllabusLesson
-from app.models.marking_scheme import MarkingScheme, MarkingSchemeStep
+from app.models.marking_scheme import MarkingScheme
 from app.models.progress import UserDailyActivity, UserQuestionAttempt, XpTransaction
 from app.models.question import Question
 from app.models.student_profile import StudentProfile
@@ -205,19 +205,10 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
                     id=ms_uuid,
                     question_id="q_trig_1",
                     title="Official Marking Scheme",
+                    content_text="$$\\sin(A+B) = \\sin A \\cos B + \\cos A \\sin B$$",
+                    pdf_url="https://cdn.mathsdd.lk/solutions/q_trig_1_solution.pdf",
                     total_marks=25,
                     order_index=1,
-                )
-            )
-            session.add(
-                MarkingSchemeStep(
-                    id="mss_trig_1",
-                    marking_scheme_id=ms_uuid,
-                    step_number=1,
-                    order_index=1,
-                    step_type="METHOD",
-                    description_si="සූත්‍රය ආදේශ කරන්න",
-                    allocated_marks=10,
                 )
             )
             session.add(
@@ -303,8 +294,12 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         res = self.client.get("/api/v1/users/me")
         self.assertEqual(res.status_code, 200)
         profile = res.json()
+        self.assertNotIn("district_id", profile)
+        self.assertNotIn("exam_district_id", profile)
         self.assertNotIn("exam_district", profile)
         self.assertNotIn("attempt", profile)
+        self.assertEqual(profile["district"]["id"], 1)
+        self.assertEqual(profile["district"]["code"], "COLOMBO")
         self.assertNotIn("display_order", profile["district"])
         # Active subscription on /users/me uses lightweight ActiveSubscriptionSummaryResponse
         active_sub = profile["active_subscription"]
@@ -364,20 +359,10 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ms_res.status_code, 200)
         ms_data = ms_res.json()
         self.assertNotIn("order_index", ms_data)
-
-        from app.schemas.question import MarkingSchemeStepResponse
-
-        step_dump = MarkingSchemeStepResponse.model_validate(
-            {
-                "id": "mss_trig_1",
-                "step_number": 1,
-                "step_type": "METHOD",
-                "description_si": "සූත්‍රය ආදේශ කරන්න",
-                "allocated_marks": 10,
-                "order_index": 1,
-            }
-        ).model_dump()
-        self.assertNotIn("order_index", step_dump)
+        self.assertNotIn("steps", ms_data)
+        self.assertNotIn("description_si", ms_data)
+        self.assertEqual(ms_data["content_type"], "pdf")
+        self.assertIn("q_trig_1_solution.pdf", ms_data["pdf_url"])
 
         notes_res = self.client.get("/api/v1/study-notes")
         self.assertEqual(notes_res.status_code, 200)

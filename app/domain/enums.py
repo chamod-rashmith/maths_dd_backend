@@ -72,15 +72,6 @@ class ExamPaperPart(str, Enum):
     FULL = "FULL"
 
 
-class MarkingStepType(str, Enum):
-    """Rubric allocation category for marking scheme steps."""
-
-    METHOD = "METHOD"
-    ACCURACY = "ACCURACY"
-    FINAL = "FINAL"
-    BONUS = "BONUS"
-
-
 class ConfidenceLevel(str, Enum):
     """Student self-reported confidence level when completing a question."""
 

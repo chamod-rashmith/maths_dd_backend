@@ -151,10 +151,8 @@ class UserProfileResponse(BaseModel):
     avatar_url: str | None = None
     school_name: str | None = None
 
-    # Regional & Z-Score data
-    district_id: int | None = None
+    # Unified Regional & Z-Score District (single source of truth with id, code, name_si, name_en)
     district: DistrictResponse | None = None
-    exam_district_id: int | None = None
 
     # Academic Syllabus & Target Exam
     exam_year: int | None = None

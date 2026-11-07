@@ -13,7 +13,6 @@ from app.domain.enums import (
     ContentType,
     ExamPaperPart,
     ExamPaperType,
-    MarkingStepType,
     QuestionDifficulty,
     QuestionSchedule,
     QuestionSource,
@@ -36,38 +35,20 @@ class ExamPaperResponse(BaseModel):
     source_pdf_url: str | None = Field(None, description="නිල ප්‍රශ්න පත්‍ර PDF URL")
 
 
-class MarkingSchemeStepResponse(BaseModel):
-    """ලකුණු දීමේ පටිපාටියේ තනි පියවරක් (Step-by-Step Marking Rubric DTO). Omits internal order_index."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str = Field(..., description="පියවරේ ID")
-    step_number: int = Field(1, description="පියවර අංකය")
-    step_type: MarkingStepType | str = Field(MarkingStepType.METHOD, description="ලකුණු වර්ගය (METHOD, ACCURACY, FINAL, BONUS)")
-    description_si: str = Field(..., description="පියවරේ ගණිතමය විසඳුම (Sinhala + LaTeX)")
-    allocated_marks: int = Field(1, description="හිමිවන ලකුණු ගණන")
-    annotation: str | None = Field(None, description="පරීක්ෂක සටහන් / විකල්ප ක්‍රම")
-
-
 class MarkingSchemeResponse(BaseModel):
-    """Detailed representation of a question's official marking scheme / worked solution with 3NF step rubrics."""
+    """Detailed representation of a question's official marking scheme / worked solution (supports Markdown + LaTeX or PDF)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     question_id: str
     title: str = "Official Marking Scheme"
-    description_si: str | None = None
     content_text: str | None = ""
     pdf_url: str | None = None
     content_type: ContentType | str = ContentType.MARKDOWN
     total_marks: int = 25
     is_official: bool = True
     is_premium_only: bool = False
-    steps: list[MarkingSchemeStepResponse] = Field(
-        default_factory=list,
-        description="පියවරෙන් පියවර ලකුණු බෙදී යන ආකාරය",
-    )
 
 
 class QuestionCreate(BaseModel):

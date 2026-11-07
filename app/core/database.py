@@ -4,7 +4,7 @@ Database connection, engine configuration, and pool lifecycle using SQLAlchemy 2
 
 import logging
 from typing import AsyncGenerator, List
-from sqlalchemy import text
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -71,87 +71,13 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 get_db = get_db_session  # Backward-compatible alias for dependency injection
 
 
-async def _repair_schema_anomalies(conn) -> None:
-    """
-    Auto-repairs legacy schema naming anomalies (e.g. users.id -> users.uid)
-    to ensure seamless compatibility with existing databases without requiring table drops.
-    """
-    try:
-        # Check if users table exists and whether primary key is 'id' instead of 'uid'
-        res = await conn.execute(
-            text(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'users' AND column_name IN ('id', 'uid')"
-            )
-        )
-        cols = {row[0] for row in res.fetchall()}
-        if "id" in cols and "uid" not in cols:
-            logger.info("Repairing legacy 'users.id' column -> renaming to 'users.uid'...")
-            await conn.execute(text("ALTER TABLE users RENAME COLUMN id TO uid;"))
-
-        # Ensure backward-compatible profile columns exist on users
-        for col_name, col_def in [
-            ("school_name", "VARCHAR(255)"),
-            ("stream", "VARCHAR(50)"),
-            ("grade", "VARCHAR(50)"),
-            ("attempt", "VARCHAR(50)"),
-        ]:
-            await conn.execute(
-                text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_def};")
-            )
-
-        # Check student_profiles primary key anomaly
-        res_sp = await conn.execute(
-            text(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'student_profiles' AND column_name = 'id'"
-            )
-        )
-        if res_sp.fetchall():
-            logger.info("Repairing student_profiles table schema...")
-            await conn.execute(text("ALTER TABLE student_profiles DROP COLUMN IF EXISTS id CASCADE;"))
-            await conn.execute(text("ALTER TABLE student_profiles ADD PRIMARY KEY (user_id);"))
-
-        # Ensure daily_challenges has subject_id column
-        await conn.execute(
-            text("ALTER TABLE daily_challenges ADD COLUMN IF NOT EXISTS subject_id VARCHAR(100);")
-        )
-
-        # Ensure daily_challenge_questions and marking_scheme_steps allow varchar(100) IDs
-        await conn.execute(
-            text("ALTER TABLE daily_challenge_questions ALTER COLUMN id TYPE VARCHAR(100);")
-        )
-        await conn.execute(
-            text("ALTER TABLE marking_scheme_steps ALTER COLUMN id TYPE VARCHAR(100);")
-        )
-
-        # Ensure xp_transactions has reason and attempt columns
-        await conn.execute(
-            text("ALTER TABLE xp_transactions ADD COLUMN IF NOT EXISTS reason VARCHAR(64) DEFAULT 'QUESTION_SOLVED';")
-        )
-        await conn.execute(
-            text("ALTER TABLE xp_transactions ADD COLUMN IF NOT EXISTS attempt_id VARCHAR(255);")
-        )
-        await conn.execute(
-            text("ALTER TABLE xp_transactions ADD COLUMN IF NOT EXISTS question_id VARCHAR(100);")
-        )
-        await conn.execute(
-            text("ALTER TABLE xp_transactions ADD COLUMN IF NOT EXISTS description_en VARCHAR(255);")
-        )
-    except Exception as repair_exc:
-        logger.debug("Schema anomaly auto-repair skipped or not applicable (e.g. SQLite): %s", repair_exc)
-
-
 async def init_db() -> None:
     """
-    Initializes database tables and default seeds on application startup.
-    Idempotent and safe across multiple instances and local/cloud environments.
+    Initializes database tables and default seeds on application startup
+    using 100% SQLAlchemy 2.0 metadata & ORM APIs (zero raw SQL strings).
     """
     try:
         async with engine.begin() as conn:
-            # Auto-repair any schema discrepancies on existing databases
-            await _repair_schema_anomalies(conn)
-
             # Import models so they are registered with Base.metadata
             from app import models  # noqa: F401
             await conn.run_sync(Base.metadata.create_all)
@@ -174,10 +100,10 @@ async def init_db_pool() -> None:
 
 
 async def check_db_health() -> bool:
-    """Executes a fast ping against the database for health checks."""
+    """Executes a fast ping against the database using SQLAlchemy `select(1)`."""
     try:
         async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+            await conn.execute(select(1))
         return True
     except Exception as e:
         logger.warning("Database health check failed: %s", e)
@@ -185,18 +111,12 @@ async def check_db_health() -> bool:
 
 
 async def list_public_tables(session: AsyncSession) -> List[str]:
-    """Returns all table names in the public schema for readiness verification."""
-    result = await session.execute(
-        text(
-            """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public'
-            ORDER BY table_name ASC;
-            """
-        )
+    """Returns all table names using SQLAlchemy's native `inspect()` API (zero raw SQL)."""
+    conn = await session.connection()
+    table_names = await conn.run_sync(
+        lambda sync_conn: inspect(sync_conn).get_table_names()
     )
-    return [str(row[0]) for row in result.fetchall()]
+    return sorted(str(t) for t in table_names)
 
 
 async def close_db_pool() -> None:
