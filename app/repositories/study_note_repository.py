@@ -70,9 +70,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.downvote_count,
                     user_vote_col,
                     is_bookmarked_col,
-                    Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
-                    SyllabusLesson.title.label("lesson_title"),
                     SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)
@@ -193,9 +191,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.downvote_count,
                     user_vote_col,
                     is_bookmarked_col,
-                    Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
-                    SyllabusLesson.title.label("lesson_title"),
                     SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)
@@ -313,7 +309,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                         existing_vote.updated_at = datetime.now(timezone.utc)
                     else:
                         new_vote = StudyNoteVote(
-                            id=f"{user_id}_{note_id}",
+                            id=str(uuid.uuid4()),
                             user_id=user_id,
                             note_id=note_id,
                             vote_type=target_vote,
@@ -368,7 +364,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
             # Strict 3NF normalization: insert row when True, delete row when False
             if target_state and existing_bookmark is None:
                 bookmark = StudyNoteBookmark(
-                    id=f"{user_id}_{note_id}",
+                    id=str(uuid.uuid4()),
                     user_id=user_id,
                     note_id=note_id,
                 )

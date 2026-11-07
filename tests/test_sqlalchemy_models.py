@@ -345,8 +345,8 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.exam_year, 2026)
         self.assertEqual(dto.attempt_number, 1)
         self.assertEqual(dto.xp, 150)
-        self.assertEqual(dto.streak_count, 5)
-        self.assertEqual(dto.questions_solved, 20)
+        self.assertEqual(dto.current_streak_days, 5)
+        self.assertEqual(dto.total_solved_count, 20)
         self.assertFalse(dto.is_premium)
 
     def test_user_subscription_lifecycle_and_entitlements(self) -> None:
@@ -409,6 +409,76 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(evt.event_id, "evt_01HABCXYZ")
         self.assertIn("ProcessedWebhookEvent", repr(evt))
 
+    def test_all_seed_ids_and_model_defaults_are_valid_uuids(self) -> None:
+        """Verify all seeded entity IDs, foreign keys, and ORM default primary keys are RFC-4122 UUIDs."""
+        import uuid
+        from app.core.seed import (
+            DAILY_CHALLENGES_SEED,
+            EXAM_PAPERS_SEED,
+            LESSONS_SEED,
+            QUESTIONS_SEED,
+            STUDY_NOTES_SEED,
+            SUBJECTS_SEED,
+            SUBSCRIPTION_PLANS_SEED,
+        )
+        from app.models.progress import UserDailyActivity, UserQuestionAttempt
+        from app.models.study_note import StudyNoteBookmark, StudyNoteVote
+
+        def _assert_valid_uuid(val: str, label: str) -> None:
+            parsed = uuid.UUID(str(val))
+            self.assertEqual(str(parsed), str(val), f"{label} is not a canonical UUID: {val}")
+
+        for s in SUBJECTS_SEED:
+            _assert_valid_uuid(s["id"], "Subject.id")
+
+        for l in LESSONS_SEED:
+            _assert_valid_uuid(l["id"], "SyllabusLesson.id")
+            _assert_valid_uuid(l["subject_id"], "SyllabusLesson.subject_id")
+            if l.get("parent_lesson_id"):
+                _assert_valid_uuid(l["parent_lesson_id"], "SyllabusLesson.parent_lesson_id")
+
+        for ep in EXAM_PAPERS_SEED:
+            _assert_valid_uuid(ep["id"], "ExamPaper.id")
+            _assert_valid_uuid(ep["subject_id"], "ExamPaper.subject_id")
+
+        for sp in SUBSCRIPTION_PLANS_SEED:
+            _assert_valid_uuid(sp["id"], "SubscriptionPlan.id")
+
+        for n in STUDY_NOTES_SEED:
+            _assert_valid_uuid(n["id"], "StudyNote.id")
+            _assert_valid_uuid(n["subject_id"], "StudyNote.subject_id")
+            if n.get("lesson_id"):
+                _assert_valid_uuid(n["lesson_id"], "StudyNote.lesson_id")
+
+        for q in QUESTIONS_SEED:
+            _assert_valid_uuid(q["id"], "Question.id")
+            _assert_valid_uuid(q["subject_id"], "Question.subject_id")
+            if q.get("lesson_id"):
+                _assert_valid_uuid(q["lesson_id"], "Question.lesson_id")
+            if q.get("exam_paper_id"):
+                _assert_valid_uuid(q["exam_paper_id"], "Question.exam_paper_id")
+
+        for dc in DAILY_CHALLENGES_SEED:
+            _assert_valid_uuid(dc["id"], "DailyChallenge.id")
+            for qid in dc["question_ids"]:
+                _assert_valid_uuid(qid, "DailyChallenge.question_id")
+
+        # Verify ORM column default callables generate valid UUIDv4 strings
+        for model_cls in (
+            Subject,
+            SyllabusLesson,
+            Question,
+            StudyNote,
+            StudyNoteVote,
+            StudyNoteBookmark,
+            UserQuestionAttempt,
+            UserDailyActivity,
+        ):
+            default_fn = model_cls.__table__.c.id.default.arg
+            generated = default_fn(None)
+            _assert_valid_uuid(generated, f"{model_cls.__name__}.id default")
+
 
 if __name__ == "__main__":
     unittest.main()
+

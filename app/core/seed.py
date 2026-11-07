@@ -887,11 +887,61 @@ DAILY_CHALLENGES_SEED = [
     },
 ]
 
+_SEED_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+
+def _seed_uuid(key: str) -> str:
+    """Generates a deterministic RFC-4122 UUIDv5 string from a seed key."""
+    try:
+        return str(uuid.UUID(str(key)))
+    except ValueError:
+        return str(uuid.uuid5(_SEED_NS, f"mathsdd:{key}"))
+
+
+def _normalize_seed_uuids() -> None:
+    """Converts all seed dictionary IDs and foreign-key references into RFC-4122 UUIDs."""
+    for s in SUBJECTS_SEED:
+        s["id"] = _seed_uuid(s["id"])
+
+    for l in LESSONS_SEED:
+        l["id"] = _seed_uuid(l["id"])
+        l["subject_id"] = _seed_uuid(l["subject_id"])
+        if l.get("parent_lesson_id"):
+            l["parent_lesson_id"] = _seed_uuid(l["parent_lesson_id"])
+
+    for ep in EXAM_PAPERS_SEED:
+        ep["id"] = _seed_uuid(ep["id"])
+        ep["subject_id"] = _seed_uuid(ep["subject_id"])
+
+    for sp in SUBSCRIPTION_PLANS_SEED:
+        sp["id"] = _seed_uuid(sp["id"])
+
+    for n in STUDY_NOTES_SEED:
+        n["id"] = _seed_uuid(n["id"])
+        n["subject_id"] = _seed_uuid(n["subject_id"])
+        if n.get("lesson_id"):
+            n["lesson_id"] = _seed_uuid(n["lesson_id"])
+
+    for q in QUESTIONS_SEED:
+        q["id"] = _seed_uuid(q["id"])
+        q["subject_id"] = _seed_uuid(q["subject_id"])
+        if q.get("lesson_id"):
+            q["lesson_id"] = _seed_uuid(q["lesson_id"])
+        if q.get("exam_paper_id"):
+            q["exam_paper_id"] = _seed_uuid(q["exam_paper_id"])
+
+    for dc in DAILY_CHALLENGES_SEED:
+        dc["id"] = _seed_uuid(dc["id"])
+        dc["question_ids"] = [_seed_uuid(qid) for qid in dc["question_ids"]]
+
+
+_normalize_seed_uuids()
+
 
 async def seed_database(session: AsyncSession) -> None:
     """
     Seeds initial reference data if tables are empty or updates existing seeds idempotently.
-    Uses modern SQLAlchemy ORM models across all domains.
+    Uses modern SQLAlchemy ORM models across all domains with RFC-4122 UUID primary keys.
     """
     # 0. Seed Sri Lankan Administrative Districts (1-25)
     for d in DISTRICTS_SEED:
@@ -974,136 +1024,9 @@ async def seed_database(session: AsyncSession) -> None:
         )
     await session.flush()
 
-    # Seed Lifetime UserSubscription for Admin if not present
-    admin_sub = (
-        await session.execute(
-            select(UserSubscription).where(
-                UserSubscription.user_id == admin_uid,
-                UserSubscription.status == "ACTIVE",
-            )
-        )
-    ).scalar_one_or_none()
-    if not admin_sub:
-        session.add(
-            UserSubscription(
-                user_id=admin_uid,
-                plan_id="plan_monthly_pro",
-                status="ACTIVE",
-                provider="MANUAL_ADMIN",
-                admin_notes="Default seeded Master Admin entitlement",
-                starts_at=datetime.datetime.now(ZoneInfo("UTC")),
-                expires_at=None,
-                is_auto_renew=False,
-            )
-        )
-    await session.flush()
-
-    # 2. Seed Subjects
-    subject_id_map: Dict[str, str] = {}
-    for s in SUBJECTS_SEED:
-        existing_subj = (
-            await session.execute(
-                select(Subject).where(
-                    (Subject.id == s["id"]) | (func.upper(Subject.code) == s["code"].upper())
-                )
-            )
-        ).scalar_one_or_none()
-
-        if existing_subj:
-            existing_subj.name = s["name"]
-            existing_subj.sinhala_name = s["sinhala_name"]
-            existing_subj.code = s["code"]
-            existing_subj.order_index = s["order_index"]
-            existing_subj.description = s["description"]
-            subject_id_map[s["id"]] = existing_subj.id
-        else:
-            session.add(
-                Subject(
-                    id=s["id"],
-                    name=s["name"],
-                    sinhala_name=s["sinhala_name"],
-                    code=s["code"],
-                    order_index=s["order_index"],
-                    description=s["description"],
-                )
-            )
-            subject_id_map[s["id"]] = s["id"]
-    await session.flush()
-
-    # 3. Seed Lessons & Hierarchical Sub-lessons
-    # Pass 1: Insert root units (parent_lesson_id is None)
-    # Pass 2: Insert sub-lessons (parent_lesson_id references root unit)
-    lesson_id_map: Dict[str, str] = {}
-    for l in LESSONS_SEED:
-        lesson_id_map[l["id"]] = l["id"]
-
-    for pass_root_only in (True, False):
-        for l in LESSONS_SEED:
-            is_root = l.get("parent_lesson_id") is None
-            if pass_root_only != is_root:
-                continue
-
-            resolved_subj_id = subject_id_map.get(l["subject_id"], l["subject_id"])
-            parent_id = l.get("parent_lesson_id")
-
-            existing_lesson = (
-                await session.execute(select(SyllabusLesson).where(SyllabusLesson.id == l["id"]))
-            ).scalar_one_or_none()
-
-            if existing_lesson:
-                existing_lesson.subject_id = resolved_subj_id
-                existing_lesson.parent_lesson_id = parent_id
-                existing_lesson.title = l["title"]
-                existing_lesson.sinhala_title = l["sinhala_title"]
-                existing_lesson.order_index = l["order_index"]
-                existing_lesson.description = l["description"]
-            else:
-                session.add(
-                    SyllabusLesson(
-                        id=l["id"],
-                        subject_id=resolved_subj_id,
-                        parent_lesson_id=parent_id,
-                        title=l["title"],
-                        sinhala_title=l["sinhala_title"],
-                        order_index=l["order_index"],
-                        description=l["description"],
-                    )
-                )
-        await session.flush()
-
-    # 4. Seed Exam Papers
-    for ep in EXAM_PAPERS_SEED:
-        resolved_subj_id = subject_id_map.get(ep["subject_id"], ep["subject_id"])
-        existing_paper = (
-            await session.execute(select(ExamPaper).where(ExamPaper.id == ep["id"]))
-        ).scalar_one_or_none()
-
-        if existing_paper:
-            existing_paper.subject_id = resolved_subj_id
-            existing_paper.type = ep["type"]
-            existing_paper.year = ep["year"]
-            existing_paper.part = ep["part"]
-            existing_paper.title_si = ep["title_si"]
-            existing_paper.title_en = ep.get("title_en")
-            existing_paper.source_pdf_url = ep.get("source_pdf_url")
-        else:
-            session.add(
-                ExamPaper(
-                    id=ep["id"],
-                    subject_id=resolved_subj_id,
-                    type=ep["type"],
-                    year=ep["year"],
-                    part=ep["part"],
-                    title_si=ep["title_si"],
-                    title_en=ep.get("title_en"),
-                    source_pdf_url=ep.get("source_pdf_url"),
-                    is_published=True,
-                )
-            )
-    await session.flush()
-
-    # 5. Seed Subscription Plans & Plan Prices (Domain 7)
+    # 2. Seed Subscription Plans & Plan Prices (Domain 7)
     now_utc = datetime.datetime.now(ZoneInfo("UTC"))
+    plan_id_map: Dict[str, str] = {}
     for sp in SUBSCRIPTION_PLANS_SEED:
         existing_plan = (
             await session.execute(
@@ -1141,6 +1064,7 @@ async def seed_database(session: AsyncSession) -> None:
             )
             session.add(new_plan)
             plan_id = sp["id"]
+        plan_id_map[sp["id"]] = plan_id
         await session.flush()
 
         # Seed or update PlanPrice in minor units (cents)
@@ -1156,7 +1080,7 @@ async def seed_database(session: AsyncSession) -> None:
         else:
             session.add(
                 PlanPrice(
-                    id=f"price_{sp['code'].lower()}",
+                    id=_seed_uuid(f"price_{sp['code'].lower()}"),
                     plan_id=plan_id,
                     currency="LKR",
                     amount_minor=sp["amount_minor"],
@@ -1164,6 +1088,153 @@ async def seed_database(session: AsyncSession) -> None:
                     is_active=True,
                 )
             )
+    await session.flush()
+
+    # Seed Lifetime UserSubscription for Admin if not present
+    admin_sub = (
+        await session.execute(
+            select(UserSubscription).where(
+                UserSubscription.user_id == admin_uid,
+                UserSubscription.status == "ACTIVE",
+            )
+        )
+    ).scalar_one_or_none()
+    if not admin_sub:
+        default_pro_plan_id = plan_id_map.get(
+            _seed_uuid("plan_monthly_pro"),
+            _seed_uuid("plan_monthly_pro"),
+        )
+        session.add(
+            UserSubscription(
+                id=_seed_uuid(f"sub_admin_{admin_uid}"),
+                user_id=admin_uid,
+                plan_id=default_pro_plan_id,
+                status="ACTIVE",
+                provider="MANUAL_ADMIN",
+                admin_notes="Default seeded Master Admin entitlement",
+                starts_at=now_utc,
+                expires_at=None,
+                is_auto_renew=False,
+            )
+        )
+    await session.flush()
+
+    # 3. Seed Subjects
+    subject_id_map: Dict[str, str] = {}
+    for s in SUBJECTS_SEED:
+        existing_subj = (
+            await session.execute(
+                select(Subject).where(
+                    (Subject.id == s["id"]) | (func.upper(Subject.code) == s["code"].upper())
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing_subj:
+            existing_subj.name = s["name"]
+            existing_subj.sinhala_name = s["sinhala_name"]
+            existing_subj.code = s["code"]
+            existing_subj.order_index = s["order_index"]
+            existing_subj.description = s["description"]
+            subject_id_map[s["id"]] = existing_subj.id
+        else:
+            session.add(
+                Subject(
+                    id=s["id"],
+                    name=s["name"],
+                    sinhala_name=s["sinhala_name"],
+                    code=s["code"],
+                    order_index=s["order_index"],
+                    description=s["description"],
+                )
+            )
+            subject_id_map[s["id"]] = s["id"]
+    await session.flush()
+
+    # 4. Seed Lessons & Hierarchical Sub-lessons
+    # Pass 1: Insert root units (parent_lesson_id is None)
+    # Pass 2: Insert sub-lessons (parent_lesson_id references root unit)
+    lesson_id_map: Dict[str, str] = {}
+    for l in LESSONS_SEED:
+        lesson_id_map[l["id"]] = l["id"]
+
+    for pass_root_only in (True, False):
+        for l in LESSONS_SEED:
+            is_root = l.get("parent_lesson_id") is None
+            if pass_root_only != is_root:
+                continue
+
+            resolved_subj_id = subject_id_map.get(l["subject_id"], l["subject_id"])
+            raw_parent_id = l.get("parent_lesson_id")
+            parent_id = lesson_id_map.get(raw_parent_id, raw_parent_id) if raw_parent_id else None
+
+            existing_lesson = (
+                await session.execute(
+                    select(SyllabusLesson).where(
+                        (SyllabusLesson.id == l["id"])
+                        | (
+                            (SyllabusLesson.subject_id == resolved_subj_id)
+                            & (SyllabusLesson.title == l["title"])
+                        )
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if existing_lesson:
+                existing_lesson.subject_id = resolved_subj_id
+                existing_lesson.parent_lesson_id = parent_id
+                existing_lesson.title = l["title"]
+                existing_lesson.sinhala_title = l["sinhala_title"]
+                existing_lesson.order_index = l["order_index"]
+                existing_lesson.description = l["description"]
+                lesson_id_map[l["id"]] = existing_lesson.id
+            else:
+                session.add(
+                    SyllabusLesson(
+                        id=l["id"],
+                        subject_id=resolved_subj_id,
+                        parent_lesson_id=parent_id,
+                        title=l["title"],
+                        sinhala_title=l["sinhala_title"],
+                        order_index=l["order_index"],
+                        description=l["description"],
+                    )
+                )
+                lesson_id_map[l["id"]] = l["id"]
+        await session.flush()
+
+    # 5. Seed Exam Papers
+    paper_id_map: Dict[str, str] = {}
+    for ep in EXAM_PAPERS_SEED:
+        resolved_subj_id = subject_id_map.get(ep["subject_id"], ep["subject_id"])
+        existing_paper = (
+            await session.execute(select(ExamPaper).where(ExamPaper.id == ep["id"]))
+        ).scalar_one_or_none()
+
+        if existing_paper:
+            existing_paper.subject_id = resolved_subj_id
+            existing_paper.type = ep["type"]
+            existing_paper.year = ep["year"]
+            existing_paper.part = ep["part"]
+            existing_paper.title_si = ep["title_si"]
+            existing_paper.title_en = ep.get("title_en")
+            existing_paper.source_pdf_url = ep.get("source_pdf_url")
+            paper_id_map[ep["id"]] = existing_paper.id
+        else:
+            session.add(
+                ExamPaper(
+                    id=ep["id"],
+                    subject_id=resolved_subj_id,
+                    type=ep["type"],
+                    year=ep["year"],
+                    part=ep["part"],
+                    title_si=ep["title_si"],
+                    title_en=ep.get("title_en"),
+                    source_pdf_url=ep.get("source_pdf_url"),
+                    is_published=True,
+                )
+            )
+            paper_id_map[ep["id"]] = ep["id"]
     await session.flush()
 
     # 6. Seed Study Notes
@@ -1206,9 +1277,8 @@ async def seed_database(session: AsyncSession) -> None:
             )
     await session.flush()
 
-    # 7. Seed Questions & Marking Schemes with Steps
-    today_colombo = datetime.datetime.now(ZoneInfo("Asia/Colombo")).date()
-
+    # 7. Seed Questions & Marking Schemes
+    question_id_map: Dict[str, str] = {}
     for q in QUESTIONS_SEED:
         resolved_subj_id = subject_id_map.get(q["subject_id"], q["subject_id"])
         resolved_lesson_id = (
@@ -1216,6 +1286,9 @@ async def seed_database(session: AsyncSession) -> None:
             if q.get("lesson_id")
             else None
         )
+        raw_paper_id = q.get("exam_paper_id")
+        resolved_paper_id = paper_id_map.get(raw_paper_id, raw_paper_id) if raw_paper_id else None
+
         if q.get("day_number"):
             sched_date = _compute_challenge_date(q["day_number"])
         elif q.get("scheduled_date"):
@@ -1232,7 +1305,7 @@ async def seed_database(session: AsyncSession) -> None:
             existing_q.description = q.get("description", "")
             existing_q.subject_id = resolved_subj_id
             existing_q.lesson_id = resolved_lesson_id
-            existing_q.exam_paper_id = q.get("exam_paper_id")
+            existing_q.exam_paper_id = resolved_paper_id
             existing_q.content_text = q.get("content_text", "")
             existing_q.type = q["type"]
             existing_q.difficulty = q["difficulty"]
@@ -1244,6 +1317,7 @@ async def seed_database(session: AsyncSession) -> None:
             if sched_date:
                 existing_q.scheduled_date = sched_date
             existing_q.day_number = q.get("day_number", 1)
+            q_id_final = existing_q.id
         else:
             session.add(
                 Question(
@@ -1252,7 +1326,7 @@ async def seed_database(session: AsyncSession) -> None:
                     description=q.get("description", ""),
                     subject_id=resolved_subj_id,
                     lesson_id=resolved_lesson_id,
-                    exam_paper_id=q.get("exam_paper_id"),
+                    exam_paper_id=resolved_paper_id,
                     content_text=q.get("content_text", ""),
                     type=q["type"],
                     difficulty=q["difficulty"],
@@ -1265,6 +1339,8 @@ async def seed_database(session: AsyncSession) -> None:
                     day_number=q.get("day_number", 1),
                 )
             )
+            q_id_final = q["id"]
+        question_id_map[q["id"]] = q_id_final
         await session.flush()
 
         sol_uuid = uuid.UUID(q["solution_id"])
@@ -1273,6 +1349,7 @@ async def seed_database(session: AsyncSession) -> None:
         ).scalar_one_or_none()
 
         if existing_ms:
+            existing_ms.question_id = q_id_final
             existing_ms.content_text = q["solution_text"]
             existing_ms.total_marks = q["allocated_marks"]
             existing_ms.is_premium_only = q["is_premium"]
@@ -1280,7 +1357,7 @@ async def seed_database(session: AsyncSession) -> None:
             session.add(
                 MarkingScheme(
                     id=sol_uuid,
-                    question_id=q["id"],
+                    question_id=q_id_final,
                     title="Official Marking Scheme",
                     content_text=q["solution_text"],
                     total_marks=q["allocated_marks"],
@@ -1325,8 +1402,9 @@ async def seed_database(session: AsyncSession) -> None:
         await session.flush()
 
         # Link questions to daily challenge junction table
-        for q_order, q_id in enumerate(dc["question_ids"], start=1):
-            junction_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"dcq_{challenge_id}_{q_id}"))
+        for q_order, raw_q_id in enumerate(dc["question_ids"], start=1):
+            q_id = question_id_map.get(raw_q_id, raw_q_id)
+            junction_id = str(uuid.uuid5(_SEED_NS, f"dcq_{challenge_id}_{q_id}"))
             existing_junction = (
                 await session.execute(
                     select(DailyChallengeQuestion).where(
@@ -1337,7 +1415,7 @@ async def seed_database(session: AsyncSession) -> None:
             ).scalar_one_or_none()
 
             # Look up question marks and section
-            q_info = next((item for item in QUESTIONS_SEED if item["id"] == q_id), None)
+            q_info = next((item for item in QUESTIONS_SEED if item["id"] == raw_q_id), None)
             section = q_info["type"] if q_info else "SHORT"
             marks = q_info["allocated_marks"] if q_info else 25
 

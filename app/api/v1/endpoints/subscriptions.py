@@ -181,10 +181,7 @@ async def get_subscription_status(
     if user_role == "ADMIN":
         return CurrentSubscriptionStatusResponse(
             is_premium=True,
-            plan_id="ADMIN_OVERRIDE",
             status="ACTIVE",
-            provider="MANUAL_ADMIN",
-            expires_at=None,
             days_remaining=9999,
             active_subscription=None,
         )
@@ -195,10 +192,7 @@ async def get_subscription_status(
     if not active_sub:
         return CurrentSubscriptionStatusResponse(
             is_premium=False,
-            plan_id=None,
             status="NONE",
-            provider=None,
-            expires_at=None,
             days_remaining=0,
             active_subscription=None,
         )
@@ -211,10 +205,7 @@ async def get_subscription_status(
 
     return CurrentSubscriptionStatusResponse(
         is_premium=True,
-        plan_id=active_sub.plan_id,
         status=active_sub.status,
-        provider=active_sub.provider,
-        expires_at=active_sub.expires_at,
         days_remaining=days_remaining,
         active_subscription=ActiveSubscriptionSummaryResponse.model_validate(active_sub),
     )

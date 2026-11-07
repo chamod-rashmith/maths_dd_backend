@@ -67,7 +67,7 @@ class LessonCreate(BaseModel):
 class LessonResponse(BaseModel):
     """
     Clean lightweight response schema for a syllabus lesson.
-    පාඩම් විස්තර සහ ඒ යටතේ ඇති ප්‍රශ්න ප්‍රමාණයන් පෙන්වන response schema එක (omits internal order_index).
+    පාඩම් විස්තර සහ ඒ යටතේ ඇති ප්‍රශ්න ප්‍රමාණයන් පෙන්වන response schema එක (omits internal order_index and parent subject_code/subject_name).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -78,8 +78,6 @@ class LessonResponse(BaseModel):
         None,
         description="Parent lesson ID if this is a sub-lesson; None if top-level unit.",
     )
-    subject_code: str | None = None
-    subject_name: str | None = None
     title: str
     sinhala_title: str | None = None
     description: str | None = None

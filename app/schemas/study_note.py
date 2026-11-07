@@ -79,9 +79,7 @@ class StudyNoteSummaryResponse(BaseModel):
     is_premium: bool = False
     is_locked: bool = False
     author: str | None = None
-    subject_name: str | None = None
     subject_sinhala_name: str | None = None
-    lesson_title: str | None = None
     lesson_sinhala_title: str | None = None
 
     # --- Voting & Bookmarking State for Frontend UI ---

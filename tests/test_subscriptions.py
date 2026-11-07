@@ -370,7 +370,7 @@ class TestSubscriptionFeature(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first_plan["code"], "COMBINED_PRO_MONTHLY")
         self.assertEqual(first_plan["name_si"], "සංයුක්ත ගණිතය මාසික සාමාජිකත්වය")
         self.assertEqual(len(first_plan["prices"]), 1)
-        self.assertEqual(first_plan["prices"][0]["amount_minor"], 250000)
+        self.assertNotIn("amount_minor", first_plan["prices"][0])
         self.assertEqual(first_plan["prices"][0]["amount_lkr"], 2500.0)
 
         # Verify internal database audit timestamps are NOT exposed to the client

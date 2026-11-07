@@ -7,7 +7,7 @@ Omits internal database timestamps (created_at, updated_at, deleted_at) for secu
 """
 
 from datetime import date
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.enums import (
     ContentType,
@@ -42,12 +42,27 @@ class MarkingSchemeResponse(BaseModel):
     id: str
     question_id: str
     title: str = "Official Marking Scheme"
-    content_text: str | None = ""
+    content_text: str | None = None
     pdf_url: str | None = None
     content_type: ContentType | str = ContentType.MARKDOWN
     total_marks: int = 25
     is_official: bool = True
     is_premium_only: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def enforce_single_content(cls, data: dict) -> dict:
+        """Guarantees that PDF marking schemes do not also transmit redundant content_text."""
+        if isinstance(data, dict):
+            raw_pdf = data.get("pdf_url")
+            has_pdf = bool(raw_pdf and str(raw_pdf).strip())
+            if has_pdf:
+                data["content_text"] = None
+                if not data.get("content_type"):
+                    data["content_type"] = ContentType.PDF.value
+            else:
+                data["pdf_url"] = None
+        return data
 
 
 class QuestionCreate(BaseModel):
@@ -79,7 +94,8 @@ class QuestionCreate(BaseModel):
 class QuestionSummaryResponse(BaseModel):
     """
     Lightweight summary representation of a question in catalog/lesson list views.
-    Omits heavy problem content_text, solution payloads, internal timestamps, and server-only is_published flag.
+    Omits heavy problem content_text, solution payloads, internal timestamps, server-only is_published flag,
+    and redundant English parent subject_name / lesson_title.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -89,9 +105,7 @@ class QuestionSummaryResponse(BaseModel):
     description: str | None = ""
     subject_id: str
     subject_code: str | None = None
-    subject_name: str | None = None
     lesson_id: str | None = None
-    lesson_title: str | None = None
     lesson_sinhala_title: str | None = None
     exam_paper_id: str | None = None
     content_type: ContentType | str = ContentType.MARKDOWN
@@ -109,11 +123,24 @@ class QuestionSummaryResponse(BaseModel):
 class QuestionDetailResponse(QuestionSummaryResponse):
     """
     Full detail representation of a single question, inheriting all summary fields
-    and hydrating inline LaTeX/Markdown or a short-lived signed Cloud Storage URL.
+    and hydrating inline LaTeX/Markdown OR a short-lived signed Cloud Storage URL (never both).
     """
 
-    content_text: str | None = ""
+    content_text: str | None = None
     content_url: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def enforce_single_content(cls, data: dict) -> dict:
+        """Guarantees that PDF/image questions omit content_text and markdown questions omit content_url."""
+        if isinstance(data, dict):
+            raw_url = data.get("content_url")
+            has_url = bool(raw_url and str(raw_url).strip())
+            if has_url:
+                data["content_text"] = None
+            else:
+                data["content_url"] = None
+        return data
 
 
 class DailyChallengePackResponse(BaseModel):
