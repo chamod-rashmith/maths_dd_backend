@@ -215,7 +215,7 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
         current_user: dict[str, Any],
         district_identifier: int | str | None = None,
         exam_year: int | None = None,
-        limit: int = 50,
+        limit: int = 10,
         offset: int = 0,
     ) -> dict[str, Any]:
         """

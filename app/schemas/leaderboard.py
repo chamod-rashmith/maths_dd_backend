@@ -81,7 +81,7 @@ class LeaderboardResponse(BaseModel):
         description="Optional A/L exam year filter applied to the leaderboard",
     )
     total_students: int = Field(0, ge=0, description="Total students in the current leaderboard scope")
-    limit: int = Field(50, ge=1, le=100, description="Maximum number of top entries returned")
+    limit: int = Field(10, ge=1, le=100, description="Maximum number of top entries returned")
     items: list[LeaderboardEntryResponse] = Field(
         default_factory=list,
         description="Ranked list of top students ordered by XP descending",
