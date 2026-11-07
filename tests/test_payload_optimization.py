@@ -191,7 +191,6 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
                     subject_id="sub_pmat",
                     lesson_id="les_trig",
                     type="SHORT",
-                    difficulty="MEDIUM",
                     source="PAST_PAPER",
                     allocated_marks=25,
                     is_premium=False,
@@ -367,6 +366,7 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         q_summary = q_list_res.json()["items"][0]
         self.assertNotIn("is_published", q_summary)
         self.assertNotIn("schedule", q_summary)
+        self.assertNotIn("difficulty", q_summary)
         self.assertNotIn("subject_name", q_summary)
         self.assertNotIn("lesson_title", q_summary)
 
@@ -375,6 +375,7 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         q_detail = q_detail_res.json()
         self.assertNotIn("is_published", q_detail)
         self.assertNotIn("schedule", q_detail)
+        self.assertNotIn("difficulty", q_detail)
         self.assertNotIn("subject_name", q_detail)
         self.assertNotIn("lesson_title", q_detail)
         self.assertIsNone(q_detail["content_url"])

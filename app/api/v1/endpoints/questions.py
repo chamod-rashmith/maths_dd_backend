@@ -79,9 +79,6 @@ async def list_questions(
     type: str | None = Query(
         None, description="Filter by question type ('SHORT' or 'ESSAY')"
     ),
-    difficulty: str | None = Query(
-        None, description="Filter by difficulty ('EASY', 'MEDIUM', 'HARD')"
-    ),
     source: str | None = Query(
         None, description="Filter by source ('PAST_PAPER', 'MODEL_PAPER', etc.)"
     ),
@@ -106,7 +103,6 @@ async def list_questions(
         subject_id=subject_id,
         lesson_id=lesson_id,
         question_type=type,
-        difficulty=difficulty,
         source=source,
         is_premium=is_premium,
         include_unpublished=False,
