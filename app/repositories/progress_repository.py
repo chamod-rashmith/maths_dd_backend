@@ -17,6 +17,7 @@ Core Architectural Fixes & Improvements:
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+import uuid
 from zoneinfo import ZoneInfo
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from sqlalchemy.orm import selectinload
 from app.domain.repositories.progress_repository import ProgressRepository
 from app.models.progress import UserDailyActivity, UserQuestionAttempt, XpTransaction
 from app.models.question import Question
+from app.models.subject import Subject
 from app.models.user_stats import UserStats
 from app.schemas.progress import (
     CompletedQuestionRecordSchema,
@@ -42,11 +44,11 @@ def _get_colombo_today() -> date:
     return datetime.now(_COLOMBO_TZ).date()
 
 
-def _normalize_subject(subject_id: Optional[str]) -> str:
+def _normalize_subject(subject_id_or_code: Optional[str]) -> str:
     """විෂය හඳුනාගැනීම (pureMaths / appliedMaths)."""
-    if not subject_id:
+    if not subject_id_or_code:
         return "pureMaths"
-    s = subject_id.lower()
+    s = subject_id_or_code.lower()
     if "applied" in s or "amat" in s:
         return "appliedMaths"
     return "pureMaths"
@@ -76,14 +78,16 @@ class PostgresProgressRepository(ProgressRepository):
         ශිෂ්‍යයාගේ සමස්ත ප්‍රගති සාරාංශය ගණනය කර ලබා දීම.
         මෙහිදී සමස්ත අධ්‍යයන කාලය (total_time_spent_seconds) සත්‍ය සමුච්චිත අගයක් ලෙස නිවැරදිව ගණනය වේ.
         """
-        # 1. Fetch all question attempts with lightweight Question(subject_id, lesson_id) projection
+        # 1. Fetch all question attempts with lightweight Question(subject_id, lesson_id) & Subject.code projection
         stmt = (
             select(
                 UserQuestionAttempt,
                 Question.subject_id,
                 Question.lesson_id,
+                Subject.code,
             )
             .outerjoin(Question, UserQuestionAttempt.question_id == Question.id)
+            .outerjoin(Subject, Question.subject_id == Subject.id)
             .where(UserQuestionAttempt.user_id == user_id)
             .order_by(UserQuestionAttempt.completed_at.desc())
         )
@@ -99,8 +103,8 @@ class PostgresProgressRepository(ProgressRepository):
         total_time_spent = 0
         date_to_solved_count: Dict[str, int] = {}
 
-        for a, q_subject_id, q_lesson_id in attempt_rows:
-            subject_str = _normalize_subject(q_subject_id)
+        for a, q_subject_id, q_lesson_id, subj_code in attempt_rows:
+            subject_str = _normalize_subject(subj_code or q_subject_id)
             lesson_id = q_lesson_id
             date_key = a.completed_date.isoformat() if a.completed_date else ""
 
@@ -294,7 +298,7 @@ class PostgresProgressRepository(ProgressRepository):
                 attempt.is_bookmarked = request.is_bookmarked
         else:
             attempt = UserQuestionAttempt(
-                id=f"{user_id}_{request.question_id}",
+                id=str(uuid.uuid4()),
                 user_id=user_id,
                 question_id=request.question_id,
                 time_spent_seconds=time_delta,
@@ -376,7 +380,7 @@ class PostgresProgressRepository(ProgressRepository):
                 activity.daily_challenge_completed = True
         else:
             activity = UserDailyActivity(
-                id=f"{user_id}_{today_key}",
+                id=str(uuid.uuid4()),
                 user_id=user_id,
                 date_key=today_key,
                 questions_solved_count=1,
@@ -505,7 +509,7 @@ class PostgresProgressRepository(ProgressRepository):
             attempt.is_bookmarked = is_bookmarked
         else:
             attempt = UserQuestionAttempt(
-                id=f"{user_id}_{question_id}",
+                id=str(uuid.uuid4()),
                 user_id=user_id,
                 question_id=question_id,
                 time_spent_seconds=0,

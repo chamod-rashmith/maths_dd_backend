@@ -6,6 +6,7 @@ and strict 3NF normalized tables for per-user votes (`study_note_votes`) and boo
 
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
+import uuid
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -32,7 +33,12 @@ if TYPE_CHECKING:
 class StudyNote(Base):
     __tablename__ = "study_notes"
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subject_id: Mapped[str] = mapped_column(
@@ -111,7 +117,8 @@ class StudyNoteVote(Base):
     id: Mapped[str] = mapped_column(
         String(255),
         primary_key=True,
-        comment="අනන්‍ය හැඳුනුම් අංකය ({user_id}_{note_id})",
+        default=lambda: str(uuid.uuid4()),
+        comment="අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
     user_id: Mapped[str] = mapped_column(
         String(128),
@@ -169,7 +176,8 @@ class StudyNoteBookmark(Base):
     id: Mapped[str] = mapped_column(
         String(255),
         primary_key=True,
-        comment="අනන්‍ය හැඳුනුම් අංකය ({user_id}_{note_id})",
+        default=lambda: str(uuid.uuid4()),
+        comment="අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
     user_id: Mapped[str] = mapped_column(
         String(128),

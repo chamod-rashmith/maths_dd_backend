@@ -26,6 +26,7 @@ G.C.E. A/L Combined Mathematics (Pure Maths / Applied Maths) හෝ Physics
 
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+import uuid
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,8 +43,8 @@ class SyllabusLesson(Base):
     Syllabus Lesson model representing both Main Units and Sub-lessons.
 
     Attributes:
-        id: Unique identifier for the lesson (e.g. UUID or descriptive code 'les_trig').
-        subject_id: Foreign key to the parent `Subject` (e.g. 'subj_pmat', 'subj_amat').
+        id: Unique UUID identifier for the lesson.
+        subject_id: Foreign key to the parent `Subject` UUID.
         parent_lesson_id: Self-referential FK to `syllabus_lessons.id`.
                           - None: Indicates a top-level Unit / Main Lesson.
                           - Not None: Indicates a Sub-lesson belonging to a parent unit.
@@ -59,7 +60,12 @@ class SyllabusLesson(Base):
 
     __tablename__ = "syllabus_lessons"
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        index=True,
+    )
     subject_id: Mapped[str] = mapped_column(
         ForeignKey("subjects.id", ondelete="CASCADE"),
         nullable=False,

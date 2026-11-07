@@ -54,11 +54,12 @@ class UserQuestionAttempt(Base):
         Index("idx_attempt_user_date", "user_id", "completed_date"),
     )
 
-    # Composite or UUID identifier
+    # UUID identifier
     id: Mapped[str] = mapped_column(
         String(255),
         primary_key=True,
-        comment="වාර්තාවේ අනන්‍ය හැඳුනුම් අංකය (user_id_question_id)",
+        default=lambda: str(uuid.uuid4()),
+        comment="වාර්තාවේ අනන්‍ය හැඳුනුම් අංකය (UUID)",
     )
 
     # Student Firebase UID
@@ -214,7 +215,8 @@ class UserDailyActivity(Base):
     id: Mapped[str] = mapped_column(
         String(255),
         primary_key=True,
-        comment="වාර්තාවේ හැඳුනුම් අංකය (user_id_date_key)",
+        default=lambda: str(uuid.uuid4()),
+        comment="වාර්තාවේ හැඳුනුම් අංකය (UUID)",
     )
 
     user_id: Mapped[str] = mapped_column(

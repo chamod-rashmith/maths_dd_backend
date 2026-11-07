@@ -6,6 +6,7 @@ Includes soft-delete support (`is_deleted`) to preserve student historical attem
 
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+import uuid
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,7 +27,12 @@ class Question(Base):
     """
     __tablename__ = "questions"
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, default="", nullable=True)
     subject_id: Mapped[str] = mapped_column(
