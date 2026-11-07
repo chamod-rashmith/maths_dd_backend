@@ -82,9 +82,6 @@ async def list_questions(
     difficulty: str | None = Query(
         None, description="Filter by difficulty ('EASY', 'MEDIUM', 'HARD')"
     ),
-    schedule: str | None = Query(
-        None, description="Filter by schedule category"
-    ),
     source: str | None = Query(
         None, description="Filter by source ('PAST_PAPER', 'MODEL_PAPER', etc.)"
     ),
@@ -110,7 +107,6 @@ async def list_questions(
         lesson_id=lesson_id,
         question_type=type,
         difficulty=difficulty,
-        schedule=schedule,
         source=source,
         is_premium=is_premium,
         include_unpublished=False,

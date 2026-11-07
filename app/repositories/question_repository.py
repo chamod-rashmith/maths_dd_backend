@@ -91,7 +91,6 @@ def _question_select_stmt():
             content_type_case,
             Question.type,
             Question.difficulty,
-            Question.schedule,
             Question.source,
             func.coalesce(Question.source_details, "").label("source_details"),
             Question.allocated_marks,
@@ -130,7 +129,6 @@ class PostgresQuestionRepository(QuestionRepository):
         solution_title: str = "Official Marking Scheme",
         question_type: str = "SHORT",
         difficulty: str = "MEDIUM",
-        schedule: str = "REGULAR",
         source: str = "PAST_PAPER",
         source_details: str = "",
         allocated_marks: int = 25,
@@ -152,10 +150,6 @@ class PostgresQuestionRepository(QuestionRepository):
                 except (ValueError, TypeError):
                     parsed_date = None
 
-            effective_schedule = schedule
-            if (parsed_date is not None or day_number is not None) and effective_schedule == "REGULAR":
-                effective_schedule = "DAILY"
-
             cleaned_content_url = content_url.strip() if (content_url and content_url.strip()) else None
 
             # Upsert Question entity
@@ -174,7 +168,6 @@ class PostgresQuestionRepository(QuestionRepository):
                 q.content_url = cleaned_content_url
                 q.type = question_type
                 q.difficulty = difficulty
-                q.schedule = effective_schedule
                 q.source = source
                 q.source_details = source_details or ""
                 q.allocated_marks = allocated_marks
@@ -194,7 +187,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     content_url=cleaned_content_url,
                     type=question_type,
                     difficulty=difficulty,
-                    schedule=effective_schedule,
                     source=source,
                     source_details=source_details or "",
                     allocated_marks=allocated_marks,
@@ -255,7 +247,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     "content_type": "pdf" if (cleaned_content_url and cleaned_content_url.endswith(".pdf")) else "markdown",
                     "type": question_type,
                     "difficulty": difficulty,
-                    "schedule": effective_schedule,
                     "source": source,
                     "source_details": source_details or "",
                     "allocated_marks": allocated_marks,
@@ -276,7 +267,6 @@ class PostgresQuestionRepository(QuestionRepository):
         lesson_id: Optional[str] = None,
         question_type: Optional[str] = None,
         difficulty: Optional[str] = None,
-        schedule: Optional[str] = None,
         source: Optional[str] = None,
         is_premium: Optional[bool] = None,
         include_unpublished: bool = False,
@@ -323,9 +313,6 @@ class PostgresQuestionRepository(QuestionRepository):
 
             if difficulty and difficulty.strip():
                 stmt = stmt.where(func.upper(Question.difficulty) == difficulty.strip().upper())
-
-            if schedule and schedule.strip():
-                stmt = stmt.where(func.upper(Question.schedule) == schedule.strip().upper())
 
             if source and source.strip():
                 stmt = stmt.where(func.upper(Question.source) == source.strip().upper())
@@ -393,9 +380,7 @@ class PostgresQuestionRepository(QuestionRepository):
             result1 = await self._session.execute(stmt1)
             row = result1.mappings().first()
             if row:
-                d = dict(row)
-                d["schedule"] = "DAILY"
-                return d
+                return dict(row)
 
             # 2. Fallback to latest scheduled question on or before resolved_date
             stmt2 = (
@@ -411,9 +396,7 @@ class PostgresQuestionRepository(QuestionRepository):
             result2 = await self._session.execute(stmt2)
             row2 = result2.mappings().first()
             if row2:
-                d = dict(row2)
-                d["schedule"] = "DAILY"
-                return d
+                return dict(row2)
 
             return None
         except Exception as exc:

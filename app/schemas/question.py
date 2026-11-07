@@ -14,7 +14,6 @@ from app.domain.enums import (
     ExamPaperPart,
     ExamPaperType,
     QuestionDifficulty,
-    QuestionSchedule,
     QuestionSource,
     QuestionType,
 )
@@ -68,7 +67,6 @@ class QuestionCreate(BaseModel):
     solution_title: str = "Official Marking Scheme"
     question_type: QuestionType = QuestionType.SHORT
     difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
-    schedule: QuestionSchedule = QuestionSchedule.REGULAR
     source: QuestionSource = QuestionSource.PAST_PAPER
     source_details: str | None = ""
     allocated_marks: int = 25
@@ -99,7 +97,6 @@ class QuestionSummaryResponse(BaseModel):
     content_type: ContentType | str = ContentType.MARKDOWN
     type: QuestionType
     difficulty: QuestionDifficulty
-    schedule: QuestionSchedule = QuestionSchedule.REGULAR
     source: QuestionSource
     source_details: str | None = ""
     allocated_marks: int = 25

@@ -50,7 +50,6 @@ class Question(Base):
     content_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     type: Mapped[str] = mapped_column(String(50), default="SHORT", nullable=False)
     difficulty: Mapped[str] = mapped_column(String(50), default="MEDIUM", nullable=False)
-    schedule: Mapped[str] = mapped_column(String(50), default="REGULAR", nullable=False)
     source: Mapped[str] = mapped_column(String(50), default="PAST_PAPER", nullable=False)
     source_details: Mapped[Optional[str]] = mapped_column(Text, default="", nullable=True)
     allocated_marks: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
