@@ -14,14 +14,6 @@ class UserRole(str, Enum):
     USER = "USER"
 
 
-class QuestionDifficulty(str, Enum):
-    """Complexity / difficulty level of mathematical questions."""
-
-    EASY = "EASY"
-    MEDIUM = "MEDIUM"
-    HARD = "HARD"
-
-
 class QuestionType(str, Enum):
     """Format and examination structure of questions."""
 

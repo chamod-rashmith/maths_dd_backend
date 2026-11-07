@@ -515,7 +515,6 @@ Required equation is $x^2 - Sx + P = 0 \implies 16x^2 - 5x + 32 = 0$.
             {"step_number": 3, "step_type": "FINAL", "marks": 10, "description_si": "නව සමීකරණය ගොඩනැගීම: $16x^2 - 5x + 32 = 0$"},
         ],
         "type": "SHORT",
-        "difficulty": "MEDIUM",
         "source": "PAST_PAPER",
         "source_details": "2023 G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -559,7 +558,6 @@ $$ = \lim_{h \to 0} \frac{2\cos(2x + h)\sin(h)}{h} = 2\cos(2x) $$
             {"step_number": 4, "step_type": "FINAL", "marks": 50, "description_si": "දෙවන අවකලනයේ ලකුණ අනුව උපරිම/අවම නිගමනය සහ ප්‍රස්තාර සටහන"},
         ],
         "type": "ESSAY",
-        "difficulty": "HARD",
         "source": "PAST_PAPER",
         "source_details": "2023 G.C.E. A/L Pure Maths Part B",
         "allocated_marks": 150,
@@ -602,7 +600,6 @@ $$ T - mg\cos\theta = \frac{mv^2}{l} \implies T = mg(4 + 3\cos\theta) $$
             {"step_number": 3, "step_type": "FINAL", "marks": 10, "description_si": "උපරිම හා අවම ආතති අනුපාතය $7:1$ බව පෙන්වීම"},
         ],
         "type": "SHORT",
-        "difficulty": "MEDIUM",
         "source": "MODEL_PAPER",
         "source_details": "Royal College Model Paper",
         "allocated_marks": 25,
@@ -646,7 +643,6 @@ Time: $t = 12:00 + \frac{40\cos\theta}{|\mathbf{v}_{B/A}|} \approx 1:19\text{ PM
             {"step_number": 3, "step_type": "FINAL", "marks": 20, "description_si": "ලම්බ දුර මඟින් කෙටිම දුර සහ ආසන්නතම වේලාව නිවැරදිව ලබා ගැනීම"},
         ],
         "type": "ESSAY",
-        "difficulty": "HARD",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Applied Maths Part B",
         "allocated_marks": 50,
@@ -693,7 +689,6 @@ $$ \theta \in \left\{ \frac{\pi}{4}, \frac{3\pi}{4}, \frac{\pi}{2}, \frac{5\pi}{
             {"step_number": 3, "step_type": "FINAL", "marks": 5, "description_si": "$[0, 2\\pi)$ පරාසයේ නිශ්චිත විසඳුම් ලැයිස්තුගත කිරීම"},
         ],
         "type": "SHORT",
-        "difficulty": "MEDIUM",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -741,7 +736,6 @@ Limiting equilibrium check: $2mg < 3mg\sin\alpha + \mu R = \frac{12}{5}mg \impli
             {"step_number": 3, "step_type": "FINAL", "marks": 5, "description_si": "ත්වරණය සෘණ වීමෙන් පද්ධතිය සමතුලිතතාවයේ පවතින බව නිගමනය කිරීම"},
         ],
         "type": "SHORT",
-        "difficulty": "HARD",
         "source": "MODEL_PAPER",
         "source_details": "Ananda College Term Test Paper",
         "allocated_marks": 25,
@@ -786,7 +780,6 @@ $$ I = \int_{4}^{3} \frac{-\frac{1}{2}du}{\sqrt{u}} = \frac{1}{2} \int_{3}^{4} u
             {"step_number": 3, "step_type": "FINAL", "marks": 10, "description_si": "අනුකලනය කර අවසන් අගය $2 - \\sqrt{3}$ ලෙස ලබා ගැනීම"},
         ],
         "type": "SHORT",
-        "difficulty": "MEDIUM",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -833,7 +826,6 @@ $$ T = \frac{3}{2f} \left(\frac{2S}{T}\right) = \frac{3S}{fT} \implies T^2 = \fr
             {"step_number": 3, "step_type": "FINAL", "marks": 7, "description_si": "$V$ ආදේශ කර මුළු කාලය $T = \\sqrt{3S/f}$ බව පෙන්වීම"},
         ],
         "type": "SHORT",
-        "difficulty": "MEDIUM",
         "source": "MODEL_PAPER",
         "source_details": "Royal College Term Test",
         "allocated_marks": 25,
@@ -1308,7 +1300,6 @@ async def seed_database(session: AsyncSession) -> None:
             existing_q.exam_paper_id = resolved_paper_id
             existing_q.content_text = q.get("content_text", "")
             existing_q.type = q["type"]
-            existing_q.difficulty = q["difficulty"]
             existing_q.source = q["source"]
             existing_q.source_details = q.get("source_details", "")
             existing_q.allocated_marks = q["allocated_marks"]
@@ -1329,7 +1320,6 @@ async def seed_database(session: AsyncSession) -> None:
                     exam_paper_id=resolved_paper_id,
                     content_text=q.get("content_text", ""),
                     type=q["type"],
-                    difficulty=q["difficulty"],
                     source=q["source"],
                     source_details=q.get("source_details", ""),
                     allocated_marks=q["allocated_marks"],

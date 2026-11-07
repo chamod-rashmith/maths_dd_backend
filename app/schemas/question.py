@@ -1,6 +1,6 @@
 """
-Pydantic DTO schemas for Questions, Marking Schemes, Marking Steps, and Exam Papers.
-Enforces type-safe domain Enums for Type, Difficulty, Schedule, Source, and ContentType,
+Pydantic DTO schemas for Questions, Marking Schemes, and Exam Papers.
+Enforces type-safe domain Enums for Type, Source, and ContentType,
 uses clean class inheritance between QuestionSummaryResponse and QuestionDetailResponse,
 and guarantees strictly typed composite responses without untyped Dict[str, Any].
 Omits internal database timestamps (created_at, updated_at, deleted_at) for security and minimal bandwidth payload.
@@ -13,7 +13,6 @@ from app.domain.enums import (
     ContentType,
     ExamPaperPart,
     ExamPaperType,
-    QuestionDifficulty,
     QuestionSource,
     QuestionType,
 )
@@ -81,7 +80,6 @@ class QuestionCreate(BaseModel):
     solution_pdf_url: str | None = None
     solution_title: str = "Official Marking Scheme"
     question_type: QuestionType = QuestionType.SHORT
-    difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
     source: QuestionSource = QuestionSource.PAST_PAPER
     source_details: str | None = ""
     allocated_marks: int = 25
@@ -110,7 +108,6 @@ class QuestionSummaryResponse(BaseModel):
     exam_paper_id: str | None = None
     content_type: ContentType | str = ContentType.MARKDOWN
     type: QuestionType
-    difficulty: QuestionDifficulty
     source: QuestionSource
     source_details: str | None = ""
     allocated_marks: int = 25

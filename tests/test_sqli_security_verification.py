@@ -154,7 +154,6 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
                         subject_id="sub_pmat",
                         lesson_id="les_trig",
                         type="SHORT",
-                        difficulty="MEDIUM",
                         source="PAST_PAPER",
                         allocated_marks=25,
                         is_premium=False,
@@ -167,7 +166,6 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
                         subject_id="sub_pmat",
                         lesson_id="les_trig",
                         type="ESSAY",
-                        difficulty="HARD",
                         source="MODEL_PAPER",
                         allocated_marks=100,
                         is_premium=True,
@@ -303,7 +301,7 @@ class TestSQLInjectionSecurityVerification(unittest.IsolatedAsyncioTestCase):
 
             # 1. Questions list filter injection attempt (trying to dump unpublished q_secret_unpub)
             q_res = self.client.get(
-                f"/api/v1/questions?subject_id={encoded}&lesson_id={encoded}&difficulty={encoded}"
+                f"/api/v1/questions?subject_id={encoded}&lesson_id={encoded}&source={encoded}"
             )
             self.assertEqual(q_res.status_code, 200)
             items = q_res.json()["items"]

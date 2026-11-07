@@ -94,7 +94,6 @@ def _question_summary_select_stmt():
             Question.lesson_id,
             _question_content_type_expr(),
             Question.type,
-            Question.difficulty,
             Question.source,
             func.coalesce(Question.source_details, "").label("source_details"),
             Question.allocated_marks,
@@ -125,7 +124,6 @@ def _question_select_stmt():
             Question.content_url,
             _question_content_type_expr(),
             Question.type,
-            Question.difficulty,
             Question.source,
             func.coalesce(Question.source_details, "").label("source_details"),
             Question.allocated_marks,
@@ -161,7 +159,6 @@ class PostgresQuestionRepository(QuestionRepository):
         solution_pdf_url: Optional[str] = None,
         solution_title: str = "Official Marking Scheme",
         question_type: str = "SHORT",
-        difficulty: str = "MEDIUM",
         source: str = "PAST_PAPER",
         source_details: str = "",
         allocated_marks: int = 25,
@@ -200,7 +197,6 @@ class PostgresQuestionRepository(QuestionRepository):
                 q.content_text = content_text or ""
                 q.content_url = cleaned_content_url
                 q.type = question_type
-                q.difficulty = difficulty
                 q.source = source
                 q.source_details = source_details or ""
                 q.allocated_marks = allocated_marks
@@ -219,7 +215,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     content_text=content_text or "",
                     content_url=cleaned_content_url,
                     type=question_type,
-                    difficulty=difficulty,
                     source=source,
                     source_details=source_details or "",
                     allocated_marks=allocated_marks,
@@ -279,7 +274,6 @@ class PostgresQuestionRepository(QuestionRepository):
                     "content_url": cleaned_content_url,
                     "content_type": "pdf" if (cleaned_content_url and cleaned_content_url.endswith(".pdf")) else "markdown",
                     "type": question_type,
-                    "difficulty": difficulty,
                     "source": source,
                     "source_details": source_details or "",
                     "allocated_marks": allocated_marks,
@@ -299,7 +293,6 @@ class PostgresQuestionRepository(QuestionRepository):
         subject_id: Optional[str] = None,
         lesson_id: Optional[str] = None,
         question_type: Optional[str] = None,
-        difficulty: Optional[str] = None,
         source: Optional[str] = None,
         is_premium: Optional[bool] = None,
         include_unpublished: bool = False,
@@ -343,9 +336,6 @@ class PostgresQuestionRepository(QuestionRepository):
 
             if question_type and question_type.strip():
                 stmt = stmt.where(func.upper(Question.type) == question_type.strip().upper())
-
-            if difficulty and difficulty.strip():
-                stmt = stmt.where(func.upper(Question.difficulty) == difficulty.strip().upper())
 
             if source and source.strip():
                 stmt = stmt.where(func.upper(Question.source) == source.strip().upper())
