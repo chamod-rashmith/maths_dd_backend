@@ -37,14 +37,11 @@ def _error_response(
     message: Any,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    """Builds the stable API error envelope while preserving legacy `detail`."""
+    """Builds the compact API error envelope without duplicating the error message."""
     payload = {
-        "error": {
-            "code": code,
-            "message": jsonable_encoder(message),
-            "request_id": _request_id(request),
-        },
+        "code": code,
         "detail": jsonable_encoder(message),
+        "request_id": _request_id(request),
     }
     return JSONResponse(status_code=status_code, content=payload, headers=headers)
 

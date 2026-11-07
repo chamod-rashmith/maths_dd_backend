@@ -70,9 +70,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.downvote_count,
                     user_vote_col,
                     is_bookmarked_col,
-                    Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
-                    SyllabusLesson.title.label("lesson_title"),
                     SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)
@@ -193,9 +191,7 @@ class PostgresStudyNoteRepository(StudyNoteRepository):
                     StudyNote.downvote_count,
                     user_vote_col,
                     is_bookmarked_col,
-                    Subject.name.label("subject_name"),
                     Subject.sinhala_name.label("subject_sinhala_name"),
-                    SyllabusLesson.title.label("lesson_title"),
                     SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
                 )
                 .outerjoin(Subject, StudyNote.subject_id == Subject.id)

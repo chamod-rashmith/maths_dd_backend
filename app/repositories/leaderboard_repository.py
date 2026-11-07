@@ -74,19 +74,12 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
             effective_district_id = func.coalesce(
                 StudentProfile.exam_district_id, User.district_id
             )
-            effective_school = func.coalesce(
-                StudentProfile.school_name, User.school_name
-            )
 
-            # 1. Fetch the current user's own profile & stats row
+            # 1. Fetch the current user's own stats & district row
             me_stmt = (
                 select(
                     User.uid,
-                    User.name,
-                    User.avatar_url,
-                    effective_school.label("school_name"),
                     effective_district_id.label("district_id"),
-                    StudentProfile.exam_year.label("exam_year"),
                     effective_xp.label("xp"),
                     effective_streak.label("current_streak_days"),
                     effective_solved.label("total_solved_count"),
@@ -101,11 +94,7 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
             me_row = (await self._session.execute(me_stmt)).first()
 
             if me_row is not None:
-                my_name = me_row.name or str(current_user.get("name") or "Student")
-                my_avatar = me_row.avatar_url
-                my_school = me_row.school_name
                 my_district_id = me_row.district_id
-                my_exam_year = me_row.exam_year
                 my_xp = int(me_row.xp or 0)
                 my_streak = int(me_row.current_streak_days or 0)
                 my_solved = int(me_row.total_solved_count or 0)
@@ -113,14 +102,7 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
                 my_district_name_si = me_row.district_name_si
                 user_in_db = True
             else:
-                my_name = str(
-                    current_user.get("name")
-                    or current_user.get("email", "Student").split("@")[0]
-                )
-                my_avatar = current_user.get("avatar_url")
-                my_school = current_user.get("school_name")
                 my_district_id = current_user.get("district_id")
-                my_exam_year = current_user.get("exam_year")
                 my_xp = 0
                 my_streak = 0
                 my_solved = 0
@@ -213,13 +195,8 @@ class PostgresLeaderboardRepository(LeaderboardRepository):
 
             return {
                 "user_id": my_uid,
-                "name": my_name,
-                "avatar_url": my_avatar,
-                "school_name": my_school,
-                "district_id": my_district_id,
                 "district_code": my_district_code,
                 "district_name_si": my_district_name_si,
-                "exam_year": my_exam_year,
                 "xp": my_xp,
                 "current_streak_days": my_streak,
                 "total_solved_count": my_solved,

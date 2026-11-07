@@ -16,7 +16,7 @@ Enforces type-safe UserRole, StudyStream, StudentGrade, ExamMedium, and ExamAtte
 ===============================================================================
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.enums import (
     ExamAttempt,
@@ -139,9 +139,10 @@ class UserProfileResponse(BaseModel):
     """
     Clean lightweight response model representing a student's profile, academic status, and telemetry stats.
     Optimized to omit duplicate district objects, legacy duplicate attempt strings, and heavy payment/slip arrays.
+    Standardizes telemetry fields (`current_streak_days`, `total_solved_count`) across `/users/me`, `/leaderboard`, and `/progress/summary`.
     """
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     uid: str
     email: str
@@ -161,11 +162,17 @@ class UserProfileResponse(BaseModel):
     stream: StudyStream | str | None = None
     grade: StudentGrade | str | None = None
 
-    # Gamification & Telemetry stats
+    # Gamification & Telemetry stats (standardized across all endpoints)
     xp: int = 0
-    streak_count: int = 0
+    current_streak_days: int = Field(
+        default=0,
+        validation_alias=AliasChoices("current_streak_days", "streak_count"),
+    )
     accuracy_rate: float = 0.0
-    questions_solved: int = 0
+    total_solved_count: int = Field(
+        default=0,
+        validation_alias=AliasChoices("total_solved_count", "questions_solved"),
+    )
 
     # Subscription state (lightweight summary only)
     is_premium: bool = False

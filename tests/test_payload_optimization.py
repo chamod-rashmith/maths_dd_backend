@@ -297,6 +297,10 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("exam_district_id", profile)
         self.assertNotIn("exam_district", profile)
         self.assertNotIn("attempt", profile)
+        self.assertNotIn("streak_count", profile)
+        self.assertNotIn("questions_solved", profile)
+        self.assertEqual(profile["current_streak_days"], 5)
+        self.assertEqual(profile["total_solved_count"], 25)
         self.assertEqual(profile["district"]["id"], 1)
         self.assertEqual(profile["district"]["code"], "COLOMBO")
         self.assertNotIn("display_order", profile["district"])
@@ -311,27 +315,38 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("amount_minor", active_sub)
 
     def test_subscriptions_plans_status_and_history_payloads(self) -> None:
-        # 1. Plans exclude display_order
+        # 1. Plans exclude display_order and amount_minor (exposing only amount_lkr)
         plans_res = self.client.get("/api/v1/subscriptions/plans")
         self.assertEqual(plans_res.status_code, 200)
         plan = plans_res.json()[0]
         self.assertNotIn("display_order", plan)
+        self.assertNotIn("amount_minor", plan["prices"][0])
+        self.assertEqual(plan["prices"][0]["amount_lkr"], 1500.0)
 
-        # 2. Status uses lightweight ActiveSubscriptionSummaryResponse
+        # 2. Status uses lightweight ActiveSubscriptionSummaryResponse without top-level duplicate fields
         status_res = self.client.get("/api/v1/subscriptions/status")
         self.assertEqual(status_res.status_code, 200)
-        active_sub = status_res.json()["active_subscription"]
+        status_data = status_res.json()
+        self.assertNotIn("plan_id", status_data)
+        self.assertNotIn("provider", status_data)
+        self.assertNotIn("expires_at", status_data)
+        active_sub = status_data["active_subscription"]
+        self.assertEqual(active_sub["plan_id"], "COMBINED_PRO_MONTHLY")
+        self.assertEqual(active_sub["provider"], "BANK_TRANSFER")
         self.assertNotIn("payments", active_sub)
         self.assertNotIn("slip_image_url", active_sub)
 
-        # 3. History includes payments + bank_slip without parent ID duplication
+        # 3. History includes payments + bank_slip without parent ID or amount_minor duplication
         hist_res = self.client.get("/api/v1/subscriptions/history")
         self.assertEqual(hist_res.status_code, 200)
         sub_item = hist_res.json()[0]
         self.assertNotIn("slip_image_url", sub_item)
         self.assertNotIn("amount_minor", sub_item)
+        self.assertNotIn("amount_lkr", sub_item)
         payment = sub_item["payments"][0]
         self.assertNotIn("subscription_id", payment)
+        self.assertNotIn("amount_minor", payment)
+        self.assertEqual(payment["amount_lkr"], 1500.0)
         self.assertNotIn("payment_id", payment["bank_slip"])
         self.assertEqual(payment["bank_slip"]["deposit_reference"], "BOC-12345")
 
@@ -342,19 +357,27 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
 
         les_res = self.client.get("/api/v1/curriculum/lessons")
         self.assertEqual(les_res.status_code, 200)
-        self.assertNotIn("order_index", les_res.json()[0])
+        lesson_item = les_res.json()[0]
+        self.assertNotIn("order_index", lesson_item)
+        self.assertNotIn("subject_code", lesson_item)
+        self.assertNotIn("subject_name", lesson_item)
 
         q_list_res = self.client.get("/api/v1/questions")
         self.assertEqual(q_list_res.status_code, 200)
         q_summary = q_list_res.json()["items"][0]
         self.assertNotIn("is_published", q_summary)
         self.assertNotIn("schedule", q_summary)
+        self.assertNotIn("subject_name", q_summary)
+        self.assertNotIn("lesson_title", q_summary)
 
         q_detail_res = self.client.get("/api/v1/questions/q_trig_1")
         self.assertEqual(q_detail_res.status_code, 200)
         q_detail = q_detail_res.json()
         self.assertNotIn("is_published", q_detail)
         self.assertNotIn("schedule", q_detail)
+        self.assertNotIn("subject_name", q_detail)
+        self.assertNotIn("lesson_title", q_detail)
+        self.assertIsNone(q_detail["content_url"])
 
         ms_res = self.client.get("/api/v1/questions/q_trig_1/solution")
         self.assertEqual(ms_res.status_code, 200)
@@ -363,11 +386,15 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("steps", ms_data)
         self.assertNotIn("description_si", ms_data)
         self.assertEqual(ms_data["content_type"], "pdf")
+        self.assertIsNone(ms_data["content_text"])
         self.assertIn("q_trig_1_solution.pdf", ms_data["pdf_url"])
 
         notes_res = self.client.get("/api/v1/study-notes")
         self.assertEqual(notes_res.status_code, 200)
-        self.assertNotIn("order_index", notes_res.json()["items"][0])
+        note_item = notes_res.json()["items"][0]
+        self.assertNotIn("order_index", note_item)
+        self.assertNotIn("subject_name", note_item)
+        self.assertNotIn("lesson_title", note_item)
 
     def test_progress_heatmap_and_xp_history_exclude_redundant_fields(self) -> None:
         prog_res = self.client.get("/api/v1/progress/summary")
@@ -379,10 +406,16 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(len(active_days), 1)
         self.assertNotIn("question_ids", active_days[0])
+        self.assertNotIn("date_key", active_days[0])
 
         comp_items = list(prog_data["completed_questions"].values())
         self.assertEqual(len(comp_items), 1)
         self.assertNotIn("completed_date_key", comp_items[0])
+        self.assertNotIn("question_id", comp_items[0])
+        self.assertNotIn("title", comp_items[0])
+        self.assertNotIn("subject", comp_items[0])
+        self.assertNotIn("lesson_id", comp_items[0])
+        self.assertNotIn("question_type", comp_items[0])
 
         xp_res = self.client.get("/api/v1/progress/xp-history")
         self.assertEqual(xp_res.status_code, 200)
@@ -399,4 +432,10 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("district_name_en", entry)
         self.assertEqual(entry["district_code"], "COLOMBO")
         self.assertEqual(entry["district_name_si"], "කොළඹ")
-        self.assertNotIn("district_name_en", lb_data["my_rank"])
+        my_rank = lb_data["my_rank"]
+        self.assertNotIn("district_name_en", my_rank)
+        self.assertNotIn("district_id", my_rank)
+        self.assertNotIn("name", my_rank)
+        self.assertNotIn("avatar_url", my_rank)
+        self.assertNotIn("school_name", my_rank)
+        self.assertNotIn("exam_year", my_rank)

@@ -76,15 +76,19 @@ class PostgresProgressRepository(ProgressRepository):
         ශිෂ්‍යයාගේ සමස්ත ප්‍රගති සාරාංශය ගණනය කර ලබා දීම.
         මෙහිදී සමස්ත අධ්‍යයන කාලය (total_time_spent_seconds) සත්‍ය සමුච්චිත අගයක් ලෙස නිවැරදිව ගණනය වේ.
         """
-        # 1. Fetch all question attempts with joined question
+        # 1. Fetch all question attempts with lightweight Question(subject_id, lesson_id) projection
         stmt = (
-            select(UserQuestionAttempt)
-            .options(selectinload(UserQuestionAttempt.question))
+            select(
+                UserQuestionAttempt,
+                Question.subject_id,
+                Question.lesson_id,
+            )
+            .outerjoin(Question, UserQuestionAttempt.question_id == Question.id)
             .where(UserQuestionAttempt.user_id == user_id)
             .order_by(UserQuestionAttempt.completed_at.desc())
         )
         result = await self.session.execute(stmt)
-        attempts = result.scalars().all()
+        attempt_rows = result.all()
 
         completed_questions: Dict[str, CompletedQuestionRecordSchema] = {}
         solved_count_by_lesson: Dict[str, int] = {}
@@ -95,21 +99,13 @@ class PostgresProgressRepository(ProgressRepository):
         total_time_spent = 0
         date_to_solved_count: Dict[str, int] = {}
 
-        for a in attempts:
-            q: Optional[Question] = a.question
-            title = q.title if q else f"Question {a.question_id}"
-            subject_str = _normalize_subject(q.subject_id if q else None)
-            lesson_id = q.lesson_id if q else None
-            q_type = _normalize_question_type(q.type if q else None)
+        for a, q_subject_id, q_lesson_id in attempt_rows:
+            subject_str = _normalize_subject(q_subject_id)
+            lesson_id = q_lesson_id
             date_key = a.completed_date.isoformat() if a.completed_date else ""
 
             if a.attempt_count > 0:
                 completed_questions[a.question_id] = CompletedQuestionRecordSchema(
-                    question_id=a.question_id,
-                    title=title,
-                    subject=subject_str,
-                    lesson_id=lesson_id,
-                    question_type=q_type,
                     is_daily_question=a.is_daily_question,
                     time_spent_seconds=a.time_spent_seconds,
                     last_attempt_duration_seconds=getattr(a, "last_attempt_duration_seconds", a.time_spent_seconds),
@@ -145,7 +141,6 @@ class PostgresProgressRepository(ProgressRepository):
         total_daily_seconds = 0
         for act in activities:
             daily_activity[act.date_key] = DailyActivityBucketSchema(
-                date_key=act.date_key,
                 questions_solved_count=act.questions_solved_count,
                 total_time_spent_seconds=act.total_time_spent_seconds,
                 daily_challenge_completed=act.daily_challenge_completed,
@@ -156,7 +151,6 @@ class PostgresProgressRepository(ProgressRepository):
         for dk, cnt in date_to_solved_count.items():
             if dk not in daily_activity:
                 daily_activity[dk] = DailyActivityBucketSchema(
-                    date_key=dk,
                     questions_solved_count=cnt,
                     total_time_spent_seconds=0,
                     daily_challenge_completed=False,

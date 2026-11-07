@@ -43,9 +43,9 @@ def _resolve_colombo_date(target_date: Optional[str] = None) -> datetime.date:
     return datetime.datetime.now(_SL_TZ).date()
 
 
-def _question_select_stmt():
-    """Builds the canonical SQLAlchemy select statement for questions with joined relations."""
-    content_type_case = case(
+def _question_content_type_expr():
+    """Returns SQLAlchemy CASE expression determining question content_type."""
+    return case(
         (
             and_(Question.content_url.isnot(None), Question.content_url != ""),
             case(
@@ -66,7 +66,10 @@ def _question_select_stmt():
         else_="markdown",
     ).label("content_type")
 
-    has_ms_subquery = (
+
+def _has_marking_scheme_expr():
+    """Returns SQLAlchemy EXISTS subquery checking if question has a non-empty marking scheme."""
+    return (
         select(literal(1))
         .where(
             MarkingScheme.question_id == Question.id,
@@ -79,6 +82,9 @@ def _question_select_stmt():
         .label("has_marking_scheme")
     )
 
+
+def _question_summary_select_stmt():
+    """Builds the lightweight SQLAlchemy select statement for question catalog listings (omits heavy content_text/content_url)."""
     return (
         select(
             Question.id,
@@ -86,9 +92,7 @@ def _question_select_stmt():
             func.coalesce(Question.description, "").label("description"),
             Question.subject_id,
             Question.lesson_id,
-            func.coalesce(Question.content_text, "").label("content_text"),
-            Question.content_url,
-            content_type_case,
+            _question_content_type_expr(),
             Question.type,
             Question.difficulty,
             Question.source,
@@ -98,10 +102,39 @@ def _question_select_stmt():
             Question.is_published,
             Question.scheduled_date,
             Question.day_number,
-            has_ms_subquery,
+            _has_marking_scheme_expr(),
             Subject.code.label("subject_code"),
-            Subject.name.label("subject_name"),
-            SyllabusLesson.title.label("lesson_title"),
+            SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
+        )
+        .outerjoin(Subject, Question.subject_id == Subject.id)
+        .outerjoin(SyllabusLesson, Question.lesson_id == SyllabusLesson.id)
+        .where(Question.is_deleted.is_(False))
+    )
+
+
+def _question_select_stmt():
+    """Builds the full SQLAlchemy select statement for single question detail and daily pack views."""
+    return (
+        select(
+            Question.id,
+            Question.title,
+            func.coalesce(Question.description, "").label("description"),
+            Question.subject_id,
+            Question.lesson_id,
+            func.coalesce(Question.content_text, "").label("content_text"),
+            Question.content_url,
+            _question_content_type_expr(),
+            Question.type,
+            Question.difficulty,
+            Question.source,
+            func.coalesce(Question.source_details, "").label("source_details"),
+            Question.allocated_marks,
+            Question.is_premium,
+            Question.is_published,
+            Question.scheduled_date,
+            Question.day_number,
+            _has_marking_scheme_expr(),
+            Subject.code.label("subject_code"),
             SyllabusLesson.sinhala_title.label("lesson_sinhala_title"),
         )
         .outerjoin(Subject, Question.subject_id == Subject.id)
@@ -277,7 +310,7 @@ class PostgresQuestionRepository(QuestionRepository):
         """Lists filtered and paginated question summaries."""
         try:
             today_colombo = datetime.datetime.now(_SL_TZ).date()
-            stmt = _question_select_stmt()
+            stmt = _question_summary_select_stmt()
 
             if not include_unpublished:
                 stmt = stmt.where(

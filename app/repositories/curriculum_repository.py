@@ -181,8 +181,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     SyllabusLesson.description,
                     q_count,
                     prem_count,
-                    Subject.code.label("subject_code"),
-                    Subject.name.label("subject_name"),
                 )
                 .join(Subject, SyllabusLesson.subject_id == Subject.id)
                 .outerjoin(
@@ -231,8 +229,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 SyllabusLesson.id,
                 SyllabusLesson.parent_lesson_id,
                 Subject.order_index,
-                Subject.code,
-                Subject.name,
             ).order_by(Subject.order_index.asc(), SyllabusLesson.order_index.asc())
 
             result = await self._session.execute(stmt)

@@ -65,7 +65,7 @@ class QuestionService:
         limit: int = 20,
         offset: int = 0,
     ) -> Dict[str, Any]:
-        result = await self._repo.list_questions(
+        return await self._repo.list_questions(
             subject_id=subject_id,
             lesson_id=lesson_id,
             question_type=question_type,
@@ -77,17 +77,13 @@ class QuestionService:
             limit=limit,
             offset=offset,
         )
-        result["items"] = [
-            self._hydrate_question_signed_url(q) for q in result["items"]
-        ]
-        return result
 
     async def list_recent_questions(
         self, limit: int = 15
     ) -> List[Dict[str, Any]]:
         result = await self._repo.get_recent(limit=limit)
         items = result["items"] if isinstance(result, dict) else result
-        return [self._hydrate_question_signed_url(q) for q in items]
+        return list(items)
 
     @staticmethod
     def _is_privileged_user(current_user: Optional[Dict[str, Any]]) -> bool:

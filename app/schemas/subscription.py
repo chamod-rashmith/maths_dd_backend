@@ -89,14 +89,18 @@ class SlipReviewStatus(str, Enum):
 class PlanPriceResponse(BaseModel):
     """
     පැකේජයක මිල විස්තරය (Plan Price for Paywall Display).
-    ශත (cents) සහ රුපියල් (LKR) යන දෙකෙන්ම අගය සපයයි.
+    Database හි ශත (cents) ලෙස ගබඩා කර ඇති අගය Client වෙත රුපියල් (LKR) වලින් පමණක් යවයි (`amount_minor` JSON වෙතින් ඉවත් කර ඇත).
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="මිල වාර්තාවේ ID")
     currency: str = Field(default="LKR", description="මුදල් ඒකකය (LKR)")
-    amount_minor: int = Field(..., description="මිල ශත වලින් (Minor Units / Cents, e.g. 250000 = Rs. 2,500.00)")
+    amount_minor: int = Field(
+        ...,
+        exclude=True,
+        description="මිල ශත වලින් (Internal minor units used to compute amount_lkr; excluded from JSON)",
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -175,7 +179,7 @@ class BankSlipDetailsResponse(BaseModel):
 
 
 class PaymentResponse(BaseModel):
-    """ගෙවීම් ගනුදෙනු විස්තරය (Payment Transaction DTO). Omits redundant parent subscription_id."""
+    """ගෙවීම් ගනුදෙනු විස්තරය (Payment Transaction DTO). Omits redundant parent subscription_id and raw amount_minor."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -183,7 +187,11 @@ class PaymentResponse(BaseModel):
     method: SubscriptionProvider | str = Field(..., description="ගෙවීම් ක්‍රමය (BANK_TRANSFER, PLAY_STORE, etc.)")
     status: PaymentStatus | str = Field(..., description="ගෙවීමේ තත්වය (PENDING, COMPLETED, FAILED)")
     currency: str = Field(default="LKR", description="මුදල් ඒකකය")
-    amount_minor: int = Field(..., description="ගෙවූ මුදල ශත වලින්")
+    amount_minor: int = Field(
+        ...,
+        exclude=True,
+        description="ගෙවූ මුදල ශත වලින් (Internal minor units used to compute amount_lkr; excluded from JSON)",
+    )
     paid_at: datetime | None = Field(None, description="ගෙවූ දිනය")
     bank_slip: BankSlipDetailsResponse | None = Field(None, description="බැංකු රිසිට්පත් විස්තර")
 
@@ -272,8 +280,8 @@ class UserSubscriptionResponse(BaseModel):
     """
     Client & Admin representation of a subscription record (used in `/subscriptions/history`,
     `/subscriptions/bank-slip`, and `/subscriptions/admin/*`).
-    Strips internal database audit timestamps (`created_at`, `updated_at`) and avoids duplicating
-    bank slip fields that already live inside `payments[].bank_slip`.
+    Strips internal database audit timestamps (`created_at`, `updated_at`), top-level `amount_lkr`,
+    and avoids duplicating bank slip fields that already live inside `payments[].bank_slip`.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -284,7 +292,6 @@ class UserSubscriptionResponse(BaseModel):
     provider: SubscriptionProvider | str = Field(..., description="නාලිකාව (BANK_TRANSFER, REVENUECAT, etc.)")
     starts_at: datetime = Field(..., description="ආරම්භක දිනය")
     expires_at: datetime | None = Field(None, description="අවසන් වන දිනය (Lifetime සඳහා None)")
-    amount_lkr: float | None = Field(None, description="ගෙවූ මුදල (රුපියල් වලින්)")
     approved_at: datetime | None = Field(None, description="අනුමත කළ දිනය")
     payments: list[PaymentResponse] | None = Field(default=None, description="අදාළ ගෙවීම් වාර්තා (Payments & Bank Slip Details)")
 
@@ -293,14 +300,12 @@ class CurrentSubscriptionStatusResponse(BaseModel):
     """
     Lightweight access status returned to the mobile app for paywall gating and countdown (`GET /subscriptions/status`).
     Strictly gates access: `is_premium` is FALSE while status is `PENDING_APPROVAL`.
-    Uses `ActiveSubscriptionSummaryResponse` to avoid transmitting redundant payment/slip history on status checks.
+    Uses `ActiveSubscriptionSummaryResponse` as the single source of truth for `plan_id`, `provider`,
+    `starts_at`, and `expires_at` without duplicating them at the top level.
     """
 
     is_premium: bool = Field(..., description="ශිෂ්‍යයාට මේ මොහොතේ Premium අයිතිය තිබේද යන්න")
-    plan_id: SubscriptionPlanCode | str | None = Field(None, description="සක්‍රිය පැකේජ කේතය")
-    status: SubscriptionStatus | str | None = Field(None, description="සාමාජිකත්ව තත්වය")
-    provider: SubscriptionProvider | str | None = Field(None, description="ගෙවීම් නාලිකාව")
-    expires_at: datetime | None = Field(None, description="කල් ඉකුත් වන දිනය")
+    status: SubscriptionStatus | str | None = Field(None, description="සාමාජිකත්ව තත්වය (ACTIVE, NONE)")
     days_remaining: int | None = Field(None, description="ඉතිරිව ඇති දින ගණන")
     active_subscription: ActiveSubscriptionSummaryResponse | None = Field(None, description="සක්‍රිය සාමාජිකත්ව සාරාංශය")
 

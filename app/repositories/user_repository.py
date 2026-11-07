@@ -34,9 +34,9 @@ def _serialize_user(user: User) -> Dict[str, Any]:
     """Helper to cleanly serialize User and normalized StudentProfile ORM models."""
     stats = user.stats
     xp = stats.xp if stats else 0
-    streak_count = stats.current_streak_days if stats else 0
+    current_streak_days = stats.current_streak_days if stats else 0
     accuracy_rate = stats.accuracy_rate if stats else 0.0
-    questions_solved = stats.total_solved_count if stats else 0
+    total_solved_count = stats.total_solved_count if stats else 0
 
     active_sub = user.active_subscription
     active_sub_payload = None
@@ -82,9 +82,9 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "stream": profile.stream if (profile and profile.stream) else user.stream,
         "grade": user.grade,
         "xp": xp,
-        "streak_count": streak_count,
+        "current_streak_days": current_streak_days,
         "accuracy_rate": accuracy_rate,
-        "questions_solved": questions_solved,
+        "total_solved_count": total_solved_count,
         "is_premium": user.is_premium,
         "active_subscription": active_sub_payload,
     }

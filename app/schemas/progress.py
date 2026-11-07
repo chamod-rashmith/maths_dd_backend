@@ -24,14 +24,10 @@ class CompletedQuestionRecordSchema(BaseProgressSchema):
     ශිෂ්‍යයෙකු විසඳූ ප්‍රශ්නයක සාරාංශ වාර්තාව (Completed Question Record DTO).
     `time_spent_seconds` මඟින් මෙම ප්‍රශ්නය පුහුණු වීමට වැය කළ සමස්ත කාලයත් (Cumulative Seconds),
     `last_attempt_duration_seconds` මඟින් අවසන් වරට වැය කළ කාලයත් නියෝජනය වේ.
-    Omits redundant `completed_date_key` (derivable from `completed_at`).
+    Omits redundant `question_id` (already the `completed_questions` map key), `completed_date_key`
+    (derivable from `completed_at`), and static question catalog fields (`title`, `subject`, `lesson_id`, `question_type`).
     """
 
-    question_id: str = Field(..., description="ප්‍රශ්නයේ හැඳුනුම් අංකය")
-    title: str = Field(..., description="ප්‍රශ්නයේ මාතෘකාව")
-    subject: str = Field("pureMaths", description="විෂය (pureMaths, appliedMaths)")
-    lesson_id: str | None = Field(None, description="අදාළ පාඩමේ ID")
-    question_type: str = Field("short", description="ප්‍රශ්න වර්ගය (short, essay)")
     is_daily_question: bool = Field(False, description="දිනපතා අභ්‍යාසයක් ලෙස විසඳුවේද යන්න")
     time_spent_seconds: int = Field(0, description="සමස්ත වැය කළ කාලය (Cumulative Seconds across all attempts)")
     last_attempt_duration_seconds: int = Field(0, description="අවසන් වරට විසඳීමට වැය වූ කාලය (Most recent attempt duration)")
@@ -48,10 +44,9 @@ class DailyActivityBucketSchema(BaseProgressSchema):
     """
     දිනපතා අධ්‍යයන දත්ත (Daily Activity Heatmap Bucket DTO).
     GitHub-style Heatmap එකක් ජනනය කිරීම සඳහා අවශ්‍ය දිනපතා සංඛ්‍යාලේඛන.
-    Omits `question_ids` array to keep the 365-day heatmap payload lightweight.
+    Omits `date_key` (already the `daily_activity` map key) and `question_ids` array to keep the 365-day heatmap payload lightweight.
     """
 
-    date_key: str = Field(..., description="දිනය (YYYY-MM-DD Asia/Colombo)")
     questions_solved_count: int = Field(0, description="අදාළ දිනයේ විසඳූ ප්‍රශ්න ගණන")
     total_time_spent_seconds: int = Field(0, description="අදාළ දිනයේ වැය කළ මුළු කාලය (තත්පර වලින්)")
     daily_challenge_completed: bool = Field(False, description="Daily Challenge සම්පූර්ණ කළේද යන්න")

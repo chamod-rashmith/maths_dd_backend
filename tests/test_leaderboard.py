@@ -253,12 +253,13 @@ class TestLeaderboardEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["user_id"] for item in data["items"]], expected_order)
         self.assertEqual([item["rank"] for item in data["items"]], [1, 2, 3, 4, 5, 6, 7, 8])
 
-        # Verify legacy fallback fields on stu_zero_xp
+        # Verify legacy fallback fields on stu_zero_xp and deduplicated my_rank card
         my_rank = data["my_rank"]
         self.assertEqual(my_rank["user_id"], "stu_zero_xp")
         self.assertEqual(my_rank["xp"], 0)
-        self.assertEqual(my_rank["school_name"], "Mahanama College")
-        self.assertEqual(my_rank["district_id"], 1)
+        self.assertNotIn("district_id", my_rank)
+        self.assertNotIn("name", my_rank)
+        self.assertNotIn("school_name", my_rank)
         self.assertEqual(my_rank["district_code"], "COLOMBO")
         self.assertEqual(my_rank["island_rank"], 8)
         self.assertEqual(my_rank["total_island_students"], 8)

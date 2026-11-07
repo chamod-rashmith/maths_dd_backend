@@ -345,8 +345,8 @@ class TestSqlAlchemyModels(unittest.TestCase):
         self.assertEqual(dto.exam_year, 2026)
         self.assertEqual(dto.attempt_number, 1)
         self.assertEqual(dto.xp, 150)
-        self.assertEqual(dto.streak_count, 5)
-        self.assertEqual(dto.questions_solved, 20)
+        self.assertEqual(dto.current_streak_days, 5)
+        self.assertEqual(dto.total_solved_count, 20)
         self.assertFalse(dto.is_premium)
 
     def test_user_subscription_lifecycle_and_entitlements(self) -> None:
