@@ -192,7 +192,6 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
                     lesson_id="les_trig",
                     type="SHORT",
                     difficulty="MEDIUM",
-                    schedule="REGULAR",
                     source="PAST_PAPER",
                     allocated_marks=25,
                     is_premium=False,
@@ -349,11 +348,13 @@ class TestResponsePayloadOptimization(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(q_list_res.status_code, 200)
         q_summary = q_list_res.json()["items"][0]
         self.assertNotIn("is_published", q_summary)
+        self.assertNotIn("schedule", q_summary)
 
         q_detail_res = self.client.get("/api/v1/questions/q_trig_1")
         self.assertEqual(q_detail_res.status_code, 200)
         q_detail = q_detail_res.json()
         self.assertNotIn("is_published", q_detail)
+        self.assertNotIn("schedule", q_detail)
 
         ms_res = self.client.get("/api/v1/questions/q_trig_1/solution")
         self.assertEqual(ms_res.status_code, 200)

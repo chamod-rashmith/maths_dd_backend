@@ -516,7 +516,6 @@ Required equation is $x^2 - Sx + P = 0 \implies 16x^2 - 5x + 32 = 0$.
         ],
         "type": "SHORT",
         "difficulty": "MEDIUM",
-        "schedule": "DAILY",
         "source": "PAST_PAPER",
         "source_details": "2023 G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -561,7 +560,6 @@ $$ = \lim_{h \to 0} \frac{2\cos(2x + h)\sin(h)}{h} = 2\cos(2x) $$
         ],
         "type": "ESSAY",
         "difficulty": "HARD",
-        "schedule": "DAILY",
         "source": "PAST_PAPER",
         "source_details": "2023 G.C.E. A/L Pure Maths Part B",
         "allocated_marks": 150,
@@ -605,7 +603,6 @@ $$ T - mg\cos\theta = \frac{mv^2}{l} \implies T = mg(4 + 3\cos\theta) $$
         ],
         "type": "SHORT",
         "difficulty": "MEDIUM",
-        "schedule": "DAILY",
         "source": "MODEL_PAPER",
         "source_details": "Royal College Model Paper",
         "allocated_marks": 25,
@@ -650,7 +647,6 @@ Time: $t = 12:00 + \frac{40\cos\theta}{|\mathbf{v}_{B/A}|} \approx 1:19\text{ PM
         ],
         "type": "ESSAY",
         "difficulty": "HARD",
-        "schedule": "DAILY",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Applied Maths Part B",
         "allocated_marks": 50,
@@ -698,7 +694,6 @@ $$ \theta \in \left\{ \frac{\pi}{4}, \frac{3\pi}{4}, \frac{\pi}{2}, \frac{5\pi}{
         ],
         "type": "SHORT",
         "difficulty": "MEDIUM",
-        "schedule": "DAILY",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -747,7 +742,6 @@ Limiting equilibrium check: $2mg < 3mg\sin\alpha + \mu R = \frac{12}{5}mg \impli
         ],
         "type": "SHORT",
         "difficulty": "HARD",
-        "schedule": "DAILY",
         "source": "MODEL_PAPER",
         "source_details": "Ananda College Term Test Paper",
         "allocated_marks": 25,
@@ -793,7 +787,6 @@ $$ I = \int_{4}^{3} \frac{-\frac{1}{2}du}{\sqrt{u}} = \frac{1}{2} \int_{3}^{4} u
         ],
         "type": "SHORT",
         "difficulty": "MEDIUM",
-        "schedule": "DAILY",
         "source": "PAST_PAPER",
         "source_details": "G.C.E. A/L Combined Maths (Part A)",
         "allocated_marks": 25,
@@ -841,7 +834,6 @@ $$ T = \frac{3}{2f} \left(\frac{2S}{T}\right) = \frac{3S}{fT} \implies T^2 = \fr
         ],
         "type": "SHORT",
         "difficulty": "MEDIUM",
-        "schedule": "DAILY",
         "source": "MODEL_PAPER",
         "source_details": "Royal College Term Test",
         "allocated_marks": 25,
@@ -1244,7 +1236,6 @@ async def seed_database(session: AsyncSession) -> None:
             existing_q.content_text = q.get("content_text", "")
             existing_q.type = q["type"]
             existing_q.difficulty = q["difficulty"]
-            existing_q.schedule = q["schedule"]
             existing_q.source = q["source"]
             existing_q.source_details = q.get("source_details", "")
             existing_q.allocated_marks = q["allocated_marks"]
@@ -1265,7 +1256,6 @@ async def seed_database(session: AsyncSession) -> None:
                     content_text=q.get("content_text", ""),
                     type=q["type"],
                     difficulty=q["difficulty"],
-                    schedule=q["schedule"],
                     source=q["source"],
                     source_details=q.get("source_details", ""),
                     allocated_marks=q["allocated_marks"],

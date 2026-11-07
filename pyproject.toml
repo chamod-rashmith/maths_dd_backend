@@ -29,4 +29,10 @@ dev = [
 ]
 
 [tool.uv]
-native-tls = true
+system-certs = true
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:fastapi.testclient",
+    "ignore::DeprecationWarning:starlette.*",
+]

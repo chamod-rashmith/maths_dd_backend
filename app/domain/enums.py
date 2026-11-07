@@ -29,15 +29,6 @@ class QuestionType(str, Enum):
     ESSAY = "ESSAY"
 
 
-class QuestionSchedule(str, Enum):
-    """Cadence / schedule category for question releases."""
-
-    REGULAR = "REGULAR"
-    DAILY = "DAILY"
-    WEEKLY = "WEEKLY"
-    MONTHLY = "MONTHLY"
-
-
 class QuestionSource(str, Enum):
     """Origin source of the question."""
 
