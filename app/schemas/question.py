@@ -37,7 +37,7 @@ class ExamPaperResponse(BaseModel):
 
 
 class MarkingSchemeStepResponse(BaseModel):
-    """ලකුණු දීමේ පටිපාටියේ තනි පියවරක් (Step-by-Step Marking Rubric DTO)."""
+    """ලකුණු දීමේ පටිපාටියේ තනි පියවරක් (Step-by-Step Marking Rubric DTO). Omits internal order_index."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -47,7 +47,6 @@ class MarkingSchemeStepResponse(BaseModel):
     description_si: str = Field(..., description="පියවරේ ගණිතමය විසඳුම (Sinhala + LaTeX)")
     allocated_marks: int = Field(1, description="හිමිවන ලකුණු ගණන")
     annotation: str | None = Field(None, description="පරීක්ෂක සටහන් / විකල්ප ක්‍රම")
-    order_index: int = Field(1, description="ප්‍රදර්ශන අනුපිළිවෙල")
 
 
 class MarkingSchemeResponse(BaseModel):
@@ -65,7 +64,6 @@ class MarkingSchemeResponse(BaseModel):
     total_marks: int = 25
     is_official: bool = True
     is_premium_only: bool = False
-    order_index: int = 1
     steps: list[MarkingSchemeStepResponse] = Field(
         default_factory=list,
         description="පියවරෙන් පියවර ලකුණු බෙදී යන ආකාරය",
@@ -102,7 +100,7 @@ class QuestionCreate(BaseModel):
 class QuestionSummaryResponse(BaseModel):
     """
     Lightweight summary representation of a question in catalog/lesson list views.
-    Omits heavy problem content_text, solution payloads, and internal timestamps.
+    Omits heavy problem content_text, solution payloads, internal timestamps, and server-only is_published flag.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -125,7 +123,6 @@ class QuestionSummaryResponse(BaseModel):
     source_details: str | None = ""
     allocated_marks: int = 25
     is_premium: bool = False
-    is_published: bool = True
     scheduled_date: date | None = None
     day_number: int | None = None
     has_marking_scheme: bool = True

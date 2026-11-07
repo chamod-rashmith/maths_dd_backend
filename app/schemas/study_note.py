@@ -78,7 +78,6 @@ class StudyNoteSummaryResponse(BaseModel):
     content_type: ContentType | str = ContentType.MARKDOWN  # 'pdf' or 'markdown'
     is_premium: bool = False
     is_locked: bool = False
-    order_index: int = 0
     author: str | None = None
     subject_name: str | None = None
     subject_sinhala_name: str | None = None

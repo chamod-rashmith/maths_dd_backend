@@ -13,7 +13,9 @@ from app.schemas.district import DistrictResponse
 class LeaderboardEntryResponse(BaseModel):
     """
     Single ranked student row in the Island-wide or District Leaderboard.
-    Data Minimization & Privacy: Never exposes sensitive contact fields (email, telephone_no).
+    Data Minimization & Privacy:
+    - Never exposes sensitive contact fields (email, telephone_no).
+    - Omits redundant `district_id` and `district_name_en` on each of the 50 rows (keeping compact `district_code` and `district_name_si`).
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -23,9 +25,7 @@ class LeaderboardEntryResponse(BaseModel):
     name: str = Field(..., description="Student's display name")
     avatar_url: str | None = Field(None, description="Student's profile picture URL")
     school_name: str | None = Field(None, description="School attended by the student")
-    district_id: int | None = Field(None, description="Sri Lankan District integer ID (1-25)")
     district_code: str | None = Field(None, description="District code (e.g. 'COLOMBO', 'KANDY')")
-    district_name_en: str | None = Field(None, description="District English name")
     district_name_si: str | None = Field(None, description="District Sinhala name")
     exam_year: int | None = Field(None, description="Target G.C.E. A/L examination year")
     xp: int = Field(0, ge=0, description="Total verified XP score from UserStats")
@@ -48,7 +48,6 @@ class MyRankSummaryResponse(BaseModel):
     school_name: str | None = Field(None, description="School name from StudentProfile or User")
     district_id: int | None = Field(None, description="Student's Z-Score / residential district ID (1-25)")
     district_code: str | None = Field(None, description="Student's district code (e.g. 'COLOMBO')")
-    district_name_en: str | None = Field(None, description="Student's district English name")
     district_name_si: str | None = Field(None, description="Student's district Sinhala name")
     exam_year: int | None = Field(None, description="Student's target G.C.E. A/L exam year")
     xp: int = Field(0, ge=0, description="Student's total XP")

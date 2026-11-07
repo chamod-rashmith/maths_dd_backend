@@ -108,7 +108,7 @@ class PlanPriceResponse(BaseModel):
 class SubscriptionPlanResponse(BaseModel):
     """
     ශිෂ්‍යයන්ට පෙන්වන සාමාජිකත්ව පැකේජ විස්තරය (Public Subscription Plan DTO).
-    Mobile Paywall එකෙහි පෙන්වීම සඳහා අවශ්‍ය දත්ත පමණක් අඩංගු වන අතර, අභ්‍යන්තර audit timestamps ඉවත් කර ඇත.
+    Mobile Paywall එකෙහි පෙන්වීම සඳහා අවශ්‍ය දත්ත පමණක් අඩංගු වන අතර, අභ්‍යන්තර audit timestamps සහ display_order ඉවත් කර ඇත.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -120,7 +120,6 @@ class SubscriptionPlanResponse(BaseModel):
     description_si: str | None = Field(None, description="සිංහල විස්තරය (Sinhala Description)")
     interval: PlanInterval | str = Field(default=PlanInterval.MONTH, description="ගෙවීම් වාර ගණන (MONTH, YEAR, LIFETIME)")
     duration_days: int | None = Field(None, description="වලංගු දින ගණන (30, 365, හෝ Lifetime සඳහා None)")
-    display_order: int = Field(default=0, description="තිරයේ පෙන්වන අනුපිළිවෙල")
     features_si: str | None = Field(None, description="පැකේජයේ අඩංගු පහසුකම් (Features / Perks)")
     prices: list[PlanPriceResponse] = Field(default_factory=list, description="පැකේජයේ සක්‍රිය මිල ගණන්")
 
@@ -162,11 +161,10 @@ class BankSlipUploadRequest(BaseModel):
 
 
 class BankSlipDetailsResponse(BaseModel):
-    """බැංකු රිසිට්පත් පරීක්ෂණ විස්තරය (Bank Slip Audit Details)."""
+    """බැංකු රිසිට්පත් පරීක්ෂණ විස්තරය (Bank Slip Audit Details). Omits redundant parent payment_id."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    payment_id: str = Field(..., description="අදාළ ගෙවීමේ ID")
     slip_image_url: str = Field(..., description="රිසිට්පත් ඡායාරූපයේ URL")
     bank_name: str | None = Field(None, description="තැන්පත් කළ බැංකුව")
     deposit_reference: str | None = Field(None, description="රිසිට්පත් අංකය")
@@ -177,12 +175,11 @@ class BankSlipDetailsResponse(BaseModel):
 
 
 class PaymentResponse(BaseModel):
-    """ගෙවීම් ගනුදෙනු විස්තරය (Payment Transaction DTO)."""
+    """ගෙවීම් ගනුදෙනු විස්තරය (Payment Transaction DTO). Omits redundant parent subscription_id."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="ගෙවීමේ හැඳුනුම් අංකය")
-    subscription_id: str = Field(..., description="අදාළ සාමාජිකත්වයේ ID")
     method: SubscriptionProvider | str = Field(..., description="ගෙවීම් ක්‍රමය (BANK_TRANSFER, PLAY_STORE, etc.)")
     status: PaymentStatus | str = Field(..., description="ගෙවීමේ තත්වය (PENDING, COMPLETED, FAILED)")
     currency: str = Field(default="LKR", description="මුදල් ඒකකය")
@@ -254,10 +251,29 @@ class RevenueCatWebhookPayload(BaseModel):
 # 5. User Subscription Responses (Client & Paywall Status)
 # =============================================================================
 
+class ActiveSubscriptionSummaryResponse(BaseModel):
+    """
+    Ultra-lightweight summary of an active subscription embedded in UserProfileResponse (`/users/me`)
+    and `CurrentSubscriptionStatusResponse` (`/subscriptions/status`).
+    Omits heavy payment history arrays, bank slip URLs, and internal admin notes.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str = Field(..., description="සාමාජිකත්වයේ ID")
+    plan_id: SubscriptionPlanCode | str = Field(..., description="පැකේජ කේතය හෝ ID")
+    status: SubscriptionStatus | str = Field(..., description="තත්වය (ACTIVE, GRACE_PERIOD)")
+    provider: SubscriptionProvider | str = Field(..., description="නාලිකාව (BANK_TRANSFER, REVENUECAT, etc.)")
+    starts_at: datetime = Field(..., description="ආරම්භක දිනය")
+    expires_at: datetime | None = Field(None, description="අවසන් වන දිනය (Lifetime සඳහා None)")
+
+
 class UserSubscriptionResponse(BaseModel):
     """
-    Lightweight client representation of a subscription record.
-    Strips internal database audit timestamps (`created_at`, `updated_at`).
+    Client & Admin representation of a subscription record (used in `/subscriptions/history`,
+    `/subscriptions/bank-slip`, and `/subscriptions/admin/*`).
+    Strips internal database audit timestamps (`created_at`, `updated_at`) and avoids duplicating
+    bank slip fields that already live inside `payments[].bank_slip`.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -269,18 +285,15 @@ class UserSubscriptionResponse(BaseModel):
     starts_at: datetime = Field(..., description="ආරම්භක දිනය")
     expires_at: datetime | None = Field(None, description="අවසන් වන දිනය (Lifetime සඳහා None)")
     amount_lkr: float | None = Field(None, description="ගෙවූ මුදල (රුපියල් වලින්)")
-    amount_minor: int | None = Field(None, description="ගෙවූ මුදල (ශත වලින්)")
-    slip_image_url: str | None = Field(None, description="රිසිට්පතේ URL එක")
-    reference_note: str | None = Field(None, description="තැන්පත්කරුගේ සටහන")
-    admin_notes: str | None = Field(None, description="පරිපාලකගේ සටහන")
     approved_at: datetime | None = Field(None, description="අනුමත කළ දිනය")
-    payments: list[PaymentResponse] | None = Field(default=None, description="අදාළ ගෙවීම් වාර්තා (Payments)")
+    payments: list[PaymentResponse] | None = Field(default=None, description="අදාළ ගෙවීම් වාර්තා (Payments & Bank Slip Details)")
 
 
 class CurrentSubscriptionStatusResponse(BaseModel):
     """
-    Detailed access status returned to the mobile app for paywall gating and countdown.
+    Lightweight access status returned to the mobile app for paywall gating and countdown (`GET /subscriptions/status`).
     Strictly gates access: `is_premium` is FALSE while status is `PENDING_APPROVAL`.
+    Uses `ActiveSubscriptionSummaryResponse` to avoid transmitting redundant payment/slip history on status checks.
     """
 
     is_premium: bool = Field(..., description="ශිෂ්‍යයාට මේ මොහොතේ Premium අයිතිය තිබේද යන්න")
@@ -289,4 +302,5 @@ class CurrentSubscriptionStatusResponse(BaseModel):
     provider: SubscriptionProvider | str | None = Field(None, description="ගෙවීම් නාලිකාව")
     expires_at: datetime | None = Field(None, description="කල් ඉකුත් වන දිනය")
     days_remaining: int | None = Field(None, description="ඉතිරිව ඇති දින ගණන")
-    active_subscription: UserSubscriptionResponse | None = Field(None, description="සක්‍රිය සාමාජිකත්ව විස්තරය")
+    active_subscription: ActiveSubscriptionSummaryResponse | None = Field(None, description="සක්‍රිය සාමාජිකත්ව සාරාංශය")
+

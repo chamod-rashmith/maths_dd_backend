@@ -114,7 +114,6 @@ class DistrictRepository:
                     "name_si": d.name_si,
                     "name_ta": d.name_ta,
                     "province": d.province,
-                    "display_order": d.display_order,
                 }
                 for d in districts
             ]

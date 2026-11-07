@@ -419,7 +419,12 @@ class UserSubscription(Base):
             return False
         if self.expires_at is None:
             return True  # Lifetime permanent access
-        return self.expires_at > datetime.now(timezone.utc)
+        exp = (
+            self.expires_at.replace(tzinfo=timezone.utc)
+            if self.expires_at.tzinfo is None
+            else self.expires_at
+        )
+        return exp > datetime.now(timezone.utc)
 
     def __repr__(self) -> str:
         return (

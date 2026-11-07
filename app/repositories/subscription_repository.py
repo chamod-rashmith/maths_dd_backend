@@ -93,7 +93,6 @@ class SubscriptionRepository:
             now = datetime.now(timezone.utc)
             stmt = (
                 select(UserSubscription)
-                .options(selectinload(UserSubscription.payments))
                 .where(
                     UserSubscription.user_id == user_id,
                     UserSubscription.status.in_(["ACTIVE", "GRACE_PERIOD"]),
@@ -117,7 +116,9 @@ class SubscriptionRepository:
         try:
             stmt = (
                 select(UserSubscription)
-                .options(selectinload(UserSubscription.payments))
+                .options(
+                    selectinload(UserSubscription.payments).selectinload(Payment.bank_slip)
+                )
                 .where(UserSubscription.user_id == user_id)
                 .order_by(desc(UserSubscription.created_at))
             )

@@ -36,7 +36,6 @@ def _serialize_subject(subj: Subject) -> Dict[str, Any]:
         "name": subj.name,
         "sinhala_name": subj.sinhala_name,
         "code": subj.code,
-        "order_index": subj.order_index,
         "description": subj.description,
     }
 
@@ -49,7 +48,6 @@ def _serialize_lesson(lesson: SyllabusLesson) -> Dict[str, Any]:
         "parent_lesson_id": lesson.parent_lesson_id,
         "title": lesson.title,
         "sinhala_title": lesson.sinhala_title,
-        "order_index": lesson.order_index,
         "description": lesson.description,
         "question_count": lesson.question_count,
         "premium_count": lesson.premium_count,
@@ -70,7 +68,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                 Subject.name,
                 Subject.sinhala_name,
                 Subject.code,
-                Subject.order_index,
                 Subject.description,
             ).order_by(Subject.order_index.asc())
             result = await self._session.execute(stmt)
@@ -181,7 +178,6 @@ class PostgresCurriculumRepository(CurriculumRepository):
                     SyllabusLesson.parent_lesson_id,
                     SyllabusLesson.title,
                     SyllabusLesson.sinhala_title,
-                    SyllabusLesson.order_index,
                     SyllabusLesson.description,
                     q_count,
                     prem_count,

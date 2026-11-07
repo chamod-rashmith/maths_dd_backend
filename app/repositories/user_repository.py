@@ -48,11 +48,6 @@ def _serialize_user(user: User) -> Dict[str, Any]:
             "provider": active_sub.provider,
             "starts_at": active_sub.starts_at,
             "expires_at": active_sub.expires_at,
-            "amount_lkr": active_sub.amount_lkr,
-            "slip_image_url": active_sub.slip_image_url,
-            "reference_note": active_sub.reference_note,
-            "admin_notes": active_sub.admin_notes,
-            "approved_at": active_sub.approved_at,
         }
 
     # Extract normalized student_profile data
@@ -60,19 +55,11 @@ def _serialize_user(user: User) -> Dict[str, Any]:
     exam_year = profile.exam_year if profile else None
     attempt_number = profile.attempt_number if profile else None
     exam_district_id = profile.exam_district_id if (profile and profile.exam_district_id is not None) else user.district_id
-    exam_district = profile.exam_district if (profile and profile.exam_district) else user.district
     medium = profile.medium if profile else "SINHALA"
 
-    # Derive attempt string <-> attempt number fallback
+    # Derive attempt_number fallback from legacy attempt string if needed
     attempt_str = user.attempt
-    if attempt_str is None and attempt_number is not None:
-        if attempt_number == 1:
-            attempt_str = "FIRST"
-        elif attempt_number == 2:
-            attempt_str = "SECOND"
-        elif attempt_number == 3:
-            attempt_str = "THIRD"
-    elif attempt_number is None and attempt_str is not None:
+    if attempt_number is None and attempt_str is not None:
         upper_att = attempt_str.upper()
         if "FIRST" in upper_att or "1" in upper_att:
             attempt_number = 1
@@ -92,13 +79,11 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "district_id": user.district_id,
         "district": user.district,
         "exam_district_id": exam_district_id,
-        "exam_district": exam_district,
         "exam_year": exam_year,
         "attempt_number": attempt_number,
         "medium": medium,
         "stream": profile.stream if (profile and profile.stream) else user.stream,
         "grade": user.grade,
-        "attempt": attempt_str,
         "xp": xp,
         "streak_count": streak_count,
         "accuracy_rate": accuracy_rate,
@@ -136,7 +121,7 @@ class PostgresUserRepository(UserRepository):
                     selectinload(User.stats),
                     selectinload(User.subscriptions),
                     joinedload(User.district),
-                    joinedload(User.student_profile).joinedload(StudentProfile.exam_district),
+                    joinedload(User.student_profile),
                 )
                 .where(User.uid == uid)
             )
@@ -198,7 +183,7 @@ class PostgresUserRepository(UserRepository):
                     selectinload(User.stats),
                     selectinload(User.subscriptions),
                     joinedload(User.district),
-                    joinedload(User.student_profile).joinedload(StudentProfile.exam_district),
+                    joinedload(User.student_profile),
                 )
                 .where(User.uid == uid)
             )
@@ -213,7 +198,7 @@ class PostgresUserRepository(UserRepository):
                         selectinload(User.stats),
                         selectinload(User.subscriptions),
                         joinedload(User.district),
-                        joinedload(User.student_profile).joinedload(StudentProfile.exam_district),
+                        joinedload(User.student_profile),
                     )
                     .where(func.lower(User.email) == email.lower())
                 )

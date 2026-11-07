@@ -93,7 +93,7 @@ class PostgresProgressRepository(ProgressRepository):
             "appliedMaths": 0,
         }
         total_time_spent = 0
-        date_to_question_ids: Dict[str, List[str]] = {}
+        date_to_solved_count: Dict[str, int] = {}
 
         for a in attempts:
             q: Optional[Question] = a.question
@@ -116,7 +116,6 @@ class PostgresProgressRepository(ProgressRepository):
                     target_duration_seconds=a.target_duration_seconds,
                     was_overtime=a.was_overtime,
                     attempt_count=max(a.attempt_count, 1),
-                    completed_date_key=date_key,
                     completed_at=a.completed_at,
                     is_bookmarked=a.is_bookmarked,
                     confidence=a.confidence,
@@ -131,7 +130,7 @@ class PostgresProgressRepository(ProgressRepository):
                         solved_count_by_lesson.get(lesson_id, 0) + 1
                     )
                 if date_key:
-                    date_to_question_ids.setdefault(date_key, []).append(a.question_id)
+                    date_to_solved_count[date_key] = date_to_solved_count.get(date_key, 0) + 1
 
         # 2. Fetch daily activity buckets for heatmap
         stmt_act = (
@@ -145,25 +144,22 @@ class PostgresProgressRepository(ProgressRepository):
         daily_activity: Dict[str, DailyActivityBucketSchema] = {}
         total_daily_seconds = 0
         for act in activities:
-            q_ids = date_to_question_ids.get(act.date_key, [])
             daily_activity[act.date_key] = DailyActivityBucketSchema(
                 date_key=act.date_key,
                 questions_solved_count=act.questions_solved_count,
                 total_time_spent_seconds=act.total_time_spent_seconds,
                 daily_challenge_completed=act.daily_challenge_completed,
-                question_ids=q_ids,
             )
             total_daily_seconds += act.total_time_spent_seconds
 
         # Ensure any dates from attempts appear in daily_activity
-        for dk, qids in date_to_question_ids.items():
+        for dk, cnt in date_to_solved_count.items():
             if dk not in daily_activity:
                 daily_activity[dk] = DailyActivityBucketSchema(
                     date_key=dk,
-                    questions_solved_count=len(qids),
+                    questions_solved_count=cnt,
                     total_time_spent_seconds=0,
                     daily_challenge_completed=False,
-                    question_ids=qids,
                 )
 
         # Reconcile study time: ensure total_time_spent never drops below daily bucket sum

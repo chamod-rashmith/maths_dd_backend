@@ -19,4 +19,4 @@ class DistrictResponse(BaseModel):
     name_si: str
     name_ta: str
     province: Province | str
-    display_order: int
+
