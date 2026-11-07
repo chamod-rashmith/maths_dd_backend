@@ -279,7 +279,6 @@ class TestSqlAlchemyModels(unittest.TestCase):
             longest_streak_days=10,
             total_solved_count=20,
             total_study_time_seconds=600,
-            accuracy_rate=95.0,
         )
         user.stats = stats
 
@@ -328,7 +327,6 @@ class TestSqlAlchemyModels(unittest.TestCase):
             grade=user.grade,
             xp=stats.xp,
             streak_count=stats.current_streak_days,
-            accuracy_rate=stats.accuracy_rate,
             questions_solved=stats.total_solved_count,
             is_premium=user.is_premium,
         )

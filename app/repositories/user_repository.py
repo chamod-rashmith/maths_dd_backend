@@ -35,7 +35,6 @@ def _serialize_user(user: User) -> Dict[str, Any]:
     stats = user.stats
     xp = stats.xp if stats else 0
     current_streak_days = stats.current_streak_days if stats else 0
-    accuracy_rate = stats.accuracy_rate if stats else 0.0
     total_solved_count = stats.total_solved_count if stats else 0
 
     active_sub = user.active_subscription
@@ -83,7 +82,6 @@ def _serialize_user(user: User) -> Dict[str, Any]:
         "grade": user.grade,
         "xp": xp,
         "current_streak_days": current_streak_days,
-        "accuracy_rate": accuracy_rate,
         "total_solved_count": total_solved_count,
         "is_premium": user.is_premium,
         "active_subscription": active_sub_payload,

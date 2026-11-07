@@ -12,7 +12,7 @@ Design Principles:
 
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, text
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -83,15 +83,6 @@ class UserStats(Base):
         server_default=text("0"),
         nullable=False,
         comment="අධ්‍යයනය සඳහා වැය කළ මුළු කාලය (තත්පර වලින් - Cumulative across all sessions)",
-    )
-
-    # Percentage accuracy rate (0.0 to 100.0)
-    accuracy_rate: Mapped[float] = mapped_column(
-        Float,
-        default=0.0,
-        server_default=text("0.0"),
-        nullable=False,
-        comment="නිරවද්‍යතා ප්‍රතිශතය",
     )
 
     # Last active calendar date (Asia/Colombo timezone)

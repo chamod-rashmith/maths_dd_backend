@@ -168,7 +168,6 @@ class UserProfileResponse(BaseModel):
         default=0,
         validation_alias=AliasChoices("current_streak_days", "streak_count"),
     )
-    accuracy_rate: float = 0.0
     total_solved_count: int = Field(
         default=0,
         validation_alias=AliasChoices("total_solved_count", "questions_solved"),
